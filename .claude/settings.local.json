@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from app.models import User, FamilyMember, Prescription, MedicineBoxItem, AgentRun; print\\('✅ 所有模型导入成功'\\)\")",
+      "Bash(python *)"
+    ]
+  }
+}
