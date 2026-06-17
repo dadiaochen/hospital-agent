@@ -13,6 +13,11 @@ from app.agent.context_schemas import (
 )
 from app.agent.eval_schemas import EvaluationResult, ExpectedCase, ExpectedSource
 from app.agent.evaluator import DeterministicEvaluator
+from app.agent.harness_runtime import (
+    AgentHarnessRuntime,
+    HarnessRuntimeBatchResult,
+    HarnessRuntimeResult,
+)
 from app.agent.context_manager import ContextManager, ResetContextState
 from app.agent.run_trace_schemas import (
     FinalAnswerTrace,
@@ -32,6 +37,9 @@ __all__ = [
     "ExpectedCase",
     "ExpectedSource",
     "FinalAnswerTrace",
+    "AgentHarnessRuntime",
+    "HarnessRuntimeBatchResult",
+    "HarnessRuntimeResult",
     "MemoryRef",
     "RAGSourceRef",
     "RAGTrace",
