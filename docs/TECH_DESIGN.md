@@ -283,3 +283,26 @@ python -m compileall backend\app backend\tests
 - EvaluatorAgent 被拒绝进入业务角色视图，只能读取 frozen run artifacts。
 
 本阶段没有数据库、API、ToolRegistry、LangGraph 或 LLM 调用。
+
+## 15. 阶段 2D-1 DB-backed Read Tools
+
+阶段 2D-1 将工具层从纯契约推进到真实数据库只读适配：
+
+- `backend/app/services/agent_tool_query_service.py` 只负责 SQLAlchemy 查询和数据整形。
+- `backend/app/tools/tool_schemas.py` 定义 `ToolSpec`、`ToolExecutionContext`、`ToolResult` 和 retry/permission 元数据。
+- `backend/app/tools/tool_registry.py` 负责注册、输入 schema 校验、`allowed_tools` 校验、角色权限校验、输出 schema 校验和失败 fallback。
+- `backend/app/tools/db_tools.py` 注册五个只读工具：`query_health_profile`、`query_prescriptions`、`query_medicine_box`、`check_pharmacy_inventory`、`search_safety_knowledge`。
+
+分层边界：
+
+- service 层不关心 Agent 角色和工具权限，只查 DB 并返回结构化事实。
+- tools 层不直接拼业务工作流，只包装 service 结果为工具输出和 `ToolResult`。
+- 缺失数据统一返回 `success=False`、`error_type="not_found"`，并提供 `ask_user_clarification` 或 `manual_review` fallback。
+- `ToolResult` 可映射为 `ToolCallTrace`，但本阶段不写入 `agent_tool_calls` 表。
+
+医疗安全边界：
+
+- 工具只读取医生处方、药箱、购药、库存和知识库来源。
+- 不诊断、不自动开方、不修改处方、不提供自行加减停换药建议。
+- 不实现 `create_confirmation_draft`，也不创建复诊、购药或提醒业务状态。
+- 未修改 ORM、Alembic migration、`scripts/seed.py`、FastAPI API、LangGraph、LLM 或前端。

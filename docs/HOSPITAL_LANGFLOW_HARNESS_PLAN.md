@@ -14,10 +14,11 @@
 4. 阶段 2B-1：实现 Context / Evaluation Pydantic 契约、16 条固定 fixture 和契约测试。
 5. 阶段 2B-2：实现 deterministic evaluator、mock trace fixture、HarnessRunner、聚合指标和 Markdown 示例报告。
 6. 阶段 2B-3：实现 ContextManager 的 envelope 构建、角色视图裁剪、compact、RunSummary 和 reset_after_run。
-7. 后续基础 API 阶段：接入家庭成员、药箱、处方、购药记录、知识库和 Agent run 查询 API。
-8. 后续工具阶段：实现 ToolRegistry 与六类业务工具，统一 schema、权限、超时、重试、确认和 trace。
-9. 后续 Agent 阶段：实现最小 Multi-Agent 编排和运行时 SafetyAgent。
-10. 后续 Harness 阶段：接入脱敏真实 trace replay、版本化数据集和报告归档。
+7. 阶段 2D-1：实现五类数据库只读工具适配层，通过 ToolRegistry 调用真实 ORM 数据。
+8. 后续 2D-2：实现写入类 `create_confirmation_draft` 草稿工具，但必须保留人工确认门槛。
+9. 后续基础 API 阶段：接入家庭成员、药箱、处方、购药记录、知识库和 Agent run 查询 API。
+10. 后续 Agent 阶段：实现最小 Multi-Agent 编排和运行时 SafetyAgent。
+11. 后续 Harness 阶段：接入脱敏真实 trace replay、版本化数据集和报告归档。
 
 ## Multi-Agent 角色边界
 
@@ -185,6 +186,15 @@ EvaluatorAgent 只读取：
 - member_id 切换会触发隔离校验。
 - reset 不删除可审计 trace，只清理临时 working context。
 - 未调用 LLM、数据库、API、ToolRegistry 或 LangGraph。
+
+## 阶段 2D-1 已完成
+
+- 新增 DB-backed read tools 的 service/tool 分层。
+- 已注册 `query_health_profile`、`query_prescriptions`、`query_medicine_box`、`check_pharmacy_inventory`、`search_safety_knowledge`。
+- `ToolRegistry.call` 负责输入 schema、输出 schema、角色权限和 `allowed_tools` 校验。
+- 缺数据返回 `not_found` 与 fallback，不生成无来源事实。
+- `ToolResult` 可映射为 `ToolCallTrace`，供后续 Harness 和 trace 持久化适配使用。
+- 未实现写入类 `create_confirmation_draft`，未调用 LLM、LangGraph、FastAPI API，也未修改 ORM、迁移、seed 或前端。
 
 ## 运行与验证
 

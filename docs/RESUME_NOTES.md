@@ -183,3 +183,24 @@ python -m pytest backend\tests -q
 - 已实现数据库持久化上下文、LangGraph 真实编排、ToolRegistry 业务调用或长期记忆写入。
 
 下一步：实现脱敏真实 run artifact 到 ContextEnvelope / RunTrace 的 adapter，并考虑将 reset state 持久化为审计报告。
+
+## 阶段 2D-1 已完成
+
+- 实现真实数据库只读工具适配层，覆盖健康档案、处方/购药、药箱、药店库存和安全知识库。
+- `agent_tool_query_service.py` 负责 DB 查询与数据整形；`db_tools.py` 负责工具 schema、权限、fallback 和 ToolRegistry 注册。
+- `ToolRegistry.call` 校验 input schema、output schema、角色权限和 `allowed_tools`。
+- 缺失数据返回 `not_found` 与 fallback，不编造处方、库存、病史或安全规则。
+- `ToolResult` 可映射为 `ToolCallTrace`，为后续 agent_tool_calls 持久化和 Harness replay 准备输入。
+- 新增测试覆盖成功查询、缺数据、schema 错误、权限、allowed_tools、安全输出和只读边界。
+
+可以写：
+
+- 设计并实现 Agent ToolRegistry 的数据库只读适配层，将 ORM 事实来源封装为可校验、可审计、可回放的工具结果。
+- 为慢病续方场景接入健康档案、处方、药箱、药店库存与安全知识库证据，缺失来源时进入 fallback 而不是模型补全。
+
+不能写：
+
+- 已实现写入类工具、自动创建复诊/购药/提醒、FastAPI Agent API、LangGraph 工作流或线上 EvaluatorAgent。
+- 已达到任何线上安全召回率、幻觉率、groundedness 或 p95 latency 指标。
+
+下一步：实现 `create_confirmation_draft` 写入类草稿工具，并将所有关键动作保持在待用户确认状态。

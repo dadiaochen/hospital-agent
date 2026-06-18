@@ -129,3 +129,23 @@
   }
 }
 ```
+
+## 11. 阶段 2D-1 API 边界
+
+阶段 2D-1 只实现后端内部 DB-backed read tools，不新增或修改任何 FastAPI endpoint。
+
+工具当前通过 Python 内部调用：
+
+```text
+ToolRegistry.call(tool_name, tool_input, ToolExecutionContext)
+```
+
+已实现的只读工具：
+
+- `query_health_profile`
+- `query_prescriptions`
+- `query_medicine_box`
+- `check_pharmacy_inventory`
+- `search_safety_knowledge`
+
+这些工具为后续 Agent API 提供证据来源，但本阶段没有开放 HTTP 调用入口，也没有写入 `agent_tool_calls`、草稿、购药方案或提醒任务。

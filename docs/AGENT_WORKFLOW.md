@@ -223,3 +223,28 @@ TaskContext Builder
 ```
 
 ContextManager 不执行工具、不访问数据库、不调用 API、不运行 LangGraph。它只负责上下文对象的构造、裁剪、压缩和 reset。EvaluatorAgent 不通过 ContextManager 获取可写业务上下文。
+
+## 16. 阶段 2D-1 DB-backed Read Tools
+
+阶段 2D-1 实现工作流中“工具证据”来源的只读适配层：
+
+```text
+Role-specific Context View
+  -> ToolRegistry.call
+  -> DB-backed read tool
+  -> agent_tool_query_service
+  -> ToolResult
+  -> ToolEvidenceRef / ToolCallTrace adapter input
+```
+
+当前已接入五个只读工具：
+
+- `query_health_profile`: 读取当前 `member_id` 的家庭成员档案、慢病标签、过敏史、当前用药和安全备注。
+- `query_prescriptions`: 读取医生处方快照和购药记录。
+- `query_medicine_box`: 读取药箱库存、剂量、频次和剩余天数。
+- `check_pharmacy_inventory`: 读取候选药店库存、配送和自提信息。
+- `search_safety_knowledge`: 读取续方 SOP、人工确认和医疗安全边界知识。
+
+工具调用仍由 `ContextManager.build_role_view` 给出的 `allowed_tools` 控制；`ToolRegistry.call` 会再次校验角色权限和 schema。缺少数据时工具返回可审计失败和 fallback，不让业务 Agent 凭模型记忆补事实。
+
+本阶段不实现写入类 `create_confirmation_draft`，也不执行 LangGraph 节点或持久化工具调用记录。后续真实工作流接入时，应把 `ToolResult` 转为 `agent_tool_calls` 与 `ToolEvidenceRef`。

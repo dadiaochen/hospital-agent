@@ -1253,3 +1253,62 @@ python -m compileall backend\app backend\tests
 ### 下一阶段建议
 
 实现脱敏真实 run artifact 到 ContextEnvelope / RunTrace 的 adapter，并增加 reset state / EvaluationResult 的 JSON 导出能力。
+
+---
+
+## 阶段 2D-1 变更记录
+
+本次阶段目标：实现真实数据库只读工具适配层，不调用 LLM，不实现 FastAPI API，不执行 LangGraph，不新增迁移，不修改 ORM 模型或 seed。
+
+### 已完成内容
+
+1. 新增 `backend/app/services/agent_tool_query_service.py`：
+   - `get_health_profile_context`
+   - `get_prescription_context`
+   - `get_medicine_box_context`
+   - `get_pharmacy_inventory_context`
+   - `search_safety_knowledge_context`
+
+2. 新增工具契约与注册表：
+   - `backend/app/tools/tool_schemas.py`
+   - `backend/app/tools/tool_registry.py`
+   - `backend/app/tools/registry.py` 保持兼容导出
+
+3. 新增 `backend/app/tools/db_tools.py`：
+   - 注册 `query_health_profile`
+   - 注册 `query_prescriptions`
+   - 注册 `query_medicine_box`
+   - 注册 `check_pharmacy_inventory`
+   - 注册 `search_safety_knowledge`
+
+4. 工具行为：
+   - 所有 DB 工具均为只读。
+   - 通过 `ToolRegistry.call` 校验 input schema、output schema、角色权限和 `allowed_tools`。
+   - 缺数据返回 `success=False`、`error_type="not_found"` 和 fallback，不编造事实。
+   - `ToolResult` 可映射为 `ToolCallTrace`。
+
+5. 测试：
+   - 新增 `backend/tests/test_db_backed_tools.py`。
+   - 覆盖 seed-like 数据查询、父亲/母亲 profile、父亲降压药处方、母亲中药处方、药箱剩余天数、药店库存、安全知识检索、缺数据、schema 错误、权限、allowed_tools、安全输出、trace 映射和只读边界。
+
+### 运行方式
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests -q
+python -m compileall backend\app backend\tests
+```
+
+### 未实现内容
+
+- 未实现 `create_confirmation_draft` 写入类工具。
+- 未创建复诊、购药、提醒或其他业务状态。
+- 未新增 FastAPI API。
+- 未执行 LangGraph / Multi-Agent 工作流。
+- 未调用 LLM。
+- 未访问外部服务。
+- 未修改 ORM、Alembic、seed 或前端。
+
+### 下一阶段建议
+
+进入 2D-2：实现待确认草稿创建工具，只允许创建待用户确认的草稿，不得直接提交复诊申请、下单或创建最终提醒。

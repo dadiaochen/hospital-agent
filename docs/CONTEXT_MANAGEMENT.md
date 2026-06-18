@@ -204,3 +204,22 @@ FinalAnswer 中的事实性陈述必须能回溯到 Tool Evidence 或 RAG Source
 - compact 只允许同一 `task_id` / `member_id`，并保留 `source_id`、`tool_call_id` 和 `member_id`。
 - reset 不删除可审计 trace，不改写 FinalAnswer，不写业务状态。
 - reset 返回的 `memory_refs` 只来自已确认 memory；`candidate_inferences` 被列为清理字段，不会写入长期记忆。
+
+## 9. 阶段 2D-1 Tool Evidence 来源
+
+阶段 2D-1 已实现五类 DB-backed read tools，作为 `ToolEvidenceRef` 的事实来源：
+
+- `query_health_profile`
+- `query_prescriptions`
+- `query_medicine_box`
+- `check_pharmacy_inventory`
+- `search_safety_knowledge`
+
+工具返回 `ToolResult`，包含 `source_id`、`source_name`、`evidence_present`、schema 状态和 fallback 信息。后续可由 adapter 将成功结果映射为 `ToolEvidenceRef`，将调用过程映射为 `ToolCallTrace` 或 `agent_tool_calls`。
+
+上下文规则保持不变：
+
+- Role-specific view 仍只接收当前角色允许的 `allowed_tools`。
+- DB 工具必须校验 `member_id` 与执行上下文一致。
+- 缺数据返回 `not_found`，不能把模型推断写入 `memory_refs`。
+- 本阶段不写长期 memory，不创建草稿或业务状态。
