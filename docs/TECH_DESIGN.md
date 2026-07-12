@@ -1,5 +1,7 @@
 # Technical Design
 
+> 本文档描述技术架构与阶段实现记录。未来阶段编号和 MVP 验收以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为唯一依据。
+
 ## 1. 总体架构
 
 系统采用 monorepo：

@@ -1,5 +1,7 @@
 # Hospital Langflow-like Harness Plan
 
+> 本文档只描述 Harness 子系统。项目阶段编号、状态和后续顺序以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为唯一依据。
+
 ## 项目定位
 
 本项目不复刻通用 Langflow 平台，而是吸收 flow runtime、component/tool、trace 和调试观测思路，构建面向互联网医院慢病续方、家庭药箱、用药提醒和安全确认的轻量业务 Agent 系统。

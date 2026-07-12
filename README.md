@@ -10,6 +10,12 @@
 - Frontend: TypeScript, Next.js App Router, Tailwind CSS
 - Infra: Docker, docker-compose, `.env.example`
 
+## 开发路线图
+
+[docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md) 是项目阶段编号、完成状态、后续顺序和 MVP 验收标准的唯一权威来源。其他文档只记录子系统设计或阶段历史，不单独新增阶段编号。
+
+当前唯一下一阶段是 **2D-2：待确认草稿写入工具**。
+
 ## 本地运行
 
 ### 1. 准备环境变量
@@ -93,6 +99,7 @@ python -m pytest backend\tests -q
 │   ├── API_SPEC.md
 │   ├── CONTEXT_MANAGEMENT.md
 │   ├── DB_SCHEMA.md
+│   ├── DEVELOPMENT_ROADMAP.md
 │   ├── EVALUATOR_AGENT.md
 │   ├── HOSPITAL_LANGFLOW_HARNESS_PLAN.md
 │   ├── PRD.md
@@ -356,4 +363,4 @@ python -m compileall backend\app backend\tests
 
 ## 下一阶段建议
 
-下一步进入阶段 2D-2：实现只创建待确认状态的 `create_confirmation_draft` 写入工具，不直接提交复诊申请、购药订单或最终提醒。
+按 [总开发路线图](docs/DEVELOPMENT_ROADMAP.md)，下一步进入阶段 2D-2：实现只创建待确认状态的 `create_confirmation_draft` 写入工具，不直接提交复诊申请、购药订单或最终提醒。

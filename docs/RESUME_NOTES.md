@@ -1,5 +1,7 @@
 # Resume Notes
 
+> 项目阶段状态和未来计划以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为唯一依据；本文档只维护可验证的简历表达边界。
+
 ## 当前阶段
 
 Phase 2D-1: DB-backed read-only tool adapters integrated with the Tool Registry contract and deterministic Harness foundation.
