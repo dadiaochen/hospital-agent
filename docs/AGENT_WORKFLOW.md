@@ -223,3 +223,26 @@ TaskContext Builder
 ```
 
 ContextManager 不执行工具、不访问数据库、不调用 API、不运行 LangGraph。它只负责上下文对象的构造、裁剪、压缩和 reset。EvaluatorAgent 不通过 ContextManager 获取可写业务上下文。
+
+## 16. 阶段 2C-1 ToolRegistry 调用位置
+
+阶段 2C-1 已实现工具契约层和 deterministic mock 工具调用。业务 Agent 的工具调用路径设计为：
+
+```text
+RoleSpecificContextView
+  -> ToolExecutionContext
+  -> ToolRegistry.call
+  -> ToolResult
+  -> ToolCallTrace / ToolEvidenceRef
+  -> ContextEnvelope evidence refs
+```
+
+调用规则：
+
+- 角色 Agent 只能调用 `RoleSpecificContextView.allowed_tools` 中的工具。
+- `ToolRegistry.call` 会再次校验 `ToolSpec.allowed_agent_roles`，避免仅靠 Planner 输出授权。
+- 输入必须通过 `input_schema`，输出必须通过 `output_schema`。
+- `create_confirmation_draft` 等关键动作在 `human_confirmation_granted=False` 时不会执行 handler，只返回需要人工确认的 fallback。
+- 成功或失败都返回 `ToolResult`，失败结果必须包含 `error_type` 和 `fallback_action`。
+
+当前 6 个 mock 工具只用于契约和 Harness 验证，不访问数据库、不调用 FastAPI API、不调用 LLM、不执行 LangGraph，也不提交复诊、购药或提醒状态。

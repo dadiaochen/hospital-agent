@@ -15,9 +15,10 @@
 5. 阶段 2B-2：实现 deterministic evaluator、mock trace fixture、HarnessRunner、聚合指标和 Markdown 示例报告。
 6. 阶段 2B-3：实现 ContextManager 的 envelope 构建、角色视图裁剪、compact、RunSummary 和 reset_after_run。
 7. 后续基础 API 阶段：接入家庭成员、药箱、处方、购药记录、知识库和 Agent run 查询 API。
-8. 后续工具阶段：实现 ToolRegistry 与六类业务工具，统一 schema、权限、超时、重试、确认和 trace。
-9. 后续 Agent 阶段：实现最小 Multi-Agent 编排和运行时 SafetyAgent。
-10. 后续 Harness 阶段：接入脱敏真实 trace replay、版本化数据集和报告归档。
+8. 阶段 2C-1：实现 ToolRegistry 契约层和六类 deterministic mock 工具，统一 schema、权限、超时、重试、确认和 trace 映射。
+9. 后续工具接入阶段：将 ToolRegistry handler 接入真实服务/数据库，并持久化 `agent_tool_calls`。
+10. 后续 Agent 阶段：实现最小 Multi-Agent 编排和运行时 SafetyAgent。
+11. 后续 Harness 阶段：接入脱敏真实 trace replay、版本化数据集和报告归档。
 
 ## Multi-Agent 角色边界
 
@@ -185,6 +186,15 @@ EvaluatorAgent 只读取：
 - member_id 切换会触发隔离校验。
 - reset 不删除可审计 trace，只清理临时 working context。
 - 未调用 LLM、数据库、API、ToolRegistry 或 LangGraph。
+
+## 阶段 2C-1 已完成
+
+- 新增 `ToolSpec`、`ToolExecutionContext`、`ToolResult`、`RetryPolicy` 和 `ToolPermissionScope` 契约。
+- 新增 `ToolRegistry.call`，统一处理工具存在性、上下文 allowed tools、角色权限、输入/输出 schema、handler 异常和人工确认门。
+- 新增 6 个 deterministic mock 工具，返回固定 source/evidence，不访问数据库或 API。
+- `ToolResult` 可映射为 `ToolCallTrace` 所需字段，后续 Harness 可基于 `success`、`schema_valid`、`evidence_present`、`source_name` 和 `fallback_action` 评估工具调用质量。
+- `create_confirmation_draft` 在未获得人工确认时不会执行 handler，返回 `fallback_action="require_human_confirmation"`。
+- mock 工具不返回 AI 诊断、自动开方或剂量调整建议；草稿工具只返回 `status="draft"`。
 
 ## 运行与验证
 

@@ -74,11 +74,12 @@ Raw Conversation
 - `input_schema`
 - `output_schema`
 - `permission_scope`
-- `timeout`
+- `allowed_agent_roles`
+- `timeout_ms`
 - `retry_policy`
 - `requires_human_confirmation`
 
-调用前执行参数校验、权限校验、安全边界校验；调用后记录 `agent_tool_calls`。
+调用前执行工具存在性校验、`allowed_tools` 校验、角色权限校验、参数 schema 校验和人工确认门校验；调用后返回结构化 `ToolResult`，并可映射为 `ToolCallTrace` 所需字段。后续接入数据库和业务服务时，再把 `ToolResult` 与 `agent_tool_calls` 持久化对齐。
 
 ## 6. 数据存储
 
@@ -283,3 +284,34 @@ python -m compileall backend\app backend\tests
 - EvaluatorAgent 被拒绝进入业务角色视图，只能读取 frozen run artifacts。
 
 本阶段没有数据库、API、ToolRegistry、LangGraph 或 LLM 调用。
+
+## 15. 阶段 2C-1 Tool Registry 契约层
+
+`backend/app/tools/` 已实现纯内存工具契约层：
+
+- `tool_schemas.py`: 定义 `ToolSpec`、`ToolExecutionContext`、`ToolResult`、`RetryPolicy` 和 `ToolPermissionScope`。
+- `tool_registry.py`: 实现 `ToolRegistry.register`、`get_tool`、`list_tools`、`list_allowed_tools` 和 `call`。
+- `mock_tools.py`: 注册 6 个 deterministic mock 工具，只返回固定模拟证据。
+- `registry.py`: 保留兼容导出，避免旧导入路径失效。
+
+`ToolRegistry.call` 的执行顺序：
+
+1. 检查工具是否已注册。
+2. 检查 `tool_name` 是否在 `ToolExecutionContext.allowed_tools` 中。
+3. 检查 `agent_role` 是否在 `ToolSpec.allowed_agent_roles` 中。
+4. 若工具需要人工确认且 `human_confirmation_granted=False`，不执行 handler，返回 `fallback_action="require_human_confirmation"`。
+5. 使用 `input_schema` 校验输入。
+6. 执行 deterministic handler。
+7. 使用 `output_schema` 校验输出。
+8. 返回 `ToolResult`，其中包含 `success`、`error_type`、`fallback_action`、`latency_ms`、`schema_valid`、`evidence_present` 和 `source_name`。
+
+已注册 mock 工具：
+
+- `query_health_profile`: ProfileAgent / SafetyAgent。
+- `query_prescriptions`: RefillAgent / SafetyAgent。
+- `query_medicine_box`: RefillAgent / ReminderAgent / SafetyAgent。
+- `check_pharmacy_inventory`: PharmacyAgent。
+- `search_safety_knowledge`: SafetyAgent / RefillAgent / ReminderAgent。
+- `create_confirmation_draft`: RefillAgent / PharmacyAgent / ReminderAgent，且需要人工确认。
+
+安全边界：mock 工具不访问数据库、不调用 API、不调用 LLM、不执行 LangGraph，不返回 AI 诊断、自动开方成功或建议用户自行加量、减量、停药、换药的内容。`create_confirmation_draft` 只能返回 `status="draft"`。

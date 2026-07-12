@@ -1253,3 +1253,79 @@ python -m compileall backend\app backend\tests
 ### 下一阶段建议
 
 实现脱敏真实 run artifact 到 ContextEnvelope / RunTrace 的 adapter，并增加 reset state / EvaluationResult 的 JSON 导出能力。
+
+---
+
+## 阶段 2C-1 变更记录
+
+本次阶段目标：实现 Tool Registry 契约层和 mock 工具调用，不访问数据库，不调用 FastAPI API，不调用 LLM，不执行 LangGraph，不实现真实业务工具。
+
+### 已完成内容
+
+1. 新增工具契约：
+   - `backend/app/tools/tool_schemas.py`
+   - `ToolSpec`
+   - `ToolExecutionContext`
+   - `ToolResult`
+   - `RetryPolicy`
+   - `ToolPermissionScope`
+
+2. 新增 ToolRegistry：
+   - `backend/app/tools/tool_registry.py`
+   - `register(tool_spec, handler)`
+   - `get_tool(name)`
+   - `list_tools()`
+   - `list_allowed_tools(agent_role)`
+   - `call(tool_name, tool_input, execution_context)`
+
+3. `ToolRegistry.call` 规则：
+   - 检查工具是否注册。
+   - 检查 `tool_name` 是否在 `execution_context.allowed_tools` 内。
+   - 检查 `agent_role` 是否在 `ToolSpec.allowed_agent_roles` 内。
+   - 使用 `input_schema` 校验输入。
+   - 执行 deterministic handler。
+   - 使用 `output_schema` 校验输出。
+   - 捕获 schema、权限、handler 和人工确认错误。
+   - 返回结构化 `ToolResult`。
+   - `ToolResult` 可映射为 `ToolCallTrace` 所需字段。
+
+4. 新增 6 个 mock 工具：
+   - `query_health_profile`
+   - `query_prescriptions`
+   - `query_medicine_box`
+   - `check_pharmacy_inventory`
+   - `search_safety_knowledge`
+   - `create_confirmation_draft`
+
+5. 权限与确认：
+   - `query_health_profile`: ProfileAgent / SafetyAgent。
+   - `query_prescriptions`: RefillAgent / SafetyAgent。
+   - `query_medicine_box`: RefillAgent / ReminderAgent / SafetyAgent。
+   - `check_pharmacy_inventory`: PharmacyAgent。
+   - `search_safety_knowledge`: SafetyAgent / RefillAgent / ReminderAgent。
+   - `create_confirmation_draft`: RefillAgent / PharmacyAgent / ReminderAgent，且 `requires_human_confirmation=True`。
+
+6. 医疗安全边界：
+   - mock 工具不返回 AI 诊断。
+   - mock 工具不返回自动开方成功。
+   - mock 工具不建议用户自行加量、减量、停药或换药。
+   - `create_confirmation_draft` 只能返回 `status="draft"`。
+
+7. 测试：
+   - 新增 `backend/tests/test_tool_registry.py`。
+   - 新增 `backend/tests/test_mock_tools.py`。
+   - 覆盖注册、重复注册、未注册调用、权限拒绝、allowed_tools 拒绝、输入/输出 schema 错误、人工确认门、draft 状态、安全文本和 ToolCallTrace 映射。
+
+### 未实现内容
+
+- 未访问数据库。
+- 未调用真实 FastAPI API。
+- 未实现真实业务工具 handler。
+- 未执行 LangGraph。
+- 未调用 LLM。
+- 未持久化 `agent_tool_calls`。
+- 未修改 ORM、Alembic、seed 或前端。
+
+### 下一阶段建议
+
+实现 ToolResult 到 ToolEvidenceRef / RunTrace 的 adapter，并用 mock ContextEnvelope + mock ToolRegistry 串起一次最小离线工具调用 replay。
