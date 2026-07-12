@@ -10,6 +10,23 @@ from app.tools.tool_schemas import ToolExecutionContext, ToolResult, ToolSpec
 ToolHandler = Callable[[BaseModel, ToolExecutionContext], BaseModel | dict[str, Any]]
 
 
+class ToolExecutionError(Exception):
+    """Expected handler failure normalized into a structured ToolResult."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_type: str = "handler_error",
+        fallback_action: str = "manual_review",
+        schema_valid: bool = True,
+    ) -> None:
+        super().__init__(message)
+        self.error_type = error_type
+        self.fallback_action = fallback_action
+        self.schema_valid = schema_valid
+
+
 class ToolRegistry:
     """Deterministic tool registry contract layer."""
 
@@ -31,11 +48,20 @@ class ToolRegistry:
     def get_definition(self, name: str) -> ToolSpec:
         return self.get_tool(name)
 
+    def get_spec(self, name: str) -> ToolSpec:
+        return self.get_tool(name)
+
     def list_tools(self) -> list[ToolSpec]:
         return list(self._specs.values())
 
     def list_definitions(self) -> list[ToolSpec]:
         return self.list_tools()
+
+    def list_specs(self) -> list[ToolSpec]:
+        return self.list_tools()
+
+    def list_tool_names(self) -> list[str]:
+        return list(self._specs)
 
     def list_allowed_tools(self, agent_role: str) -> list[ToolSpec]:
         return [
@@ -109,6 +135,20 @@ class ToolRegistry:
 
         try:
             raw_output = self._handlers[tool_name](validated_input, execution_context)
+        except ToolExecutionError as exc:
+            return self._failure(
+                tool_name=tool_name,
+                started=started,
+                error_type=exc.error_type,
+                error_message=str(exc),
+                fallback_action=exc.fallback_action,
+                schema_valid=exc.schema_valid,
+                requires_human_confirmation=spec.requires_human_confirmation,
+                execution_context=execution_context,
+                tool_input=validated_input.model_dump(mode="json"),
+                permission_scope=spec.permission_scope,
+                read_only=spec.read_only,
+            )
         except Exception as exc:  # noqa: BLE001 - registry normalizes handler failures.
             return self._failure(
                 tool_name=tool_name,
@@ -137,6 +177,10 @@ class ToolRegistry:
             tool_name=tool_name,
             success=True,
             output=output,
+            run_id=execution_context.run_id,
+            agent_role=execution_context.agent_role,
+            member_id=execution_context.member_id,
+            tool_input=validated_input.model_dump(mode="json"),
             error_type=None,
             error_message=None,
             fallback_action=None,
@@ -145,6 +189,8 @@ class ToolRegistry:
             requires_human_confirmation=spec.requires_human_confirmation,
             evidence_present=bool(output.get("evidence_present", False)),
             source_name=output.get("source_name", tool_name),
+            permission_scope=spec.permission_scope,
+            read_only=spec.read_only,
         )
 
     @classmethod
@@ -158,6 +204,10 @@ class ToolRegistry:
         fallback_action: str,
         schema_valid: bool = True,
         requires_human_confirmation: bool = False,
+        execution_context: ToolExecutionContext | None = None,
+        tool_input: dict[str, Any] | None = None,
+        permission_scope: str | None = None,
+        read_only: bool = True,
     ) -> ToolResult:
         return ToolResult.failure(
             tool_name=tool_name,
@@ -167,6 +217,12 @@ class ToolRegistry:
             latency_ms=cls._elapsed_ms(started),
             schema_valid=schema_valid,
             requires_human_confirmation=requires_human_confirmation,
+            run_id=execution_context.run_id if execution_context else None,
+            agent_role=execution_context.agent_role if execution_context else None,
+            member_id=execution_context.member_id if execution_context else None,
+            tool_input=tool_input,
+            permission_scope=permission_scope,
+            read_only=read_only,
         )
 
     @staticmethod

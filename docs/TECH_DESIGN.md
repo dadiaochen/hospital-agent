@@ -341,3 +341,15 @@ ExpectedCase
 - `p95_latency_ms`: mock 延迟 95 分位。
 
 这些指标只代表 deterministic mock fixtures，不代表真实线上、生产或临床效果。
+
+## 17. 阶段 2D-1 DB-backed Read Tools
+
+阶段 2D-1 将 2C 的工具契约扩展到真实 ORM 只读查询：
+
+- `agent_tool_query_service.py` 负责 SQLAlchemy 查询和数据整形，不处理 Agent 编排。
+- `db_tools.py` 将五类查询注册到既有 `ToolRegistry`，不绕过 `ToolRegistry.call`。
+- 工具层继续执行 `allowed_tools`、角色权限、输入/输出 schema 和成员隔离校验。
+- `ToolResult` 保留来源、fallback 和 Trace 映射信息；缺少数据时返回 `not_found`，不补造事实。
+- 工具契约不再反向依赖 `app.agent` 包入口，避免 `tools -> agent -> tools` 循环导入。
+
+本阶段不实现写入类草稿工具、FastAPI API、LangGraph、LLM 或外部服务，也不修改 ORM、迁移、seed 和前端。

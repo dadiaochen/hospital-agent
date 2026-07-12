@@ -1364,3 +1364,28 @@ python -m compileall backend\app backend\tests
 ### 下一阶段建议
 
 实现 ToolResult / RunTrace 到持久化审计记录的 adapter，并为 mock runtime 增加 JSON/Markdown 双格式报告输出。
+
+---
+
+## 阶段 2D-1 变更记录
+
+本阶段实现数据库只读工具适配层，不调用 LLM，不新增 FastAPI API，不执行 LangGraph，不修改 ORM、迁移或 seed。
+
+### 已完成内容
+
+1. 新增 `agent_tool_query_service.py`，实现健康档案、处方与购药、药箱、药店库存和安全知识查询。
+2. 新增 `db_tools.py`，通过既有 `ToolRegistry.call` 注册五个只读工具。
+3. 统一保留 input/output schema、角色权限、`allowed_tools`、成员隔离、来源和 fallback。
+4. 缺少数据返回 `not_found`，不编造医疗或库存事实。
+5. 新增 `test_db_backed_tools.py`，并修复 2C/2D 合并后工具契约的循环依赖。
+
+### 未实现内容
+
+- 未实现 `create_confirmation_draft` 写入工具。
+- 未创建复诊、购药、提醒或其他业务状态。
+- 未新增 FastAPI API、LangGraph、LLM 或外部服务调用。
+- 未修改 ORM、Alembic、seed 或前端。
+
+### 下一阶段建议
+
+进入 2D-2，只实现待用户确认的草稿创建，不直接提交复诊、下单或创建最终提醒。

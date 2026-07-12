@@ -129,3 +129,13 @@
   }
 }
 ```
+
+## 11. 阶段 2D-1 API 边界
+
+阶段 2D-1 只实现后端内部 DB-backed read tools，不新增或修改 FastAPI endpoint。当前内部调用形式为：
+
+```text
+ToolRegistry.call(tool_name, tool_input, ToolExecutionContext)
+```
+
+已接入 `query_health_profile`、`query_prescriptions`、`query_medicine_box`、`check_pharmacy_inventory` 和 `search_safety_knowledge`。这些工具为后续 API 提供证据来源，但当前不开放 HTTP 入口，也不写入草稿、购药方案、提醒或 `agent_tool_calls`。

@@ -2,7 +2,7 @@
 
 这是一个面向互联网医院业务链路的家庭健康事务管理 Agent 项目。系统定位是长期健康管家，不是 AI 医生：不诊断、不自动开方、不修改医生处方，所有复诊、购药、提醒创建等关键动作都必须经过用户或医生确认。
 
-当前完成到阶段 2C-2：已实现 Tool Registry 契约层、6 个 deterministic mock 工具，以及最小 Agent Harness Runtime，可将 ContextManager、ToolRegistry、RunTrace 和 DeterministicEvaluator 串联起来回放 16 条固定 fixture；仍未实现真实数据库查询工具、FastAPI 业务 API、LangGraph 工作流或真实在线 EvaluatorAgent。
+当前完成到阶段 2D-1：已在 2C 的 Tool Registry 与最小 Harness Runtime 之上接入五类数据库只读工具，能够从 ORM 测试数据读取健康档案、处方与购药记录、家庭药箱、药店库存和安全知识来源；仍未实现写入类草稿工具、FastAPI 业务 API、LangGraph 工作流或真实在线 EvaluatorAgent。
 
 ## 技术栈
 
@@ -116,7 +116,9 @@ python -m pytest backend\tests -q
 │   │   ├── safety/
 │   │   ├── schemas/
 │   │   ├── services/
+│   │   │   └── agent_tool_query_service.py
 │   │   └── tools/
+│   │       ├── db_tools.py
 │   │       ├── mock_tools.py
 │   │       ├── registry.py
 │   │       ├── tool_registry.py
@@ -128,7 +130,8 @@ python -m pytest backend\tests -q
 │       ├── test_context_manager.py
 │       ├── test_deterministic_evaluator.py
 │       ├── test_harness_runner.py
-│       └── test_harness_runtime.py
+│       ├── test_harness_runtime.py
+│       └── test_db_backed_tools.py
 ├── frontend/
 │   ├── app/
 │   ├── components/
@@ -322,13 +325,30 @@ python -m compileall backend\app backend\tests
 
 本阶段 runtime 指标只代表 deterministic mock fixtures 的回放结果，不代表真实线上、生产或临床效果。
 
+## 阶段 2D-1 已完成
+
+- 新增 `backend/app/services/agent_tool_query_service.py`，负责五类 SQLAlchemy 只读查询和数据整形。
+- 新增 `backend/app/tools/db_tools.py`，通过既有 `ToolRegistry.call` 注册健康档案、处方、药箱、药店库存和安全知识工具。
+- 数据库工具复用 2C 的工具契约、角色权限、`allowed_tools`、schema 校验、人工确认字段和 Trace 映射。
+- 缺少成员、药品、库存或知识来源时返回 `not_found` 与 fallback，不让模型补全事实。
+- 新增 `backend/tests/test_db_backed_tools.py`，覆盖成功查询、缺数据、schema、权限、成员隔离、安全文本和只读边界。
+- 本阶段不实现 `create_confirmation_draft`，不写业务状态，不新增 API、迁移或 ORM 字段，也不调用 LangGraph、LLM 或外部服务。
+
+阶段 2D-1 验证命令：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests -q
+python -m compileall backend\app backend\tests
+```
+
 ## 项目亮点与简历描述
 
 项目描述：基于互联网医院问诊、处方、药店审核、购药履约链路，设计家庭健康管家 Agent，帮助用户整理慢病续方、复诊材料、家庭药箱、用药提醒和 Agent 执行记录。
 
 技术栈：FastAPI、SQLAlchemy、PostgreSQL、Redis、Pydantic、LangGraph、Next.js、TypeScript、Tailwind CSS、Docker。
 
-核心职责：负责后端分层架构、Multi-Agent 角色边界、医疗安全策略、ContextManager、Context Reset / Compaction、Tool Registry 契约层，以及 Agent Harness 的强类型契约、mock runtime、确定性评估规则和固定用例回放。
+核心职责：负责后端分层架构、Multi-Agent 角色边界、医疗安全策略、ContextManager、Context Reset / Compaction、Tool Registry 契约层、数据库只读工具适配，以及 Agent Harness 的强类型契约、mock runtime、确定性评估规则和固定用例回放。
 
 面试讲解稿：项目重点不是让模型替代医生，而是把模型放在可审计、可确认、可回放、可评估的业务流程中。SafetyAgent 在运行时拦截高风险请求，EvaluatorAgent 在答案生成后检查证据、确认和成员隔离，两者职责分离。
 
@@ -336,4 +356,4 @@ python -m compileall backend\app backend\tests
 
 ## 下一阶段建议
 
-下一步可实现 ToolResult 到持久化 `agent_tool_calls` 的 adapter，并把 mock runtime 产物导出为 JSON/Markdown 双格式报告；真实数据库工具和 LangGraph 编排仍放在后续阶段。
+下一步进入阶段 2D-2：实现只创建待确认状态的 `create_confirmation_draft` 写入工具，不直接提交复诊申请、购药订单或最终提醒。

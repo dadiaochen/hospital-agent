@@ -204,3 +204,12 @@ FinalAnswer 中的事实性陈述必须能回溯到 Tool Evidence 或 RAG Source
 - compact 只允许同一 `task_id` / `member_id`，并保留 `source_id`、`tool_call_id` 和 `member_id`。
 - reset 不删除可审计 trace，不改写 FinalAnswer，不写业务状态。
 - reset 返回的 `memory_refs` 只来自已确认 memory；`candidate_inferences` 被列为清理字段，不会写入长期记忆。
+
+## 9. 阶段 2D-1 Tool Evidence 来源
+
+五类 DB-backed read tools 现在可以作为 `ToolEvidenceRef` 的事实来源。工具执行继续受 role-specific view 中的 `allowed_tools`、当前 `user_id` / `member_id` 和角色权限约束。
+
+- 成功结果保留 `source_id`、`source_name`、schema 状态和成员归属。
+- 缺少数据返回 `not_found`，不能把模型推断写入 `memory_refs`。
+- `ToolResult` 可映射为 `ToolCallTrace`；持久化 adapter 留到后续阶段。
+- 本阶段不写长期 memory，也不创建草稿或其他业务状态。

@@ -249,3 +249,18 @@ Runtime 调用规则：
 - `evaluate` 调用 `DeterministicEvaluator` 生成 `EvaluationResult`。
 
 该 runtime 是 Harness 测试运行时，不是正式业务 Agent；它不访问数据库、不调用 API、不调用 LLM、不执行 LangGraph，也不会提交复诊、购药、提醒或任何医疗动作。
+
+## 17. 阶段 2D-1 DB-backed Read Tools
+
+数据库只读证据链路为：
+
+```text
+RoleSpecificContextView.allowed_tools
+  -> ToolRegistry.call
+  -> DB-backed tool
+  -> agent_tool_query_service
+  -> ToolResult
+  -> ToolEvidenceRef / ToolCallTrace
+```
+
+五个工具分别读取当前成员档案、处方与购药记录、药箱、药店库存和安全知识。`ToolExecutionContext` 同时约束 `user_id`、`member_id`、角色和允许工具；查询失败返回结构化 fallback。2D-1 不注册写入类 `create_confirmation_draft`，也不持久化工具调用或执行正式 Agent 工作流。

@@ -16,10 +16,11 @@
 6. 阶段 2B-3：实现 ContextManager 的 envelope 构建、角色视图裁剪、compact、RunSummary 和 reset_after_run。
 7. 阶段 2C-1：实现 ToolRegistry 契约层和六类 deterministic mock 工具，统一 schema、权限、超时、重试、确认和 trace。
 8. 阶段 2C-2：实现最小 Agent Harness Runtime，串联 ContextManager、ToolRegistry、RunTrace 和 DeterministicEvaluator。
-9. 后续基础 API 阶段：接入家庭成员、药箱、处方、购药记录、知识库和 Agent run 查询 API。
-10. 后续工具接入阶段：将 ToolRegistry handler 接入真实服务/数据库，并持久化 `agent_tool_calls`。
-11. 后续 Agent 阶段：实现最小 Multi-Agent 编排和运行时 SafetyAgent。
-12. 后续 Harness 阶段：接入脱敏真实 trace replay、版本化数据集和报告归档。
+9. 阶段 2D-1：接入五类数据库只读工具，保留 schema、权限、隔离、来源和 fallback。
+10. 阶段 2D-2：实现只创建待确认状态的草稿写入工具。
+11. 后续基础 API 阶段：接入家庭成员、药箱、处方、购药记录、知识库和 Agent run 查询 API。
+12. 后续 Agent 阶段：实现最小 Multi-Agent 编排和运行时 SafetyAgent。
+13. 后续 Harness 阶段：接入脱敏真实 trace replay、版本化数据集和报告归档。
 
 ## Multi-Agent 角色边界
 
@@ -222,3 +223,10 @@ python -m compileall backend\app backend\tests
 ## 简历表达边界
 
 可以写“设计并实现 deterministic Agent Harness runner，基于固定 ExpectedCase 和冻结 RunTrace 计算结构化 EvaluationResult 与聚合报告”。示例报告指标只能注明为 mock fixture 结果，不得描述成线上或临床效果，也不得把 deterministic 规则评估写成 LLM evaluator。
+
+## 阶段 2D-1 已完成
+
+- 五类数据库只读工具通过 `ToolRegistry.call` 读取 ORM 测试数据。
+- service 层负责查询，tools 层负责契约、权限、schema、来源和 fallback。
+- DB 工具结果可映射为 `ToolCallTrace`，但本阶段不写 `agent_tool_calls`。
+- `create_confirmation_draft`、FastAPI API、LangGraph 和 LLM 仍未实现。

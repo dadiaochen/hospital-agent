@@ -2,7 +2,7 @@
 
 ## 当前阶段
 
-Phase 2B-2: deterministic Agent Harness runner, frozen RunTrace contracts, mock trace replay and aggregated evaluation report.
+Phase 2D-1: DB-backed read-only tool adapters integrated with the Tool Registry contract and deterministic Harness foundation.
 
 ## 已完成
 
@@ -219,3 +219,21 @@ python -m pytest backend\tests -q
 - 已实现 LangGraph 真实业务编排或在线 EvaluatorAgent。
 
 下一步：实现 ToolResult / RunTrace 到持久化审计记录的 adapter，并为 mock runtime 增加 JSON/Markdown 双格式报告输出。
+
+## 阶段 2D-1 已完成
+
+- 实现健康档案、处方与购药记录、药箱、药店库存和安全知识库五类数据库只读工具。
+- service 层负责 ORM 查询与数据整形，tools 层负责 schema、权限、成员隔离、fallback 和 ToolRegistry 注册。
+- 缺失来源返回 `not_found`，不编造病史、处方、库存或安全规则。
+- 2C mock runtime 与 2D DB 工具联合测试可独立运行，工具契约保持向后兼容。
+
+可以写：
+
+- 实现 Agent ToolRegistry 的数据库只读适配层，将 ORM 事实来源封装为可校验、可审计、可回放的工具结果。
+
+不能写：
+
+- 已实现完整真实 Agent、线上医院系统、自动续方、自动下单或自动开方。
+- mock fixture 指标代表生产或临床效果。
+
+下一步：实现只创建待确认草稿的 `create_confirmation_draft`，所有关键动作继续由用户确认。

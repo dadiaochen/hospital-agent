@@ -335,3 +335,11 @@
 - DeterministicEvaluator 与 HarnessRunner 不访问数据库。
 - 本阶段未修改 ORM、Alembic migration 或 seed。
 - 后续真实 trace adapter 应先读取现有审计数据并映射为冻结 DTO，不应由 evaluator 直接持有数据库 session。
+
+## 10. 阶段 2D-1 数据库边界
+
+- 只读取现有 ORM 表，不新增表、字段或 Alembic migration。
+- 读取范围包括家庭成员与档案、处方与购药记录、药箱、药店库存和知识库。
+- `ToolResult` 只作为内存结果和后续 Trace adapter 输入，不写入 `agent_tool_calls`。
+- `create_confirmation_draft` 留到 2D-2；本阶段不创建复诊、购药、提醒或其他业务状态。
+- 缺少数据库事实时返回 `not_found` 与 fallback，不把模型推断写入数据库或长期 memory。

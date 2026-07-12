@@ -2,12 +2,17 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from app.agent.context_schemas import ContractModel, NonEmptyStr
 from app.tools.tool_registry import ToolRegistry
-from app.tools.tool_schemas import RetryPolicy, ToolExecutionContext, ToolSpec
+from app.tools.tool_schemas import (
+    NonEmptyStr,
+    RetryPolicy,
+    ToolContractModel,
+    ToolExecutionContext,
+    ToolSpec,
+)
 
 
-class MemberToolInput(ContractModel):
+class MemberToolInput(ToolContractModel):
     member_id: NonEmptyStr
 
 
@@ -19,7 +24,7 @@ class PharmacyInventoryInput(MedicationToolInput):
     city: NonEmptyStr | None = None
 
 
-class SafetyKnowledgeInput(ContractModel):
+class SafetyKnowledgeInput(ToolContractModel):
     query: NonEmptyStr
     member_id: NonEmptyStr | None = None
 
@@ -32,7 +37,7 @@ class ConfirmationDraftInput(MemberToolInput):
     summary: NonEmptyStr
 
 
-class EvidenceOutput(ContractModel):
+class EvidenceOutput(ToolContractModel):
     source_id: NonEmptyStr
     source_name: NonEmptyStr
     member_id: NonEmptyStr | None = None
