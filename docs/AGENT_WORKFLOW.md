@@ -224,25 +224,28 @@ TaskContext Builder
 
 ContextManager 不执行工具、不访问数据库、不调用 API、不运行 LangGraph。它只负责上下文对象的构造、裁剪、压缩和 reset。EvaluatorAgent 不通过 ContextManager 获取可写业务上下文。
 
-## 16. 阶段 2C-1 ToolRegistry 调用位置
+## 16. 阶段 2C-2 Mock Harness Runtime
 
-阶段 2C-1 已实现工具契约层和 deterministic mock 工具调用。业务 Agent 的工具调用路径设计为：
+阶段 2C-2 已实现最小 Agent Harness Runtime，用于离线测试上下文、工具、trace 和评估契约：
 
 ```text
-RoleSpecificContextView
-  -> ToolExecutionContext
-  -> ToolRegistry.call
-  -> ToolResult
-  -> ToolCallTrace / ToolEvidenceRef
-  -> ContextEnvelope evidence refs
+ExpectedCase
+  -> AgentHarnessRuntime.load_case
+  -> build_initial_context
+  -> build_role_views
+  -> execute_expected_tools_with_mock_registry
+  -> build_run_trace
+  -> DeterministicEvaluator.evaluate
+  -> HarnessRunner.aggregate
 ```
 
-调用规则：
+Runtime 调用规则：
 
-- 角色 Agent 只能调用 `RoleSpecificContextView.allowed_tools` 中的工具。
-- `ToolRegistry.call` 会再次校验 `ToolSpec.allowed_agent_roles`，避免仅靠 Planner 输出授权。
-- 输入必须通过 `input_schema`，输出必须通过 `output_schema`。
-- `create_confirmation_draft` 等关键动作在 `human_confirmation_granted=False` 时不会执行 handler，只返回需要人工确认的 fallback。
-- 成功或失败都返回 `ToolResult`，失败结果必须包含 `error_type` 和 `fallback_action`。
+- `build_initial_context` 使用 `ContextManager` 生成 `ContextEnvelope`。
+- `build_role_views` 为 Planner、ProfileAgent、RefillAgent、PharmacyAgent、ReminderAgent、SafetyAgent 生成角色视图。
+- `execute_expected_tools_with_mock_registry` 只调用 `ToolRegistry.call`，不直接调用 mock tool handler。
+- 每次工具调用都构造 `ToolExecutionContext`，包含 `run_id`、`task_id`、`member_id`、`agent_role`、`allowed_tools`、`safety_flags` 和 `human_confirmation_granted`。
+- `build_run_trace` 将 `ToolResult` 转为 `ToolCallTrace`，并生成 `RAGTrace`、`SafetyTrace` 和 mock `FinalAnswerTrace`。
+- `evaluate` 调用 `DeterministicEvaluator` 生成 `EvaluationResult`。
 
-当前 6 个 mock 工具只用于契约和 Harness 验证，不访问数据库、不调用 FastAPI API、不调用 LLM、不执行 LangGraph，也不提交复诊、购药或提醒状态。
+该 runtime 是 Harness 测试运行时，不是正式业务 Agent；它不访问数据库、不调用 API、不调用 LLM、不执行 LangGraph，也不会提交复诊、购药、提醒或任何医疗动作。

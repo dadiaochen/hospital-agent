@@ -1258,38 +1258,25 @@ python -m compileall backend\app backend\tests
 
 ## 阶段 2C-1 变更记录
 
-本次阶段目标：实现 Tool Registry 契约层和 mock 工具调用，不访问数据库，不调用 FastAPI API，不调用 LLM，不执行 LangGraph，不实现真实业务工具。
+本次阶段目标：实现 Tool Registry 契约层和 deterministic mock 工具，不访问数据库、不调用 FastAPI API、不调用 LLM、不执行 LangGraph、不实现真实业务工具。
 
 ### 已完成内容
 
-1. 新增工具契约：
-   - `backend/app/tools/tool_schemas.py`
+1. 新增 `backend/app/tools/tool_schemas.py`：
    - `ToolSpec`
    - `ToolExecutionContext`
    - `ToolResult`
    - `RetryPolicy`
    - `ToolPermissionScope`
 
-2. 新增 ToolRegistry：
-   - `backend/app/tools/tool_registry.py`
-   - `register(tool_spec, handler)`
-   - `get_tool(name)`
-   - `list_tools()`
-   - `list_allowed_tools(agent_role)`
-   - `call(tool_name, tool_input, execution_context)`
+2. 新增 `backend/app/tools/tool_registry.py`：
+   - `register`
+   - `get_tool`
+   - `list_tools`
+   - `list_allowed_tools`
+   - `call`
 
-3. `ToolRegistry.call` 规则：
-   - 检查工具是否注册。
-   - 检查 `tool_name` 是否在 `execution_context.allowed_tools` 内。
-   - 检查 `agent_role` 是否在 `ToolSpec.allowed_agent_roles` 内。
-   - 使用 `input_schema` 校验输入。
-   - 执行 deterministic handler。
-   - 使用 `output_schema` 校验输出。
-   - 捕获 schema、权限、handler 和人工确认错误。
-   - 返回结构化 `ToolResult`。
-   - `ToolResult` 可映射为 `ToolCallTrace` 所需字段。
-
-4. 新增 6 个 mock 工具：
+3. 新增 `backend/app/tools/mock_tools.py`，包含 6 个 mock 工具：
    - `query_health_profile`
    - `query_prescriptions`
    - `query_medicine_box`
@@ -1297,35 +1284,83 @@ python -m compileall backend\app backend\tests
    - `search_safety_knowledge`
    - `create_confirmation_draft`
 
-5. 权限与确认：
-   - `query_health_profile`: ProfileAgent / SafetyAgent。
-   - `query_prescriptions`: RefillAgent / SafetyAgent。
-   - `query_medicine_box`: RefillAgent / ReminderAgent / SafetyAgent。
-   - `check_pharmacy_inventory`: PharmacyAgent。
-   - `search_safety_knowledge`: SafetyAgent / RefillAgent / ReminderAgent。
-   - `create_confirmation_draft`: RefillAgent / PharmacyAgent / ReminderAgent，且 `requires_human_confirmation=True`。
-
-6. 医疗安全边界：
-   - mock 工具不返回 AI 诊断。
-   - mock 工具不返回自动开方成功。
-   - mock 工具不建议用户自行加量、减量、停药或换药。
-   - `create_confirmation_draft` 只能返回 `status="draft"`。
-
-7. 测试：
-   - 新增 `backend/tests/test_tool_registry.py`。
-   - 新增 `backend/tests/test_mock_tools.py`。
-   - 覆盖注册、重复注册、未注册调用、权限拒绝、allowed_tools 拒绝、输入/输出 schema 错误、人工确认门、draft 状态、安全文本和 ToolCallTrace 映射。
+4. 工具边界：
+   - 所有工具调用统一通过 `ToolRegistry.call`。
+   - `create_confirmation_draft` 需要人工确认。
+   - `ToolResult` 可映射为 `ToolCallTrace`。
+   - mock 工具不返回 AI 诊断、自动开方或剂量调整建议。
 
 ### 未实现内容
 
 - 未访问数据库。
-- 未调用真实 FastAPI API。
-- 未实现真实业务工具 handler。
+- 未调用真实业务 API。
+- 未实现真实数据库查询工具。
 - 未执行 LangGraph。
 - 未调用 LLM。
 - 未持久化 `agent_tool_calls`。
+
+---
+
+## 阶段 2C-2 变更记录
+
+本次阶段目标：实现最小 Agent Harness Runtime，串联 ContextManager、ToolRegistry、RunTrace 和 DeterministicEvaluator。
+
+### 已完成内容
+
+1. 新增 `backend/app/agent/harness_runtime.py`。
+
+2. 新增核心对象：
+   - `AgentHarnessRuntime`
+   - `HarnessRuntimeResult`
+   - `HarnessRuntimeBatchResult`
+
+3. `AgentHarnessRuntime` 方法：
+   - `load_case`
+   - `build_initial_context`
+   - `build_role_views`
+   - `execute_expected_tools_with_mock_registry`
+   - `build_run_trace`
+   - `evaluate`
+   - `run_case`
+   - `run_all`
+
+4. 串联路径：
+   - `ExpectedCase`
+   - `ContextManager.build_envelope`
+   - `ContextManager.build_role_view`
+   - `ToolRegistry.call`
+   - `ToolResult`
+   - `RunTrace`
+   - `DeterministicEvaluator.evaluate`
+   - `EvaluationResult`
+   - `HarnessRunner.aggregate`
+
+5. 测试：
+   - 新增 `backend/tests/test_harness_runtime.py`。
+   - 覆盖正常续方、高风险安全、所有工具通过 registry.call、禁止直接调用 mock handler、人工确认、成员隔离、EvaluationResult、16 条 fixture 批量运行、聚合指标、权限失败、缺 required tool 和 ToolResult -> ToolCallTrace。
+
+### 指标说明
+
+- `task_success_rate`: 任务成功率。
+- `tool_call_accuracy_avg`: 工具覆盖率平均值。
+- `groundedness_rate`: 来源依据覆盖率。
+- `schema_valid_rate`: schema 合法率。
+- `hallucination_rate`: 幻觉/禁用表达触发率。
+- `safety_recall_rate`: 安全标记召回率。
+- `human_confirmation_rate`: 人工确认提示覆盖率。
+- `context_isolation_pass_rate`: 成员隔离通过率。
+- `p95_latency_ms`: mock 延迟 95 分位。
+
+### 未实现内容
+
+- 未访问数据库。
+- 未调用 FastAPI API。
+- 未实现真实数据库查询工具。
+- 未实现 LangGraph 工作流。
+- 未调用 LLM。
 - 未修改 ORM、Alembic、seed 或前端。
+- runtime 指标只代表 deterministic mock fixtures，不代表真实线上、生产或临床效果。
 
 ### 下一阶段建议
 
-实现 ToolResult 到 ToolEvidenceRef / RunTrace 的 adapter，并用 mock ContextEnvelope + mock ToolRegistry 串起一次最小离线工具调用 replay。
+实现 ToolResult / RunTrace 到持久化审计记录的 adapter，并为 mock runtime 增加 JSON/Markdown 双格式报告输出。

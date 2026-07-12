@@ -10,7 +10,9 @@ from app.tools.tool_schemas import (
     ToolSpec,
 )
 
+
 ToolDefinition = ToolSpec
+
 
 __all__ = [
     "RetryPolicy",

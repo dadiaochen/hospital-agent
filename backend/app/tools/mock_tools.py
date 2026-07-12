@@ -85,7 +85,6 @@ def register_mock_tools(registry: ToolRegistry) -> ToolRegistry:
             allowed_agent_roles=["ProfileAgent", "SafetyAgent"],
             timeout_ms=500,
             retry_policy=RetryPolicy(max_attempts=1, backoff_ms=0),
-            requires_human_confirmation=False,
         ),
         query_health_profile,
     )
@@ -99,7 +98,6 @@ def register_mock_tools(registry: ToolRegistry) -> ToolRegistry:
             allowed_agent_roles=["RefillAgent", "SafetyAgent"],
             timeout_ms=500,
             retry_policy=RetryPolicy(max_attempts=1, backoff_ms=0),
-            requires_human_confirmation=False,
         ),
         query_prescriptions,
     )
@@ -113,7 +111,6 @@ def register_mock_tools(registry: ToolRegistry) -> ToolRegistry:
             allowed_agent_roles=["RefillAgent", "ReminderAgent", "SafetyAgent"],
             timeout_ms=500,
             retry_policy=RetryPolicy(max_attempts=1, backoff_ms=0),
-            requires_human_confirmation=False,
         ),
         query_medicine_box,
     )
@@ -127,7 +124,6 @@ def register_mock_tools(registry: ToolRegistry) -> ToolRegistry:
             allowed_agent_roles=["PharmacyAgent"],
             timeout_ms=500,
             retry_policy=RetryPolicy(max_attempts=1, backoff_ms=0),
-            requires_human_confirmation=False,
         ),
         check_pharmacy_inventory,
     )
@@ -141,7 +137,6 @@ def register_mock_tools(registry: ToolRegistry) -> ToolRegistry:
             allowed_agent_roles=["SafetyAgent", "RefillAgent", "ReminderAgent"],
             timeout_ms=500,
             retry_policy=RetryPolicy(max_attempts=1, backoff_ms=0),
-            requires_human_confirmation=False,
         ),
         search_safety_knowledge,
     )

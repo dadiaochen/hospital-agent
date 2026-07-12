@@ -14,11 +14,12 @@
 4. 阶段 2B-1：实现 Context / Evaluation Pydantic 契约、16 条固定 fixture 和契约测试。
 5. 阶段 2B-2：实现 deterministic evaluator、mock trace fixture、HarnessRunner、聚合指标和 Markdown 示例报告。
 6. 阶段 2B-3：实现 ContextManager 的 envelope 构建、角色视图裁剪、compact、RunSummary 和 reset_after_run。
-7. 后续基础 API 阶段：接入家庭成员、药箱、处方、购药记录、知识库和 Agent run 查询 API。
-8. 阶段 2C-1：实现 ToolRegistry 契约层和六类 deterministic mock 工具，统一 schema、权限、超时、重试、确认和 trace 映射。
-9. 后续工具接入阶段：将 ToolRegistry handler 接入真实服务/数据库，并持久化 `agent_tool_calls`。
-10. 后续 Agent 阶段：实现最小 Multi-Agent 编排和运行时 SafetyAgent。
-11. 后续 Harness 阶段：接入脱敏真实 trace replay、版本化数据集和报告归档。
+7. 阶段 2C-1：实现 ToolRegistry 契约层和六类 deterministic mock 工具，统一 schema、权限、超时、重试、确认和 trace。
+8. 阶段 2C-2：实现最小 Agent Harness Runtime，串联 ContextManager、ToolRegistry、RunTrace 和 DeterministicEvaluator。
+9. 后续基础 API 阶段：接入家庭成员、药箱、处方、购药记录、知识库和 Agent run 查询 API。
+10. 后续工具接入阶段：将 ToolRegistry handler 接入真实服务/数据库，并持久化 `agent_tool_calls`。
+11. 后续 Agent 阶段：实现最小 Multi-Agent 编排和运行时 SafetyAgent。
+12. 后续 Harness 阶段：接入脱敏真实 trace replay、版本化数据集和报告归档。
 
 ## Multi-Agent 角色边界
 
@@ -189,12 +190,22 @@ EvaluatorAgent 只读取：
 
 ## 阶段 2C-1 已完成
 
-- 新增 `ToolSpec`、`ToolExecutionContext`、`ToolResult`、`RetryPolicy` 和 `ToolPermissionScope` 契约。
-- 新增 `ToolRegistry.call`，统一处理工具存在性、上下文 allowed tools、角色权限、输入/输出 schema、handler 异常和人工确认门。
-- 新增 6 个 deterministic mock 工具，返回固定 source/evidence，不访问数据库或 API。
-- `ToolResult` 可映射为 `ToolCallTrace` 所需字段，后续 Harness 可基于 `success`、`schema_valid`、`evidence_present`、`source_name` 和 `fallback_action` 评估工具调用质量。
-- `create_confirmation_draft` 在未获得人工确认时不会执行 handler，返回 `fallback_action="require_human_confirmation"`。
-- mock 工具不返回 AI 诊断、自动开方或剂量调整建议；草稿工具只返回 `status="draft"`。
+- 新增 `ToolSpec`、`ToolExecutionContext`、`ToolResult`、`RetryPolicy` 和 `ToolPermissionScope`。
+- 新增 6 个 deterministic mock 工具。
+- `ToolRegistry.call` 统一处理工具存在性、上下文 allowed tools、角色权限、输入/输出 schema、handler 异常和人工确认门。
+- `ToolResult` 可映射为 `ToolCallTrace`。
+- mock 工具不访问数据库、API、LLM 或 LangGraph，不返回 AI 诊断、自动开方或剂量调整建议。
+
+## 阶段 2C-2 已完成
+
+- 新增 `AgentHarnessRuntime`，形成 `ExpectedCase -> ContextEnvelope -> RoleSpecificContextView -> ToolResult -> RunTrace -> EvaluationResult` 的最小闭环。
+- 新增 `HarnessRuntimeResult`，保存单条 case 的上下文、角色视图、工具结果、运行轨迹和评估结果。
+- 新增 `HarnessRuntimeBatchResult`，保存批量 runtime 结果和聚合指标。
+- `run_case` 可跑通正常续方和高风险安全 case。
+- `run_all` 可运行 16 条 fixed fixtures，并生成聚合指标。
+- 所有工具调用都通过 `ToolRegistry.call`，测试中使用 spy registry 验证调用路径。
+- Runtime 不直接调用 mock handler，不访问数据库，不调用 FastAPI API，不调用 LLM，不执行 LangGraph。
+- runtime 指标只代表 deterministic mock fixtures，不代表真实线上、生产或临床效果。
 
 ## 运行与验证
 

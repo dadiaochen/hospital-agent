@@ -2,7 +2,7 @@
 
 这是一个面向互联网医院业务链路的家庭健康事务管理 Agent 项目。系统定位是长期健康管家，不是 AI 医生：不诊断、不自动开方、不修改医生处方，所有复诊、购药、提醒创建等关键动作都必须经过用户或医生确认。
 
-当前完成到阶段 2C-1：已实现 Tool Registry 契约层和 6 个 deterministic mock 工具调用，支持 ToolSpec、ToolExecutionContext、ToolResult、权限校验、schema 校验、人工确认门和 ToolCallTrace 映射；仍未实现真实数据库查询工具、FastAPI 业务 API、LangGraph 工作流或真实在线 EvaluatorAgent。
+当前完成到阶段 2C-2：已实现 Tool Registry 契约层、6 个 deterministic mock 工具，以及最小 Agent Harness Runtime，可将 ContextManager、ToolRegistry、RunTrace 和 DeterministicEvaluator 串联起来回放 16 条固定 fixture；仍未实现真实数据库查询工具、FastAPI 业务 API、LangGraph 工作流或真实在线 EvaluatorAgent。
 
 ## 技术栈
 
@@ -106,6 +106,7 @@ python -m pytest backend\tests -q
 │   │   │   ├── context_manager.py
 │   │   │   ├── eval_schemas.py
 │   │   │   ├── evaluator.py
+│   │   │   ├── harness_runtime.py
 │   │   │   ├── harness_runner.py
 │   │   │   └── run_trace_schemas.py
 │   │   ├── api/
@@ -127,8 +128,7 @@ python -m pytest backend\tests -q
 │       ├── test_context_manager.py
 │       ├── test_deterministic_evaluator.py
 │       ├── test_harness_runner.py
-│       ├── test_mock_tools.py
-│       └── test_tool_registry.py
+│       └── test_harness_runtime.py
 ├── frontend/
 │   ├── app/
 │   ├── components/
@@ -283,14 +283,36 @@ python -m compileall backend\app backend\tests
 ## 阶段 2C-1 已完成
 
 - 新增 `backend/app/tools/tool_schemas.py`，定义 `ToolSpec`、`ToolExecutionContext`、`ToolResult`、`RetryPolicy` 和 `ToolPermissionScope`。
-- 新增 `backend/app/tools/tool_registry.py`，实现 `register`、`get_tool`、`list_tools`、`list_allowed_tools` 和 `call`。
-- `ToolRegistry.call` 会检查工具存在性、`allowed_tools`、`allowed_agent_roles`、输入/输出 schema、handler 异常和人工确认门。
-- 新增 `backend/app/tools/mock_tools.py`，注册 6 个 deterministic mock 工具：`query_health_profile`、`query_prescriptions`、`query_medicine_box`、`check_pharmacy_inventory`、`search_safety_knowledge`、`create_confirmation_draft`。
-- `create_confirmation_draft` 设置 `requires_human_confirmation=True`；未确认时不会执行 handler，只返回 `fallback_action="require_human_confirmation"`。
-- mock 工具只返回固定模拟证据，不访问数据库，不调用 API，不调用 LLM，不生成诊断、自动开方或剂量调整建议。
-- 新增 `backend/tests/test_tool_registry.py` 和 `backend/tests/test_mock_tools.py`，覆盖注册、权限、schema、人工确认、安全文本和 ToolCallTrace 映射。
+- 新增 `backend/app/tools/tool_registry.py`，实现工具注册、查询、角色可用工具列表和 `ToolRegistry.call`。
+- 新增 `backend/app/tools/mock_tools.py`，提供 6 个 deterministic mock 工具：健康档案、处方、药箱、药店库存、安全知识和确认草稿。
+- `ToolRegistry.call` 统一校验工具存在性、`allowed_tools`、角色权限、输入/输出 schema、handler 异常和人工确认门。
+- `ToolResult` 可映射为 `ToolCallTrace` 所需字段。
+- mock 工具不访问数据库、不调用 API、不调用 LLM，不返回诊断、自动开方或剂量调整建议。
 
-阶段 2C-1 验证命令：
+## 阶段 2C-2 已完成
+
+- 新增 `backend/app/agent/harness_runtime.py`，实现最小 `AgentHarnessRuntime`。
+- 新增 `HarnessRuntimeResult` 和 `HarnessRuntimeBatchResult`，保存 `ContextEnvelope`、角色视图、`ToolResult`、`RunTrace` 和 `EvaluationResult`。
+- Runtime 默认通过 `ContextManager.build_envelope` 构造上下文，通过 `ContextManager.build_role_view` 构造角色视图。
+- Runtime 根据 `ExpectedCase.expected_required_tools` 调用 mock `ToolRegistry.call`，不直接调用 mock handler。
+- Runtime 将 `ToolResult` 转成 `ToolCallTrace`，并构造 `RAGTrace`、`SafetyTrace` 和 mock `FinalAnswerTrace`。
+- Runtime 使用 `DeterministicEvaluator.evaluate` 生成 `EvaluationResult`，不是手写成功结果。
+- `run_all` 可运行 16 条 fixture，并复用 `HarnessRunner.aggregate` 聚合指标。
+- 新增 `backend/tests/test_harness_runtime.py`，覆盖正常续方、高风险安全、权限失败、缺工具失败、确认门、成员隔离、trace 来源、批量运行和无外部依赖。
+
+聚合指标中文解释：
+
+- `task_success_rate`：任务成功率。
+- `tool_call_accuracy_avg`：预期工具调用覆盖率平均值。
+- `groundedness_rate`：答案依据覆盖率。
+- `schema_valid_rate`：结构化契约合法率。
+- `hallucination_rate`：幻觉或禁用表达触发率。
+- `safety_recall_rate`：安全标记召回率。
+- `human_confirmation_rate`：需要人工确认时确认提示覆盖率。
+- `context_isolation_pass_rate`：成员上下文隔离通过率。
+- `p95_latency_ms`：mock 运行延迟的 95 分位值。
+
+阶段 2C-2 验证命令：
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
@@ -298,13 +320,15 @@ python -m pytest backend\tests -q
 python -m compileall backend\app backend\tests
 ```
 
+本阶段 runtime 指标只代表 deterministic mock fixtures 的回放结果，不代表真实线上、生产或临床效果。
+
 ## 项目亮点与简历描述
 
 项目描述：基于互联网医院问诊、处方、药店审核、购药履约链路，设计家庭健康管家 Agent，帮助用户整理慢病续方、复诊材料、家庭药箱、用药提醒和 Agent 执行记录。
 
 技术栈：FastAPI、SQLAlchemy、PostgreSQL、Redis、Pydantic、LangGraph、Next.js、TypeScript、Tailwind CSS、Docker。
 
-核心职责：负责后端分层架构、Multi-Agent 角色边界、医疗安全策略、ContextManager、Context Reset / Compaction、Tool Registry 契约层，以及 Agent Harness 的强类型契约、确定性评估规则和固定用例回放。
+核心职责：负责后端分层架构、Multi-Agent 角色边界、医疗安全策略、ContextManager、Context Reset / Compaction、Tool Registry 契约层，以及 Agent Harness 的强类型契约、mock runtime、确定性评估规则和固定用例回放。
 
 面试讲解稿：项目重点不是让模型替代医生，而是把模型放在可审计、可确认、可回放、可评估的业务流程中。SafetyAgent 在运行时拦截高风险请求，EvaluatorAgent 在答案生成后检查证据、确认和成员隔离，两者职责分离。
 
@@ -312,4 +336,4 @@ python -m compileall backend\app backend\tests
 
 ## 下一阶段建议
 
-下一步可实现 Tool Registry 与 ContextManager / RunTrace 的轻量 adapter，把 mock ToolResult 统一转成 ToolEvidenceRef 和 ToolCallTrace；仍不接真实数据库和 LangGraph 编排。
+下一步可实现 ToolResult 到持久化 `agent_tool_calls` 的 adapter，并把 mock runtime 产物导出为 JSON/Markdown 双格式报告；真实数据库工具和 LangGraph 编排仍放在后续阶段。

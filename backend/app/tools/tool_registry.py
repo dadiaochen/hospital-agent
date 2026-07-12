@@ -11,11 +11,7 @@ ToolHandler = Callable[[BaseModel, ToolExecutionContext], BaseModel | dict[str, 
 
 
 class ToolRegistry:
-    """Deterministic tool registry contract layer.
-
-    The registry validates schemas, permissions, and confirmation gates. It does
-    not access databases, HTTP APIs, LLMs, or LangGraph.
-    """
+    """Deterministic tool registry contract layer."""
 
     def __init__(self) -> None:
         self._specs: dict[str, ToolSpec] = {}
@@ -113,7 +109,7 @@ class ToolRegistry:
 
         try:
             raw_output = self._handlers[tool_name](validated_input, execution_context)
-        except Exception as exc:  # noqa: BLE001 - registry must normalize handler failures.
+        except Exception as exc:  # noqa: BLE001 - registry normalizes handler failures.
             return self._failure(
                 tool_name=tool_name,
                 started=started,

@@ -187,21 +187,35 @@ python -m pytest backend\tests -q
 ## 阶段 2C-1 已完成
 
 - 实现 Tool Registry 契约层：`ToolSpec`、`ToolExecutionContext`、`ToolResult`、`RetryPolicy` 和 `ToolPermissionScope`。
-- 实现 `ToolRegistry.call` 的 deterministic 执行规则：工具存在性、上下文 allowed tools、角色权限、输入/输出 schema、handler 异常、人工确认门和失败 fallback。
-- 实现 6 个 mock 工具注册：健康档案、处方、药箱、药店库存、安全知识和确认草稿。
-- `create_confirmation_draft` 需要人工确认；未确认时 handler 不执行，只返回 `require_human_confirmation` fallback。
-- `ToolResult` 可以映射为 `ToolCallTrace` 所需字段。
-- 新增测试覆盖注册、重复注册、未注册调用、权限拒绝、allowed tools 拒绝、schema 错误、人工确认门、mock 工具安全边界和 trace 映射。
+- 实现 6 个 deterministic mock 工具。
+- `ToolRegistry.call` 统一处理工具存在性、角色权限、schema 校验、人工确认门和失败 fallback。
+- `ToolResult` 可映射为 `ToolCallTrace` 所需字段。
 
 可以写：
 
 - 设计并实现 Tool Registry 契约层，通过 ToolSpec / ToolExecutionContext / ToolResult 统一工具权限、schema 校验、人工确认和 trace 映射。
-- 构建 deterministic mock tools，用于在不访问数据库和不调用 LLM 的前提下验证 Agent Harness 工具调用路径。
 
 不能写：
 
 - 已实现真实数据库查询工具、真实药店库存查询、真实复诊/购药/提醒提交。
-- Tool Registry 已接入生产业务 API 或 LangGraph 运行工作流。
-- mock 工具结果代表真实医疗、库存或临床数据。
 
-下一步：实现 ToolResult 到 ToolEvidenceRef / RunTrace 的 adapter，并在 mock 工作流中串起 ContextManager、ToolRegistry 和 HarnessRunner。
+## 阶段 2C-2 已完成
+
+- 实现 mock Agent Harness Runtime，可串联 ContextManager、ToolRegistry、RunTrace 和 DeterministicEvaluator。
+- 支持单条 `run_case` 和批量 `run_all`，可回放 16 条固定 ExpectedCase fixture。
+- Runtime 通过 `ToolRegistry.call` 调用 mock tools，不直接调用 mock handler。
+- Runtime 从 `ToolResult` 构造 `ToolCallTrace`，并生成 `RAGTrace`、`SafetyTrace`、mock `FinalAnswerTrace` 和 `EvaluationResult`。
+- 新增测试覆盖正常续方、高风险安全、权限失败、缺工具失败、人工确认、成员隔离、trace 来源和无外部依赖。
+
+可以写：
+
+- 实现 mock Agent Harness Runtime，可回放 fixture 并生成 EvaluationResult，用于验证上下文、工具调用、trace 和评估链路。
+
+不能写：
+
+- 已接入真实业务数据库。
+- 已实现线上 Agent 评估。
+- mock runtime 指标代表真实 safety recall、hallucination rate、groundedness 或 p95 latency。
+- 已实现 LangGraph 真实业务编排或在线 EvaluatorAgent。
+
+下一步：实现 ToolResult / RunTrace 到持久化审计记录的 adapter，并为 mock runtime 增加 JSON/Markdown 双格式报告输出。

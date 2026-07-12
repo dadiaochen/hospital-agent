@@ -74,12 +74,11 @@ Raw Conversation
 - `input_schema`
 - `output_schema`
 - `permission_scope`
-- `allowed_agent_roles`
-- `timeout_ms`
+- `timeout`
 - `retry_policy`
 - `requires_human_confirmation`
 
-调用前执行工具存在性校验、`allowed_tools` 校验、角色权限校验、参数 schema 校验和人工确认门校验；调用后返回结构化 `ToolResult`，并可映射为 `ToolCallTrace` 所需字段。后续接入数据库和业务服务时，再把 `ToolResult` 与 `agent_tool_calls` 持久化对齐。
+调用前执行参数校验、权限校验、安全边界校验；调用后记录 `agent_tool_calls`。
 
 ## 6. 数据存储
 
@@ -289,29 +288,56 @@ python -m compileall backend\app backend\tests
 
 `backend/app/tools/` 已实现纯内存工具契约层：
 
-- `tool_schemas.py`: 定义 `ToolSpec`、`ToolExecutionContext`、`ToolResult`、`RetryPolicy` 和 `ToolPermissionScope`。
-- `tool_registry.py`: 实现 `ToolRegistry.register`、`get_tool`、`list_tools`、`list_allowed_tools` 和 `call`。
-- `mock_tools.py`: 注册 6 个 deterministic mock 工具，只返回固定模拟证据。
-- `registry.py`: 保留兼容导出，避免旧导入路径失效。
+- `tool_schemas.py`: `ToolSpec`、`ToolExecutionContext`、`ToolResult`、`RetryPolicy` 和 `ToolPermissionScope`。
+- `tool_registry.py`: `register`、`get_tool`、`list_tools`、`list_allowed_tools` 和 `call`。
+- `mock_tools.py`: 6 个 deterministic mock 工具。
+- `registry.py`: 兼容旧导入路径。
 
-`ToolRegistry.call` 的执行顺序：
+`ToolRegistry.call` 负责工具存在性、`allowed_tools`、角色权限、输入/输出 schema、handler 异常和人工确认门。所有成功或失败结果都返回 `ToolResult`，后续可转换为 `ToolCallTrace`。
 
-1. 检查工具是否已注册。
-2. 检查 `tool_name` 是否在 `ToolExecutionContext.allowed_tools` 中。
-3. 检查 `agent_role` 是否在 `ToolSpec.allowed_agent_roles` 中。
-4. 若工具需要人工确认且 `human_confirmation_granted=False`，不执行 handler，返回 `fallback_action="require_human_confirmation"`。
-5. 使用 `input_schema` 校验输入。
-6. 执行 deterministic handler。
-7. 使用 `output_schema` 校验输出。
-8. 返回 `ToolResult`，其中包含 `success`、`error_type`、`fallback_action`、`latency_ms`、`schema_valid`、`evidence_present` 和 `source_name`。
+## 16. 阶段 2C-2 Agent Harness Runtime
 
-已注册 mock 工具：
+`backend/app/agent/harness_runtime.py` 实现最小 mock runtime：
 
-- `query_health_profile`: ProfileAgent / SafetyAgent。
-- `query_prescriptions`: RefillAgent / SafetyAgent。
-- `query_medicine_box`: RefillAgent / ReminderAgent / SafetyAgent。
-- `check_pharmacy_inventory`: PharmacyAgent。
-- `search_safety_knowledge`: SafetyAgent / RefillAgent / ReminderAgent。
-- `create_confirmation_draft`: RefillAgent / PharmacyAgent / ReminderAgent，且需要人工确认。
+```text
+ExpectedCase
+  -> ContextManager.build_envelope
+  -> ContextManager.build_role_view
+  -> ToolRegistry.call
+  -> ToolResult
+  -> RunTrace
+  -> DeterministicEvaluator.evaluate
+  -> EvaluationResult
+  -> HarnessRunner.aggregate
+```
 
-安全边界：mock 工具不访问数据库、不调用 API、不调用 LLM、不执行 LangGraph，不返回 AI 诊断、自动开方成功或建议用户自行加量、减量、停药、换药的内容。`create_confirmation_draft` 只能返回 `status="draft"`。
+核心对象：
+
+- `AgentHarnessRuntime`: 串联上下文、工具、trace 和评估。
+- `HarnessRuntimeResult`: 保存单条 case 的 ContextEnvelope、role views、ToolResult、RunTrace 和 EvaluationResult。
+- `HarnessRuntimeBatchResult`: 保存 16 条 fixture 的 runtime 结果和聚合指标。
+
+执行边界：
+
+- 不调用 LLM。
+- 不访问数据库。
+- 不调用 FastAPI API。
+- 不执行 LangGraph。
+- 不直接调用 mock tool handler，所有工具调用必须经过 `ToolRegistry.call`。
+- FinalAnswerTrace 只生成 mock answer，并保留来源、确认和安全边界说明。
+- 高风险 case 直接继承 ExpectedCase 的 expected safety flags 到 SafetyTrace。
+- 需要人工确认的 case 设置 `waiting_for_user_confirmation=True` 和 `action_status="awaiting_confirmation"`。
+
+聚合指标：
+
+- `task_success_rate`: 任务成功率。
+- `tool_call_accuracy_avg`: 工具覆盖率平均值。
+- `groundedness_rate`: 来源依据覆盖率。
+- `schema_valid_rate`: schema 合法率。
+- `hallucination_rate`: 幻觉/禁用表达触发率。
+- `safety_recall_rate`: 安全标记召回率。
+- `human_confirmation_rate`: 人工确认提示覆盖率。
+- `context_isolation_pass_rate`: 成员隔离通过率。
+- `p95_latency_ms`: mock 延迟 95 分位。
+
+这些指标只代表 deterministic mock fixtures，不代表真实线上、生产或临床效果。
