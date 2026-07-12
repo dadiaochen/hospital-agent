@@ -2,7 +2,7 @@
 
 这是一个面向互联网医院业务链路的家庭健康事务管理 Agent 项目。系统定位是长期健康管家，不是 AI 医生：不诊断、不自动开方、不修改医生处方，所有复诊、购药、提醒创建等关键动作都必须经过用户或医生确认。
 
-当前完成到阶段 2D-1：已在 2C 的 Tool Registry 与最小 Harness Runtime 之上接入五类数据库只读工具，能够从 ORM 测试数据读取健康档案、处方与购药记录、家庭药箱、药店库存和安全知识来源；仍未实现写入类草稿工具、FastAPI 业务 API、LangGraph 工作流或真实在线 EvaluatorAgent。
+当前完成到阶段 2D-2：已实现 confirmation-gated 数据库草稿写入工具，支持续方、复诊、购药候选和提醒四类本地 draft，并提供幂等、用户/成员隔离、关联记录校验和医疗安全阻断；仍未实现 FastAPI 业务 API、LangGraph 工作流、外部业务提交或真实在线 EvaluatorAgent。
 
 ## 技术栈
 
@@ -14,7 +14,7 @@
 
 [docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md) 是项目阶段编号、完成状态、后续顺序和 MVP 验收标准的唯一权威来源。其他文档只记录子系统设计或阶段历史，不单独新增阶段编号。
 
-当前唯一下一阶段是 **2D-2：待确认草稿写入工具**。
+当前唯一下一阶段是 **2E-1：基础读取 API**。
 
 ## 本地运行
 
@@ -123,8 +123,10 @@ python -m pytest backend\tests -q
 │   │   ├── safety/
 │   │   ├── schemas/
 │   │   ├── services/
-│   │   │   └── agent_tool_query_service.py
+│   │   │   ├── agent_tool_query_service.py
+│   │   │   └── confirmation_draft_service.py
 │   │   └── tools/
+│   │       ├── confirmation_tools.py
 │   │       ├── db_tools.py
 │   │       ├── mock_tools.py
 │   │       ├── registry.py
@@ -138,7 +140,8 @@ python -m pytest backend\tests -q
 │       ├── test_deterministic_evaluator.py
 │       ├── test_harness_runner.py
 │       ├── test_harness_runtime.py
-│       └── test_db_backed_tools.py
+│       ├── test_db_backed_tools.py
+│       └── test_confirmation_draft_tool.py
 ├── frontend/
 │   ├── app/
 │   ├── components/
@@ -349,13 +352,31 @@ python -m pytest backend\tests -q
 python -m compileall backend\app backend\tests
 ```
 
+## 阶段 2D-2 已完成
+
+- 新增 `backend/app/services/confirmation_draft_service.py`，使用现有 ORM 表创建续方、复诊、购药候选和提醒草稿。
+- 新增 `backend/app/tools/confirmation_tools.py`，通过 `ToolRegistry.call` 执行角色、`allowed_tools`、schema 和人工确认门校验。
+- 未确认调用不会执行 handler 或写数据库；确认后只创建 `status="draft"` 的本地记录。
+- 草稿保留 `created_by_run_id`、幂等键、用户/成员和本地确认审计；`external_action_status` 固定为 `not_submitted`。
+- 重复幂等键返回已有草稿；跨用户、跨成员、错误关联记录和越权角色会被拒绝。
+- 医疗越界文本会进入 SafetyAgent fallback，不写草稿。
+- 本阶段未修改 ORM、Alembic、seed、API 或前端，也未调用 LangGraph、LLM 或外部服务。
+
+阶段 2D-2 验证命令：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests -q
+python -m compileall backend\app backend\tests
+```
+
 ## 项目亮点与简历描述
 
 项目描述：基于互联网医院问诊、处方、药店审核、购药履约链路，设计家庭健康管家 Agent，帮助用户整理慢病续方、复诊材料、家庭药箱、用药提醒和 Agent 执行记录。
 
 技术栈：FastAPI、SQLAlchemy、PostgreSQL、Redis、Pydantic、LangGraph、Next.js、TypeScript、Tailwind CSS、Docker。
 
-核心职责：负责后端分层架构、Multi-Agent 角色边界、医疗安全策略、ContextManager、Context Reset / Compaction、Tool Registry 契约层、数据库只读工具适配，以及 Agent Harness 的强类型契约、mock runtime、确定性评估规则和固定用例回放。
+核心职责：负责后端分层架构、Multi-Agent 角色边界、医疗安全策略、ContextManager、Context Reset / Compaction、Tool Registry、数据库读写工具适配与人工确认门，以及 Agent Harness 的强类型契约、mock runtime、确定性评估规则和固定用例回放。
 
 面试讲解稿：项目重点不是让模型替代医生，而是把模型放在可审计、可确认、可回放、可评估的业务流程中。SafetyAgent 在运行时拦截高风险请求，EvaluatorAgent 在答案生成后检查证据、确认和成员隔离，两者职责分离。
 
@@ -363,4 +384,4 @@ python -m compileall backend\app backend\tests
 
 ## 下一阶段建议
 
-按 [总开发路线图](docs/DEVELOPMENT_ROADMAP.md)，下一步进入阶段 2D-2：实现只创建待确认状态的 `create_confirmation_draft` 写入工具，不直接提交复诊申请、购药订单或最终提醒。
+按 [总开发路线图](docs/DEVELOPMENT_ROADMAP.md)，下一步进入阶段 2E-1：使用 FastAPI 暴露家庭成员、药箱、处方、购药记录、知识库和 Agent run 的基础读取 API；不在读取 API 阶段实现 LangGraph 或复杂写入流程。

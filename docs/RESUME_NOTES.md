@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-Phase 2D-1: DB-backed read-only tool adapters integrated with the Tool Registry contract and deterministic Harness foundation.
+Phase 2D-2: confirmation-gated local draft writes integrated with Tool Registry permissions, idempotency, member isolation and safety fallback.
 
 ## 已完成
 
@@ -239,3 +239,20 @@ python -m pytest backend\tests -q
 - mock fixture 指标代表生产或临床效果。
 
 下一步：实现只创建待确认草稿的 `create_confirmation_draft`，所有关键动作继续由用户确认。
+
+## 阶段 2D-2 已完成
+
+- 实现 confirmation-gated 数据库草稿工具，覆盖续方、复诊、购药候选和提醒四类本地 draft。
+- 实现幂等重试、user/member 隔离、关联记录归属校验、action-role 权限和医疗越界文本阻断。
+- 未确认时零写入；成功结果明确 `external_action_status=not_submitted`。
+
+可以写：
+
+- 设计并实现带人工确认门、幂等控制和成员隔离的 Agent 草稿写入工具，将关键动作限制在本地 draft 状态。
+
+不能写：
+
+- 已提交真实复诊、完成购药下单、创建真实推送提醒或实现自动续方。
+- 已实现完整 FastAPI Agent API、LangGraph 工作流或生产级并发幂等。
+
+下一步：阶段 2E-1 基础读取 API。

@@ -86,9 +86,17 @@ class SafetyKnowledgeOutput(ToolContractModel):
     sources: list[dict[str, Any]]
 
 
-def create_db_tool_registry(db: Session) -> ToolRegistry:
+def create_db_tool_registry(
+    db: Session,
+    *,
+    include_confirmation_tools: bool = False,
+) -> ToolRegistry:
     registry = ToolRegistry()
     register_db_tools(registry, db)
+    if include_confirmation_tools:
+        from app.tools.confirmation_tools import register_confirmation_draft_tool
+
+        register_confirmation_draft_tool(registry, db)
     return registry
 
 

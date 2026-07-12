@@ -213,3 +213,10 @@ FinalAnswer 中的事实性陈述必须能回溯到 Tool Evidence 或 RAG Source
 - 缺少数据返回 `not_found`，不能把模型推断写入 `memory_refs`。
 - `ToolResult` 可映射为 `ToolCallTrace`；持久化 adapter 留到后续阶段。
 - 本阶段不写长期 memory，也不创建草稿或其他业务状态。
+
+## 10. 阶段 2D-2 草稿写入上下文边界
+
+- 写工具只接收当前 role-specific view 允许的 `create_confirmation_draft`。
+- `ToolExecutionContext.user_id`、`member_id` 和 action role 必须与工具输入一致。
+- 草稿 JSON 审计保留 `created_by_run_id` 和幂等键，但不写入长期 memory。
+- 未确认调用不写状态；确认后只写本地 draft，Context Reset 仍只保留 ToolResult、Trace 和来源引用。

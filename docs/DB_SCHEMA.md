@@ -343,3 +343,11 @@
 - `ToolResult` 只作为内存结果和后续 Trace adapter 输入，不写入 `agent_tool_calls`。
 - `create_confirmation_draft` 留到 2D-2；本阶段不创建复诊、购药、提醒或其他业务状态。
 - 缺少数据库事实时返回 `not_found` 与 fallback，不把模型推断写入数据库或长期 memory。
+
+## 11. 阶段 2D-2 数据库边界
+
+- 复用现有 `refill_plans`、`consultation_drafts`、`purchase_plans` 和 `medication_reminders`，不新增表、字段或 migration。
+- 草稿保持 `status="draft"` 和 `need_human_confirmation=true`。
+- `confirmed_at` 与 `confirmation_note` 记录用户允许创建本地草稿，不表示外部动作完成。
+- `created_by_run_id`、幂等键、user/member 和 `external_action_status` 写入现有 JSON 详情字段。
+- 幂等在 service 层检查；由于本阶段禁止新增唯一约束，并发重复请求仍需在后续数据库阶段评审。

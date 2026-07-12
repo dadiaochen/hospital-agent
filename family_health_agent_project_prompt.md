@@ -1391,3 +1391,28 @@ python -m compileall backend\app backend\tests
 ### 下一阶段建议
 
 进入 2D-2，只实现待用户确认的草稿创建，不直接提交复诊、下单或创建最终提醒。
+
+---
+
+## 阶段 2D-2 变更记录
+
+本阶段实现 confirmation-gated 数据库草稿写入，不新增 API、LangGraph、LLM、ORM、migration、seed 或前端功能。
+
+### 已完成内容
+
+1. 新增 `confirmation_draft_service.py`，写入续方、复诊、购药候选和提醒草稿。
+2. 新增 `confirmation_tools.py`，统一 schema、角色权限、确认门和 ToolResult。
+3. 未确认调用零写入；确认后只创建本地 `draft`，不执行外部动作。
+4. 实现幂等键、user/member 隔离、关联记录校验和医疗安全文本阻断。
+5. 新增 `test_confirmation_draft_tool.py`，覆盖四类草稿及失败路径。
+
+### 未实现内容
+
+- 未实现 FastAPI endpoint 或草稿状态转换 API。
+- 未执行真实医院提交、药店下单或提醒推送。
+- 未实现 LangGraph、LLM 或在线 EvaluatorAgent。
+- 未修改 ORM、Alembic、seed 或前端。
+
+### 下一阶段建议
+
+进入 2E-1，只实现基础读取 API，并保持 demo user/member 隔离。

@@ -232,3 +232,10 @@ python -m compileall backend\app backend\tests
 - service 层负责查询，tools 层负责契约、权限、schema、来源和 fallback。
 - DB 工具结果可映射为 `ToolCallTrace`，但本阶段不写 `agent_tool_calls`。
 - `create_confirmation_draft`、FastAPI API、LangGraph 和 LLM 仍未实现。
+
+## 阶段 2D-2 已完成
+
+- `create_confirmation_draft` 已接入真实数据库草稿表，并继续通过 Tool Registry 调用。
+- 未确认、越权角色、跨成员、错误关联和医疗越界文本都会返回结构化失败，不产生草稿。
+- 成功结果只表示本地 draft 已创建，外部动作状态固定为 `not_submitted`。
+- 测试覆盖四类草稿、幂等、确认门、隔离、安全和 Trace 映射。

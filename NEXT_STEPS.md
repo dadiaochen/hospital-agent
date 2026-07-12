@@ -4,13 +4,14 @@
 
 ## 当前状态
 
-- 已完成到阶段 2D-1：数据库只读工具适配层。
-- 当前线性整理分支：`codex/linear-roadmap`。
-- 当前唯一下一阶段：2D-2 待确认草稿写入工具。
+- 已完成到阶段 2D-2：confirmation-gated 本地草稿写入工具。
+- 当前开发分支：`codex/2d-2-confirmation-drafts`。
+- 当前唯一下一阶段：2E-1 基础读取 API。
 
-## 2D-2 入口条件
+## 2E-1 入口条件
 
 - 从已合并的最新线性主线创建新分支。
-- 只实现本地待确认草稿及确认审计。
-- 不实现 FastAPI API、LangGraph、真实医院提交、药店下单或提醒推送。
+- 只实现家庭成员、药箱、处方、购药记录、知识库和 Agent run 的读取 API。
+- 每个 endpoint 必须使用 Pydantic DTO、统一错误响应和 demo user/member 隔离。
+- 不实现 LangGraph、真实医院提交、药店下单或提醒推送。
 - 完成后更新总路线图状态，不在本文档新增后续编号。

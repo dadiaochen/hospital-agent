@@ -264,3 +264,20 @@ RoleSpecificContextView.allowed_tools
 ```
 
 五个工具分别读取当前成员档案、处方与购药记录、药箱、药店库存和安全知识。`ToolExecutionContext` 同时约束 `user_id`、`member_id`、角色和允许工具；查询失败返回结构化 fallback。2D-1 不注册写入类 `create_confirmation_draft`，也不持久化工具调用或执行正式 Agent 工作流。
+
+## 18. 阶段 2D-2 Confirmation Draft Tool
+
+```text
+RoleSpecificContextView.allowed_tools
+  -> ToolRegistry confirmation gate
+  -> create_confirmation_draft
+  -> confirmation_draft_service
+  -> local draft row
+  -> ToolResult / ToolCallTrace
+```
+
+- 未确认时返回 `human_confirmation_required`，handler 不执行且数据库零写入。
+- 确认后根据 action type 创建续方、复诊、购药候选或提醒草稿。
+- action type 与 Agent role 必须匹配，user/member 和关联记录必须属于同一上下文。
+- 草稿仍是本地 `draft`，不表示复诊已提交、药品已下单或提醒已推送。
+- 重试使用幂等键返回已有草稿；HTTP 状态转换留到 2E-2。

@@ -355,3 +355,13 @@ ExpectedCase
 - 工具契约不再反向依赖 `app.agent` 包入口，避免 `tools -> agent -> tools` 循环导入。
 
 本阶段不实现写入类草稿工具、FastAPI API、LangGraph、LLM 或外部服务，也不修改 ORM、迁移、seed 和前端。
+
+## 18. 阶段 2D-2 Confirmation-gated Draft Writes
+
+- `confirmation_draft_service.py` 负责成员归属、关联记录、安全文本、幂等查找和事务写入。
+- `confirmation_tools.py` 定义统一契约，并按 action type 限制 RefillAgent、PharmacyAgent 和 ReminderAgent。
+- 未确认调用由 Tool Registry 在 handler 前阻断，不写数据库。
+- 确认后只创建 `status="draft"` 的本地记录，`external_action_status` 固定为 `not_submitted`。
+- `created_by_run_id`、幂等键和用户/成员审计写入现有 JSON 字段，不新增 ORM 或 migration。
+
+本阶段不实现 FastAPI、状态转换 endpoint、LangGraph、LLM 或任何外部业务动作。

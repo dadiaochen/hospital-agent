@@ -76,8 +76,8 @@
 | 2C-1 | `DONE` | Tool Registry 与六个 mock 工具 | schema、权限、确认门测试通过 |
 | 2C-2 | `DONE` | Deterministic AgentHarnessRuntime | 16 条 fixture 可离线回放 |
 | 2D-1 | `DONE` | 五类数据库只读工具 | DB 工具与 2C Harness 联合测试通过 |
-| 2D-2 | `NEXT` | 待确认草稿写入工具 | 只写本地 draft / confirmation 状态 |
-| 2E-1 | `PLANNED` | 基础读取 API | 家庭、药箱、处方、知识、run 可查询 |
+| 2D-2 | `DONE` | 待确认草稿写入工具 | 只写本地 draft / confirmation 审计 |
+| 2E-1 | `NEXT` | 基础读取 API | 家庭、药箱、处方、知识、run 可查询 |
 | 2E-2 | `PLANNED` | 草稿与确认 API | 本地状态机和幂等确认通过 |
 | 2F-1 | `PLANNED` | Hybrid RAG | 关键词稳定、向量检索可选 |
 | 2F-2 | `PLANNED` | Model Gateway | LLM 与 deterministic fallback 同契约 |
@@ -97,29 +97,32 @@ main
   -> 2C-1 Tool Registry + deterministic mock tools
   -> 2C-2 deterministic Harness Runtime
   -> 2D-1 database-backed read-only tools
+  -> 2D-2 confirmation-gated local draft writes
 ```
 
-2A 至 2B-3 已包含在初始项目基线中。2C-1、2C-2、2D-1 已拆成独立提交，并通过完整后端测试。旧平行分支和 GitHub Desktop stash 暂时只作为恢复备份，待新线性分支合并并确认远程无误后再清理。
+2A 至 2B-3 已包含在初始项目基线中。2C-1、2C-2、2D-1 已拆成独立提交；2D-2 在其线性基础上实现，并通过完整后端测试。旧平行分支和 GitHub Desktop stash 暂时只作为恢复备份，待远程推送确认后再清理。
 
 ## 8. 后续阶段详细定义
 
 ### 2D-2 待确认草稿写入工具
 
-目标：实现 `create_confirmation_draft` 的真实数据库版本，仅创建本地待确认草稿。
+目标：实现 `create_confirmation_draft` 的真实数据库版本。Tool Registry 在 handler 前执行人工确认门；通过后只创建本地草稿，不执行任何外部动作。
 
 交付：
 
-- 为复诊/续方、购药方案和提醒创建统一草稿契约。
-- 状态限制为 `draft -> pending_confirmation -> confirmed | rejected | expired`。
-- 记录 `created_by_run_id`、确认人和确认时间等现有模型允许的审计信息。
+- 为复诊、续方、购药候选和提醒创建统一草稿契约。
+- 数据库记录保持 `status="draft"` 和 `need_human_confirmation=true`；`confirmed_at` 只表示用户允许创建本地草稿。
+- 在现有 JSON 字段中记录 `created_by_run_id`、幂等键、用户/成员和外部动作状态，不新增 ORM 字段。
 - Tool Registry 继续校验角色、schema、`allowed_tools` 和 `requires_human_confirmation`。
 
 验收：
 
-- 未确认调用不能产生 confirmed 状态。
-- 重复确认幂等，不重复创建业务记录。
+- 未确认调用不执行 handler，也不产生数据库记录。
+- 重复幂等键返回已有草稿，不重复创建业务记录。
 - 跨成员、跨用户确认被拒绝。
 - 不出现“已提交医院”“已下单”或“自动开方”等外部成功语义。
+
+状态确认、拒绝和过期的 HTTP 状态机统一留到 2E-2；2D-2 不提前实现 API。
 
 非目标：FastAPI endpoint、LangGraph、外部系统提交、自动医疗动作。
 

@@ -139,3 +139,12 @@ ToolRegistry.call(tool_name, tool_input, ToolExecutionContext)
 ```
 
 已接入 `query_health_profile`、`query_prescriptions`、`query_medicine_box`、`check_pharmacy_inventory` 和 `search_safety_knowledge`。这些工具为后续 API 提供证据来源，但当前不开放 HTTP 入口，也不写入草稿、购药方案、提醒或 `agent_tool_calls`。
+
+## 12. 阶段 2D-2 API 边界
+
+阶段 2D-2 新增后端内部 `create_confirmation_draft` 工具，但仍不新增 FastAPI endpoint。
+
+- 未确认调用不落库。
+- 确认后仅创建本地 `draft`，外部动作状态为 `not_submitted`。
+- 草稿查询、确认、拒绝和过期 endpoint 统一留到阶段 2E-2。
+- 阶段 2E-1 只实现读取 API，不提前接入复杂 Agent 工作流。
