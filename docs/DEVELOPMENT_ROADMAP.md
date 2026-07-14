@@ -6,7 +6,7 @@
 
 - `README.md` 只展示当前状态和本文档入口。
 - `NEXT_STEPS.md` 只展示本文档定义的最近一个待办阶段。
-- `HOSPITAL_LANGFLOW_HARNESS_PLAN.md`、`TECH_DESIGN.md` 等是子系统设计，不单独发明阶段编号。
+- `AGENT_WORKFLOW.md`、`TECH_DESIGN.md` 等是子系统设计，不单独发明阶段编号。
 - `family_health_agent_project_prompt.md` 保留需求和历史变更记录，不作为未来阶段排期来源。
 - 未先修改本文档，不得在任务指令、提交信息或“下一阶段建议”中新增 2E、3D 等阶段编号。
 

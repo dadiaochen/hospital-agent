@@ -1,283 +1,65 @@
-# Agent Workflow
+# Agent 工作流
 
-主 Agent 名称：`FamilyHealthAgent`。
-
-阶段 2A.2 更新工作流设计。阶段 2B-1 只实现该设计使用的 Pydantic 契约和固定 fixture，不实现新的 LangGraph 节点、业务工具或 EvaluatorAgent 代码。
-
-## 1. 总体工作流
+## 1. 目标工作流
 
 ```text
-Raw Conversation
-  -> TaskContext Builder
-  -> ContextEnvelope
+User Input
   -> Planner
-  -> Role-specific Context View
-  -> ProfileAgent / RefillAgent / PharmacyAgent / ReminderAgent
-  -> Tool Evidence / RAG Sources
+  -> ContextManager
+  -> Profile / Refill / Pharmacy / Reminder Agents
+  -> Tool Registry and RAG evidence
   -> SafetyAgent
-  -> Human Confirmation Gate
-  -> FinalAnswer
-  -> Persist RunTrace
-  -> RunSummary
-  -> Context Reset
-  -> EvaluatorAgent
-  -> Long-term Memory Policy Gate
+  -> Confirmation Draft (when required)
+  -> Final Answer
+  -> RunSummary and Context Reset
+  -> EvaluatorAgent review
 ```
 
-业务 Agent 只负责信息整理、工具查询、方案草稿和确认前准备。`EvaluatorAgent` 不在业务执行图中做决策，只在 FinalAnswer 生成后读取冻结产物进行评估。
+当前仓库已经实现这个流程所需的大部分确定性契约、工具和 Harness 回放；尚未把它接成真实 LangGraph 运行图或 HTTP Agent API。
 
-## 2. 业务执行节点
+## 2. 角色边界
 
-1. `task_context_builder`: 从原始对话提取当前任务、成员、意图、已确认槽位和缺失槽位。
-2. `build_context_envelope`: 由 ContextManager 建立当前 run 的结构化上下文和来源引用。
-3. `planner`: 选择所需角色和工具，不生成医疗建议。
-4. `build_role_context_view`: 由 ContextManager 为角色投影最小字段、当前 `member_id`、来源指针和 `allowed_tools`。
-5. `load_profile`: 读取当前成员档案和安全备注。
-6. `load_medication_context`: 读取处方、药箱和购药工具证据。
-7. `estimate_remaining_days`: 基于工具事实整理剩余天数，不凭模型猜测。
-8. `check_prescription_validity`: 整理医生处方有效期和确认要求，不替医生判断。
-9. `generate_draft`: 生成续方、复诊、购药或提醒草稿。
-10. `check_pharmacy_inventory`: 查询候选库存、配送和自提信息。
-11. `safety_check`: 在输出或关键动作前执行运行时安全拦截。
-12. `human_confirmation`: 对复诊、购药、提醒等关键动作保留待确认状态。
-13. `final_answer`: 区分工具事实、RAG 规则和模型解释，输出给用户。
-14. `persist_agent_run`: 保存 run 和工具调用 trace。
+| 角色 | 可以做什么 | 不能做什么 |
+| --- | --- | --- |
+| `Planner` | 识别 intent、成员、action、缺失槽位和所需工具。 | 不给医疗建议，不直接执行业务工具。 |
+| `ProfileAgent` | 读取成员档案、慢病标签、过敏和安全备注。 | 不从模型记忆补全病史。 |
+| `RefillAgent` | 读取处方、药箱和购药记录，整理续方或复诊材料。 | 不开方、不改剂量。 |
+| `PharmacyAgent` | 读取库存、配送和自提候选。 | 不下单。 |
+| `ReminderAgent` | 根据已有药箱信息生成提醒草稿。 | 不绕过确认创建提醒。 |
+| `SafetyAgent` | 在运行时拦截高风险医疗请求、越权和跳过确认。 | 不把风险拦截延后给评估器。 |
+| `EvaluatorAgent` | 在回答后评估冻结产物。 | 不参与业务执行，不改答案，不写状态。 |
 
-## 3. Post-run 节点
+## 3. 工具调用流程
 
-1. `build_run_summary`: 由 ContextManager 记录任务结果、已确认事实、来源、待确认项、安全标记和 fallback。
-2. `freeze_evaluation_inputs`: 冻结 RunTrace、ContextEnvelope、ToolEvidence、RAGSources 和 FinalAnswer。
-3. `reset_working_context`: 由 ContextManager 清理 scratchpad、未确认推断、无关历史和临时工具拼装结果。
-4. `evaluator_review`: EvaluatorAgent 对照 ExpectedCase 生成 EvaluationResult。
-5. `memory_policy_gate`: 只允许用户确认且满足来源策略的内容进入长期 memory。
-
-Context Reset 发生后，EvaluatorAgent 读取的是保留下来的冻结评估快照，而不是已清理的角色 working context。
-
-## 4. ContextEnvelope 草案
+每次调用都经过 ToolRegistry：
 
 ```text
-ContextEnvelope
-- run_id
-- task_id
-- user_id
-- member_id
-- intent
-- action_type
-- task_state
-  - missing_slots
-  - confirmed_slots
-  - pending_confirmations
-- conversation_summary
-  - summary
-  - source_ids
-- tool_evidence_refs
-- rag_source_refs
-- safety_flags
-- allowed_tools
-- memory_refs
+ToolExecutionContext
+  -> registered tool?
+  -> included in allowed_tools?
+  -> role permitted?
+  -> confirmation granted when required?
+  -> validate input schema
+  -> run handler
+  -> validate output schema
+  -> ToolResult or structured failure
 ```
 
-完整生命周期、Reset 和 Compaction 规则见 `docs/CONTEXT_MANAGEMENT.md`。
+当前工具包括：`query_health_profile`、`query_prescriptions`、`query_medicine_box`、`check_pharmacy_inventory`、`search_safety_knowledge` 和 `create_confirmation_draft`。前五类是只读 evidence 查询；最后一类需要确认且只创建本地草稿。
 
-## 5. 角色边界
+## 4. 安全与确认
 
-- `Planner`: 识别意图、成员、动作、缺失槽位和 required tools。
-- `ProfileAgent`: 只读取当前成员档案和安全备注。
-- `RefillAgent`: 只基于处方、药箱和购药证据整理材料草稿。
-- `PharmacyAgent`: 只查询库存和履约候选，不执行下单。
-- `ReminderAgent`: 只生成提醒草稿，确认前不创建最终提醒。
-- `SafetyAgent`: 运行时拦截诊断、加量、减量、停药、换药、严重症状、越权和跳过确认。
-- `EvaluatorAgent`: 答案生成后只读评估，不修改答案、不调用业务工具、不写业务状态。
+1. 涉及诊断、加量、减量、停药、换药、严重症状、越权查询或跳过确认时，SafetyAgent 必须先介入。
+2. 没有 DB/API/RAG 来源时，Agent 不能输出为事实的病史、处方、库存或规则。
+3. 复诊、购药与提醒都先准备 draft；用户确认只允许改变本地状态，不能宣称已提交医院或下单。
+4. 工具失败必须暴露 `error_type` 与 `fallback_action`，供 Agent 转人工或要求补充信息。
 
-## 6. 人工确认规则
+## 5. 运行产物与评估
 
-以下动作必须进入 `human_confirmation`：
+一个可评估的 run 至少要有 ContextEnvelope、ToolResult / RAG 引用、FinalAnswerTrace、SafetyTrace 和 RunTrace。DeterministicEvaluator 再把 ExpectedCase 与 RunTrace 对比，检查 intent、成员、工具、来源、确认、禁用表达、安全标记和 schema。
 
-- 创建或提交复诊申请草稿。
-- 创建购药方案、加入购物车或下单。
-- 创建用药、补货或复诊提醒。
-- 任何涉及处方、剂量或医生确认的动作。
+见 [CONTEXT_MANAGEMENT.md](CONTEXT_MANAGEMENT.md) 了解上下文生命周期，见 [EVALUATOR_AGENT.md](EVALUATOR_AGENT.md) 了解评估规则。
 
-FinalAnswer 可以提供草稿和确认请求，但不能把关键动作描述成已经执行。
+## 6. 当前与后续
 
-## 7. 安全拦截规则
-
-以下问题必须由 SafetyAgent 在运行时拦截：
-
-- 用户要求诊断疾病。
-- 用户要求加量、减量、停药或换药。
-- 用户描述严重或不确定症状。
-- 用户要求跳过医生或人工确认。
-- 用户要求读取其他无权限成员的信息。
-- 模型缺少可靠来源却试图生成医疗事实或建议。
-
-SafetyAgent 的结果进入 RunTrace 和安全标记；EvaluatorAgent 只评估该拦截是否按 ExpectedCase 发生。
-
-## 8. Context Reset 与 Compaction
-
-- 每个 run 结束后生成 RunSummary，并清理 working context。
-- 不相关任务必须 reset；同一任务续跑只引用上一 RunSummary 和 source pointer。
-- 旧对话只进入结构化摘要。
-- 每条工具或 RAG 事实保留 `source_id` 与 `member_id`。
-- 多成员任务按成员拆分上下文视图，禁止跨成员串扰。
-- 未确认模型推断不得进入长期 memory。
-
-## 9. EvaluatorAgent 工作流
-
-EvaluatorAgent 读取 `RunTrace`、`ContextEnvelope`、`ToolEvidence`、`RAGSources`、`FinalAnswer` 和 `ExpectedCase`，输出：
-
-- `task_success`
-- `tool_call_accuracy`
-- `groundedness`
-- `schema_valid`
-- `hallucination_detected`
-- `safety_recall`
-- `human_confirmation_required`
-- `human_confirmation_present`
-- `context_isolation_passed`
-- `latency_ms`
-- `failure_reasons`
-
-详细口径见 `docs/EVALUATOR_AGENT.md`。
-
-## 10. MVP 场景路径
-
-### 父亲降压药续方材料
-
-`task_context_builder -> planner -> profile/refill/pharmacy views -> tools -> safety_check -> human_confirmation -> final_answer -> run_summary -> reset -> evaluator_review`
-
-### 母亲中医复诊材料
-
-`task_context_builder -> planner -> profile/refill views -> tools -> safety_check -> human_confirmation -> final_answer -> run_summary -> reset -> evaluator_review`
-
-### 母亲用药提醒
-
-`task_context_builder -> planner -> profile/reminder views -> tools -> human_confirmation -> final_answer -> run_summary -> reset -> evaluator_review`
-
-### 高风险用药调整
-
-`task_context_builder -> planner -> safety_check -> safe_final_answer -> run_summary -> reset -> evaluator_review`
-
-## 11. 数据与 Trace 支撑
-
-阶段 2A 的业务表支撑档案、药箱、处方、购药、药店、草稿、提醒、知识库和 Agent 日志。阶段 2A.1 的 `agent_runs` 与 `agent_tool_calls` 字段支撑耗时、step、角色、schema、错误和 fallback 记录。
-
-阶段 2A.2 不修改数据库结构。RunSummary、EvaluationResult 和 eval report 的持久化方式留待后续契约与实现阶段决定，不在本阶段新增迁移。
-
-## 12. 阶段 2A.2 完成记录
-
-- 新增 Context Lifecycle、Reset、Compaction 和 Role-specific Context View 设计。
-- 新增 post-run EvaluatorAgent、ExpectedCase 和 EvaluationResult 设计。
-- 明确 SafetyAgent 负责运行时拦截，EvaluatorAgent 负责事后评估。
-- 未实现 Multi-Agent、EvaluatorAgent、AgentHarness 或业务工具代码。
-
-现有测试命令保持：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q
-```
-
-2A.2 提出的契约与 fixture 已在阶段 2B-1 完成；后续应实现 deterministic 校验器，再接入真实工作流。
-
-## 13. 阶段 2B-1 契约落地
-
-- `context_schemas.py` 将 ContextEnvelope、TaskState、RoleSpecificContextView 和 RunSummary 固化为可校验 DTO。
-- `eval_schemas.py` 将 ExpectedCase 与 EvaluationResult 固化为 Harness 输入输出 DTO。
-- RoleSpecificContextView 使用 `extra="forbid"`，不能携带 `raw_conversation`。
-- ContextEnvelope、角色视图和 RunSummary 会校验 tool/RAG 引用的 run 与 member 隔离。
-- `MemoryRef.confirmed_by_user` 必须为 true，候选推断仍停留在 TaskState，不进入长期 memory_refs。
-- 16 条 fixture 已覆盖 MVP 正常路径、高风险、工具失败、跨成员串扰和无来源场景。
-
-本阶段没有实现图节点、投影函数、reset hook、EvaluatorAgent 或 fixture runner。下一阶段建议实现不调用模型的 deterministic Harness 校验器。
-
-## 14. 阶段 2B-2 Harness Replay
-
-阶段 2B-2 已实现独立于业务工作流的离线 replay：
-
-```text
-ExpectedCase JSON + Frozen RunTrace JSON
-  -> DeterministicEvaluator
-  -> EvaluationResult
-  -> HarnessRunner Aggregate
-  -> Markdown Example Report
-```
-
-该 replay 不执行任何 LangGraph 节点、不重新调用工具，也不修改 FinalAnswer。高风险、安全、确认和成员隔离失败只能被记录为 EvaluationResult，不能在事后修改已生成答案。
-
-下一阶段可增加真实 trace 到 RunTrace 的脱敏 adapter，但运行时 SafetyAgent 仍必须独立存在。
-
-## 15. 阶段 2B-3 ContextManager
-
-阶段 2B-3 已实现工作流中的上下文管理器：
-
-```text
-TaskContext Builder
-  -> ContextManager.build_envelope
-  -> ContextManager.build_role_view
-  -> Role Agents / SafetyAgent
-  -> FinalAnswer + RunTrace + EvaluationResult
-  -> ContextManager.create_run_summary
-  -> ContextManager.reset_after_run
-  -> EvaluatorAgent reads frozen artifacts
-```
-
-ContextManager 不执行工具、不访问数据库、不调用 API、不运行 LangGraph。它只负责上下文对象的构造、裁剪、压缩和 reset。EvaluatorAgent 不通过 ContextManager 获取可写业务上下文。
-
-## 16. 阶段 2C-2 Mock Harness Runtime
-
-阶段 2C-2 已实现最小 Agent Harness Runtime，用于离线测试上下文、工具、trace 和评估契约：
-
-```text
-ExpectedCase
-  -> AgentHarnessRuntime.load_case
-  -> build_initial_context
-  -> build_role_views
-  -> execute_expected_tools_with_mock_registry
-  -> build_run_trace
-  -> DeterministicEvaluator.evaluate
-  -> HarnessRunner.aggregate
-```
-
-Runtime 调用规则：
-
-- `build_initial_context` 使用 `ContextManager` 生成 `ContextEnvelope`。
-- `build_role_views` 为 Planner、ProfileAgent、RefillAgent、PharmacyAgent、ReminderAgent、SafetyAgent 生成角色视图。
-- `execute_expected_tools_with_mock_registry` 只调用 `ToolRegistry.call`，不直接调用 mock tool handler。
-- 每次工具调用都构造 `ToolExecutionContext`，包含 `run_id`、`task_id`、`member_id`、`agent_role`、`allowed_tools`、`safety_flags` 和 `human_confirmation_granted`。
-- `build_run_trace` 将 `ToolResult` 转为 `ToolCallTrace`，并生成 `RAGTrace`、`SafetyTrace` 和 mock `FinalAnswerTrace`。
-- `evaluate` 调用 `DeterministicEvaluator` 生成 `EvaluationResult`。
-
-该 runtime 是 Harness 测试运行时，不是正式业务 Agent；它不访问数据库、不调用 API、不调用 LLM、不执行 LangGraph，也不会提交复诊、购药、提醒或任何医疗动作。
-
-## 17. 阶段 2D-1 DB-backed Read Tools
-
-数据库只读证据链路为：
-
-```text
-RoleSpecificContextView.allowed_tools
-  -> ToolRegistry.call
-  -> DB-backed tool
-  -> agent_tool_query_service
-  -> ToolResult
-  -> ToolEvidenceRef / ToolCallTrace
-```
-
-五个工具分别读取当前成员档案、处方与购药记录、药箱、药店库存和安全知识。`ToolExecutionContext` 同时约束 `user_id`、`member_id`、角色和允许工具；查询失败返回结构化 fallback。2D-1 不注册写入类 `create_confirmation_draft`，也不持久化工具调用或执行正式 Agent 工作流。
-
-## 18. 阶段 2D-2 Confirmation Draft Tool
-
-```text
-RoleSpecificContextView.allowed_tools
-  -> ToolRegistry confirmation gate
-  -> create_confirmation_draft
-  -> confirmation_draft_service
-  -> local draft row
-  -> ToolResult / ToolCallTrace
-```
-
-- 未确认时返回 `human_confirmation_required`，handler 不执行且数据库零写入。
-- 确认后根据 action type 创建续方、复诊、购药候选或提醒草稿。
-- action type 与 Agent role 必须匹配，user/member 和关联记录必须属于同一上下文。
-- 草稿仍是本地 `draft`，不表示复诊已提交、药品已下单或提醒已推送。
-- 重试使用幂等键返回已有草稿；HTTP 状态转换留到 2E-2。
+当前 deterministic Harness 可使用 fixtures 回放角色工具与评估流程。后续 LangGraph 阶段要复用这些契约和边界，而不是绕过 ContextManager、ToolRegistry 或 SafetyAgent 重新实现一套流程。
