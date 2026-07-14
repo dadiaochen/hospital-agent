@@ -67,6 +67,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 4. 代码完成后同步 README、技术/接口/数据库/Agent 文档和测试指南。
 5. 只有真实运行过的评估报告才能支持指标结论；mock fixture 指标只能说明规则已被计算。
 
+当前 `2E-1` 的 API 层只暴露已有 service 的读取能力，使用固定 demo user 做成员作用域隔离，并返回统一错误响应。不得在读取 API 中加入草稿写入、确认状态机、LangGraph、LLM 或外部医疗集成。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

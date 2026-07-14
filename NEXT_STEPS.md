@@ -2,4 +2,4 @@
 
 项目的阶段状态和唯一下一步以 [docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md) 为准。
 
-当前应从已同步的 `main` 创建一个只对应 `2E-1` 的分支，并严格遵循路线图中定义的基础读取 API 范围、验收标准和非目标。开发前请先阅读 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 与 [docs/API_SPEC.md](docs/API_SPEC.md)。
+当前分支正在实现 `2E-1`。已完成的只读接口与保留给学习者的知识库搜索实战题见 [docs/API_SPEC.md](docs/API_SPEC.md) 和 [docs/learning/06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md](docs/learning/06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md)。阶段完成状态仍只由总路线图更新。

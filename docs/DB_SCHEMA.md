@@ -69,3 +69,5 @@ RAG 输出必须带来源指针；没有命中文档或工具 evidence 时不能
 ## 8. 明确禁止
 
 数据库中不得出现 `auto_prescribe`、`diagnosis_by_ai`、`ai_dosage_change` 等将医疗决策归因于 AI 的字段。对于 schema 变更，先更新 ORM、迁移、seed、测试与本文件，再进行 API 或 Agent 使用。
+
+2E-1 的读取 API 没有新增或修改任何 ORM 字段、Alembic migration 或 seed 数据；它只是将现有只读查询按 demo-user / member scope 暴露为 HTTP DTO。

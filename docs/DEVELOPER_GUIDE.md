@@ -63,7 +63,7 @@ python -m compileall backend\app backend\tests
 
 Windows 某些环境会拒绝访问默认 pytest 临时目录。上面的 `--basetemp` 把临时文件固定到仓库内的 `.tmp`，避免把环境权限问题误判为业务测试失败。
 
-确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。业务读取 API 属于路线图后续阶段，不能因为 ORM 或工具已存在就假设 endpoint 已上线。
+确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。2E-1 分支中的读取 API 需要先运行迁移和 seed；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。知识库搜索接口是学习实战题，在完成前不要假设它已经上线。
 
 ## 4. 分层与改动位置
 

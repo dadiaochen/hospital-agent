@@ -63,3 +63,5 @@ ToolExecutionContext
 ## 6. 当前与后续
 
 当前 deterministic Harness 可使用 fixtures 回放角色工具与评估流程。后续 LangGraph 阶段要复用这些契约和边界，而不是绕过 ContextManager、ToolRegistry 或 SafetyAgent 重新实现一套流程。
+
+2E-1 的读取 API 是给 UI、Swagger 和人工核对数据使用的 HTTP 查询入口，不是 Agent 的工具替代品。Agent 仍应通过 Tool Registry 获得证据、权限检查和 trace；API 不调用 Agent workflow。

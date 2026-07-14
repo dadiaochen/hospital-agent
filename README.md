@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已完成至 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 的 `2D-2`：工具层可以在确认门禁通过后创建带审计信息的本地草稿。唯一下一阶段是 `2E-1` 基础读取 API。
+项目已完成至 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 的 `2D-2`：工具层可以在确认门禁通过后创建带审计信息的本地草稿。当前分支正在实现 `2E-1` 基础读取 API；路线图的完成状态仍以该文件为准。
 
 目前已经具备：
 
@@ -15,6 +15,7 @@
 - ContextManager 的角色最小视图、上下文压缩与 run 后 reset。
 - deterministic Tool Registry、固定 Harness 用例、可重复的评估和 Markdown 报告。
 - 数据库只读查询工具，以及只创建本地 draft 的确认门禁工具。
+- 家庭、药箱、处方/购药、药店库存与 Agent 审计的只读 FastAPI 接口；知识库搜索保留为学习实战题。
 
 ## 四个演示场景
 

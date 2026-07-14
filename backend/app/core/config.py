@@ -25,6 +25,9 @@ class Settings(BaseModel):
     )
     redis_url: str = Field(default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     cors_origins: str = Field(default_factory=lambda: os.getenv("CORS_ORIGINS", "http://localhost:3000"))
+    demo_user_phone: str = Field(
+        default_factory=lambda: os.getenv("DEMO_USER_PHONE", "13800000001")
+    )
 
     @cached_property
     def cors_origin_list(self) -> list[str]:

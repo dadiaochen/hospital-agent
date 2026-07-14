@@ -11,6 +11,7 @@
 | [03 Agent Harness](03_AGENT_HARNESS_AND_SAFETY.md) | Context、工具、Trace、安全、确认和评估。 | `backend/app/agent/`、`tools/` |
 | [04 测试、Review 与交付](04_TESTING_REVIEW_AND_DELIVERY.md) | fixture、失败路径、Git 分支、review 和文档。 | `backend/tests/`、`AGENTS.md` |
 | [05 简历与面试](05_RESUME_AND_INTERVIEW.md) | 技术亮点、故事线、追问与表达边界。 | `docs/RESUME_NOTES.md` |
+| [06 2E-1 实战题](06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md) | 独立完成一个带 DTO、service、路由和测试的知识库搜索 API。 | `backend/app/services/agent_tool_query_service.py` |
 
 ## 使用方法
 

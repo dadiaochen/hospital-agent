@@ -14,6 +14,7 @@ from app.services.confirmation_draft_service import (
     ConfirmationDraftServiceError,
     create_confirmation_draft,
 )
+from app.services.read_api_service import ReadApiService
 
 __all__ = [
     "MedicineService",
@@ -26,4 +27,5 @@ __all__ = [
     "get_pharmacy_inventory_context",
     "get_prescription_context",
     "search_safety_knowledge_context",
+    "ReadApiService",
 ]

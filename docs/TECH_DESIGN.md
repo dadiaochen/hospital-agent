@@ -16,7 +16,7 @@ Agent -> ContextManager -> Tool Registry -> services / RAG
 
 | 层 | 当前职责 | 关键原则 |
 | --- | --- | --- |
-| `api` | FastAPI 路由、HTTP DTO、依赖注入 | 不写查询和 Agent 决策。 |
+| `api` | FastAPI 路由、HTTP DTO、依赖注入和统一错误映射 | 不写查询和 Agent 决策。 |
 | `schemas` | API Pydantic 模型 | API 与 ORM 解耦。 |
 | `models` | SQLAlchemy 表和关联 | 只表达持久化结构。 |
 | `services` | 数据整形、草稿创建、事务边界 | 复用给 API 和工具。 |
@@ -65,7 +65,8 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 | 已实现 | 尚未实现 |
 | --- | --- |
-| ORM、迁移、seed、只读 DB tools、本地 draft tool | 业务读取 API、草稿确认 API、生产认证。 |
+| ORM、迁移、seed、只读 DB tools、本地 draft tool | 草稿确认 API、生产认证。 |
+| 家庭、药箱、处方/购药、库存和 Agent 审计的只读 API | 知识库搜索 API（保留为学习实战题）。 |
 | ContextManager、Trace、fixture Harness、确定性评估 | 真实 Agent API、LangGraph 节点、LLM provider。 |
 | 权限、成员隔离、确认门禁和失败 fallback 的单元测试 | 医院/药店/推送等外部系统提交。 |
 
@@ -79,3 +80,4 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 - 工具运行门禁：[tool_registry.py](../backend/app/tools/tool_registry.py)
 - 草稿事务：[confirmation_draft_service.py](../backend/app/services/confirmation_draft_service.py)
 - 评估规则：[evaluator.py](../backend/app/agent/evaluator.py)
+- 读取 API 编排：[read_api_service.py](../backend/app/services/read_api_service.py)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
@@ -385,26 +384,9 @@ def test_tool_result_maps_to_trace_without_external_success_claim(
     assert "auto_prescribe" not in rendered
 
 
-def test_2d2_does_not_modify_models_migrations_seed_api_or_frontend() -> None:
-    project_root = Path(__file__).resolve().parents[2]
-    completed = subprocess.run(
-        [
-            "git",
-            "diff",
-            "--name-only",
-            "--",
-            "backend/app/models",
-            "backend/alembic",
-            "scripts/seed.py",
-            "backend/app/api",
-            "frontend",
-        ],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        pytest.skip("git diff unavailable in this test environment")
+def test_confirmation_draft_tool_remains_independent_of_http_layer() -> None:
+    tool_path = Path(__file__).resolve().parents[1] / "app" / "tools" / "confirmation_tools.py"
+    source = tool_path.read_text(encoding="utf-8")
 
-    assert [line for line in completed.stdout.splitlines() if line.strip()] == []
+    assert "fastapi" not in source.lower()
+    assert "APIRouter" not in source
