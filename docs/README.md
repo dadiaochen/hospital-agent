@@ -28,6 +28,7 @@
 | [API_SPEC.md](API_SPEC.md) | 已实现 HTTP 接口、未来接口的契约边界。 |
 | [DB_SCHEMA.md](DB_SCHEMA.md) | ORM 表、字段用途、关系、索引与审计原则。 |
 | [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md) | Retriever 契约、关键词基线、向量来源回填与降级。 |
+| [MODEL_GATEWAY.md](MODEL_GATEWAY.md) | 模型 provider、结构化输出、安全门禁、降级和调用 Trace。 |
 
 ## Agent 专项
 

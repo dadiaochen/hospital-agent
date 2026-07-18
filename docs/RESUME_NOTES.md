@@ -11,6 +11,7 @@
 - 实现 deterministic Agent Harness：固定用例、冻结 RunTrace、规则评估、失败原因与 Markdown 指标报告。
 - 区分运行时 SafetyAgent 和 post-run EvaluatorAgent，避免用事后评估代替安全拦截。
 - 在隔离 2F-1 分支实现 Hybrid RAG Retriever：保留确定性关键词基线，以来源指针回填数据库正文，并对向量后端缺失、超时和失效指针执行可追踪降级；进入主线后再作为最终交付表述。
+- 在隔离 2F-2 分支实现 Model Gateway：统一 deterministic 与 OpenAI-compatible provider 契约，在 Pydantic 解析和规则安全检查失败时执行可追踪 fallback；尚未进行真实线上模型质量评测。
 
 ## 简历表述示例
 
@@ -20,6 +21,8 @@
 构建 Tool Registry 与数据库适配层，为档案、处方、药箱、库存和安全规则提供可审计的只读 evidence；关键业务动作仅在确认后创建本地草稿，并通过幂等状态机确认或拒绝本地记录，不触发真实医院或药店提交。
 
 设计 Hybrid RAG 检索层，以 PostgreSQL 关键词检索作为稳定基线，通过协议注入可选向量后端；向量召回只提供 document/chunk 指针，正文由权威知识表回填，异常时记录原因并安全降级。
+
+实现可替换 Model Gateway，以 Pydantic 约束结构化输出、规则门禁拦截越权文本，并为 provider 超时、HTTP/schema/safety 失败记录逐次 Trace 和 deterministic fallback。
 ```
 
 ## 面试时怎么讲
@@ -38,3 +41,4 @@
 - 当前 API、LLM Gateway、LangGraph workflow、前端闭环仍按 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 后续阶段实现。
 - 知识库搜索 API 被保留为学习实战题；在完成并测试前不能称其已实现。
 - 不要把 RAG `score` 描述为医疗正确率，也不要声称已接入真实 Embedding 或向量数据库；当前实现的是接口、关键词基线和可测试的注入/降级机制。
+- 不要把 MockTransport 或 deterministic provider 测试描述为真实 LLM 效果，也不要宣称模型准确率、安全率、成本或 p95 延迟。

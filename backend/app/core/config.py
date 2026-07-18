@@ -1,7 +1,7 @@
 import os
 from functools import cached_property
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 try:
     from dotenv import load_dotenv
@@ -33,6 +33,24 @@ class Settings(BaseModel):
     redis_url: str = Field(default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     rag_vector_enabled: bool = Field(
         default_factory=lambda: _env_bool("RAG_VECTOR_ENABLED")
+    )
+    model_provider: str = Field(
+        default_factory=lambda: os.getenv("MODEL_PROVIDER", "deterministic")
+    )
+    model_api_base: str | None = Field(
+        default_factory=lambda: os.getenv("MODEL_API_BASE") or None
+    )
+    model_api_key: SecretStr | None = Field(
+        default_factory=lambda: (
+            SecretStr(value) if (value := os.getenv("MODEL_API_KEY")) else None
+        )
+    )
+    model_name: str = Field(
+        default_factory=lambda: os.getenv("MODEL_NAME", "deterministic-local")
+    )
+    model_timeout_ms: int = Field(
+        default_factory=lambda: int(os.getenv("MODEL_TIMEOUT_MS", "10000")),
+        ge=1,
     )
     cors_origins: str = Field(default_factory=lambda: os.getenv("CORS_ORIGINS", "http://localhost:3000"))
     demo_user_phone: str = Field(

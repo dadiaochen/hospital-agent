@@ -75,6 +75,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 线性后继隔离分支 `codex/2f-1-hybrid-rag` 把知识库关键词查询整理为 Retriever 契约，并提供可注入、默认关闭的向量检索协议。关键词检索始终可用；向量后端只返回 document/chunk 指针和相关性分数，正文从数据库回填。后端缺失、异常或指针失效时必须记录原因并回退，不调用 LLM、不抓取互联网知识、不新增向量表或 migration。该分支同样不提前修改总路线图状态。
 
+`codex/2f-2-model-gateway` 继续在线性隔离历史上定义 Model Gateway。默认 provider 是不会联网的 deterministic 实现；可选 OpenAI-compatible HTTP adapter 的 base URL、Key、模型和 timeout 只来自环境变量。所有 provider 文本先过 JSON、目标 Pydantic schema 和输出安全检查，失败时执行同契约 fallback 并记录逐次 Trace；本阶段不接 LangGraph、不新增 Agent API、不持久化 prompt 或 Key。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

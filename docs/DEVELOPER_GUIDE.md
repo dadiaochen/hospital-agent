@@ -24,6 +24,8 @@ Copy-Item .env.example .env
 
 `RAG_VECTOR_ENABLED` 默认是 `false`，此时只使用数据库关键词检索。不要仅把它改为 `true` 就假设向量检索可用；2F-1 只定义向量后端协议，真实 Embedding provider 和向量数据库尚未接入。
 
+`MODEL_PROVIDER` 默认是 `deterministic`，不需要 Key，也不会联网。只有准备好兼容 `/chat/completions` 的服务后才配置 `openai_compatible`、`MODEL_API_BASE`、`MODEL_API_KEY`、`MODEL_NAME` 和 `MODEL_TIMEOUT_MS`。Key 只能保存在未提交的 `.env` 或部署密钥系统中。
+
 ```powershell
 docker compose up postgres redis -d
 ```
@@ -70,6 +72,13 @@ Windows 某些环境会拒绝访问默认 pytest 临时目录。上面的 `--bas
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_hybrid_rag.py backend\tests\test_db_backed_tools.py -q --basetemp=.tmp\pytest-rag
+```
+
+只验证 2F-2 Model Gateway：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_model_gateway.py -q --basetemp=.tmp\pytest-model
 ```
 
 确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。2E-1 分支中的读取 API 需要先运行迁移和 seed；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。知识库搜索接口是学习实战题，在完成前不要假设它已经上线。

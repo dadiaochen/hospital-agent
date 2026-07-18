@@ -68,6 +68,8 @@ RAG 输出必须带来源指针；没有命中文档或工具 evidence 时不能
 
 数据库表是未来 runtime 持久化目标；当前 deterministic Harness 使用冻结 Pydantic trace，不等同于完整线上持久化。
 
+2F-2 的 `ModelCallTrace` 和 provider attempt trace 当前也是内存冻结产物，不新增 ORM 字段或 migration。其持久化、脱敏和与 `agent_runs` 的关联属于 2G-2；API Key 和完整 prompt 不得写入审计表。
+
 ## 8. 明确禁止
 
 数据库中不得出现 `auto_prescribe`、`diagnosis_by_ai`、`ai_dosage_change` 等将医疗决策归因于 AI 的字段。对于 schema 变更，先更新 ORM、迁移、seed、测试与本文件，再进行 API 或 Agent 使用。

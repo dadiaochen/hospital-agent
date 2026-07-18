@@ -11,6 +11,20 @@ from app.agent.context_schemas import (
     TaskState,
     ToolEvidenceRef,
 )
+from app.agent.model_gateway import (
+    DeterministicModelProvider,
+    ModelGateway,
+    ModelProvider,
+    OpenAICompatibleModelProvider,
+    create_model_gateway,
+)
+from app.agent.model_gateway_schemas import (
+    ModelCallRequest,
+    ModelCallResult,
+    ModelCallTrace,
+    ModelMessage,
+    ModelProviderAttemptTrace,
+)
 from app.agent.eval_schemas import EvaluationResult, ExpectedCase, ExpectedSource
 from app.agent.evaluator import DeterministicEvaluator
 from app.agent.harness_runtime import (
@@ -41,6 +55,15 @@ __all__ = [
     "HarnessRuntimeBatchResult",
     "HarnessRuntimeResult",
     "MemoryRef",
+    "DeterministicModelProvider",
+    "ModelCallRequest",
+    "ModelCallResult",
+    "ModelCallTrace",
+    "ModelGateway",
+    "ModelMessage",
+    "ModelProvider",
+    "ModelProviderAttemptTrace",
+    "OpenAICompatibleModelProvider",
     "RAGSourceRef",
     "RAGTrace",
     "ResetContextState",
@@ -51,4 +74,5 @@ __all__ = [
     "TaskState",
     "ToolEvidenceRef",
     "ToolCallTrace",
+    "create_model_gateway",
 ]

@@ -2,7 +2,7 @@
 
 ## 1. 设计目标
 
-本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前实现优先完成可重复的契约和 deterministic 基线，真实 HTTP 业务 API、LLM Gateway 与 LangGraph 编排按路线图后续阶段落地。
+本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前实现优先完成可重复契约、deterministic 基线和隔离分支中的 Model Gateway；真实 LangGraph 编排和 Agent HTTP API 按路线图后续阶段落地。
 
 ## 2. 分层架构
 
@@ -71,13 +71,19 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 `RAG_VECTOR_ENABLED` 默认关闭。显式开启后，如果后端缺失、调用异常或来源指针无法回填，系统保留关键词结果并记录 `fallback_used` / `fallback_reason`。结果中的 `score` 仅表示检索相关性，不是医疗正确率、诊断概率或执行授权。完整设计见 [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md)。
 
+### 4.7 Model Gateway 先解析再使用
+
+2F-2 定义 `ModelProvider` 与 `ModelGateway`。自动测试和无 Key 环境使用 `DeterministicModelProvider`；配置完整时可以使用 OpenAI-compatible HTTP adapter。Provider 只返回文本，Gateway 必须依次执行 JSON 解析、目标 Pydantic schema 校验和独立输出安全检查，全部通过后才返回结构化对象。
+
+超时、HTTP 错误、provider response 错误、schema 失败和 safety 失败都产生 `ModelProviderAttemptTrace`。配置了 fallback 时，Gateway 再调用 deterministic provider；fallback 也失败则返回 `output=None` 和失败 Trace，不把原始文本交给 Agent。规则型输出检查是 Gateway 的最后一道文本门禁，不替代 LangGraph 中的 SafetyAgent。完整设计见 [MODEL_GATEWAY.md](MODEL_GATEWAY.md)。
+
 ## 5. 当前实现边界
 
 | 已实现 | 尚未实现 |
 | --- | --- |
 | ORM、迁移、seed、只读 DB tools、本地 draft tool；隔离分支中的草稿状态机 API | 生产认证；2E-2 尚待在 2E-1 后线性整合。 |
 | 家庭、药箱、处方/购药、库存和 Agent 审计的只读 API | 知识库搜索 API（保留为学习实战题）。 |
-| ContextManager、Trace、fixture Harness、确定性评估 | 真实 Agent API、LangGraph 节点、LLM provider。 |
+| ContextManager、Trace、fixture Harness、确定性评估；隔离分支中的 Model Gateway 与 HTTP provider adapter | 真实 Agent API、LangGraph 节点和线上模型调用验证。 |
 | 权限、成员隔离、确认门禁和失败 fallback 的单元测试；隔离分支中的关键词/混合 Retriever | 真实 Embedding provider、向量数据库和互联网知识抓取。 |
 
 详细顺序、验收和非目标以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
@@ -94,3 +100,6 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 - 读取 API 编排：[read_api_service.py](../backend/app/services/read_api_service.py)
 - RAG 契约：[retrieval_schemas.py](../backend/app/rag/retrieval_schemas.py)
 - 关键词与混合检索：[retriever.py](../backend/app/rag/retriever.py)
+- Model Gateway 契约：[model_gateway_schemas.py](../backend/app/agent/model_gateway_schemas.py)
+- Provider、解析与 fallback：[model_gateway.py](../backend/app/agent/model_gateway.py)
+- 模型输出安全检查：[model_output.py](../backend/app/safety/model_output.py)

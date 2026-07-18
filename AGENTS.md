@@ -177,3 +177,12 @@ Context Compaction 规则：
 - `EvaluatorAgent` 不允许修改用户答案，不允许生成医疗建议，不允许调用业务工具或写业务状态。
 - 后续 `AgentHarness` 汇总多个 `EvaluationResult` 生成 `agent_eval_report.md`，聚合 `task_success`、`tool_call_accuracy`、`groundedness`、`schema_valid`、`hallucination_rate`、`safety_recall`、`human_confirmation_rate`、`context_isolation_pass_rate` 和 `p95_latency`。
 - 未真实跑出的指标只能写为“设计/定义/目标”，不能写成已达成结果。
+
+## 13. Model Gateway
+
+- 模型 provider、base URL、Key、模型名和 timeout 只能来自服务端环境变量，不能由 API 请求或 Agent prompt 覆盖。
+- 自动测试和无 Key 环境默认使用 deterministic provider，不得把网络模型作为测试前置条件。
+- Provider 原始文本必须先经过 JSON 解析、目标 Pydantic schema 和 model-output safety check，全部通过后才能进入 Agent 状态。
+- provider timeout、HTTP/response 错误、schema 失败和 safety 失败必须记录 attempt trace；配置 fallback 时使用同一输出契约重试。
+- fallback 也失败时返回无 output 的结构化失败，不允许把未校验原始文本交给 Agent。
+- Model Gateway 的规则检查不替代 SafetyAgent；SafetyAgent 仍负责工作流运行时的医疗风险拦截和人工确认判断。

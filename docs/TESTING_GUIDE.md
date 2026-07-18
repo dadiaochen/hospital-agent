@@ -14,6 +14,7 @@
 | 草稿 API 状态机 | `test_confirmation_draft_api.py` | 显式确认、四类草稿、成员隔离、幂等确认/拒绝、非法终态转换和 OpenAPI。 |
 | Harness | `test_deterministic_evaluator.py`、`test_harness_runner.py`、`test_harness_runtime.py` | 固定用例回放、评估规则和汇总报告。 |
 | RAG | `test_hybrid_rag.py` | 固定安全/SOP 召回、来源版本、向量回填、去重和失败降级。 |
+| Model Gateway | `test_model_gateway.py` | deterministic 基线、HTTP adapter、schema、安全、超时和 fallback trace。 |
 | API | `test_health.py`、`test_read_api.py`、`test_confirmation_draft_api.py` | 健康检查、只读资源和本地草稿状态机。 |
 
 ## 运行命令
@@ -39,6 +40,8 @@ python -m compileall backend\app backend\tests
 7. **测试与文档**：新增规则是否有一个正例、一个失败例和同步说明？
 
 Review RAG 时还要区分相关性与事实正确性：`score` 只能用于排序；正文必须来自可回溯的数据库 chunk，向量后端返回的未知或错配 ID 不能被 Agent 使用。
+
+Review Model Gateway 时，不只看成功响应。至少验证 provider timeout、HTTP error、非法 JSON、目标 schema 失败、不安全输出和 fallback 二次失败；Trace 不得包含 API Key，失败的原始模型文本不得进入 Agent output。
 
 ## 当前常见风险
 

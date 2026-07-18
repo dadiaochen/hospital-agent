@@ -8,6 +8,7 @@ User Input
   -> ContextManager
   -> Profile / Refill / Pharmacy / Reminder Agents
   -> Tool Registry and RAG evidence
+  -> Model Gateway (Pydantic + output safety + fallback)
   -> SafetyAgent
   -> Confirmation Draft (when required)
   -> Final Answer
@@ -48,6 +49,8 @@ ToolExecutionContext
 当前工具包括：`query_health_profile`、`query_prescriptions`、`query_medicine_box`、`check_pharmacy_inventory`、`search_safety_knowledge` 和 `create_confirmation_draft`。前五类是只读 evidence 查询；最后一类需要确认且只创建本地草稿。
 
 `search_safety_knowledge` 通过 2F-1 Retriever 获取知识。关键词检索是始终可用的基线；向量后端可选且只能返回来源指针。Retriever 从数据库回填正文和版本、按 `chunk_id` 去重，并把实际检索模式和降级原因放进 ToolResult，供 RAGSourceRef、RunTrace 和 Evaluator 使用。
+
+2F-2 Model Gateway 统一 deterministic 与可选 HTTP provider。每次调用携带 run/task/member/purpose，但 provider 配置只来自服务端环境变量。原始输出必须通过目标 Pydantic schema 和 model-output safety checker；失败时 deterministic fallback 生成同一契约，并在 attempt trace 中保留失败类型。SafetyAgent 仍负责工作流级事前拦截和最终运行时判断，不能因为 Gateway 有规则检查就被删除。
 
 ## 4. 安全与确认
 
