@@ -101,6 +101,8 @@ def test_confirmation_creates_only_a_local_draft_after_confirmation(
     assert draft.read_only is False
     assert draft.output["status"] == "draft"
     assert result.run_trace.final_answer.action_status == "draft"
+    assert result.run_trace.final_answer.human_confirmation_present is True
+    assert result.run_trace.final_answer.waiting_for_user_confirmation is False
     assert (
         "No hospital, purchase, payment, or reminder action was submitted."
         in result.run_trace.final_answer.content

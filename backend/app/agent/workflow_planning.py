@@ -4,6 +4,7 @@ from typing import Any
 from app.agent.workflow_schemas import WorkflowPlan, WorkflowRunRequest
 from app.safety.policies import needs_medical_safety_interception
 from app.tools.tool_registry import ToolRegistry
+from app.tools.tool_schemas import ToolResult
 
 
 DEFAULT_FORBIDDEN_PHRASES = [
@@ -145,6 +146,7 @@ class WorkflowToolInputBuilder:
         request: WorkflowRunRequest,
         plan: WorkflowPlan,
         registry: ToolRegistry,
+        tool_results: Sequence[ToolResult] = (),
     ) -> dict[str, Any]:
         fields = registry.get_spec(tool_name).input_schema.model_fields
         values: dict[str, Any] = {
@@ -157,15 +159,91 @@ class WorkflowToolInputBuilder:
             "action_type": plan.draft_action_type,
             "idempotency_key": f"{request.run_id}:{plan.draft_action_type or 'none'}",
             "summary": f"Local {plan.intent} draft for run {request.run_id}.",
-            "payload": {
-                "purpose": plan.intent,
-                "source": "langgraph_workflow",
-            },
+            "payload": self._draft_payload(request, plan, tool_results),
         }
         return {
             name: values[name]
             for name in fields
             if name in values and values[name] is not None
+        }
+
+    @staticmethod
+    def _draft_payload(
+        request: WorkflowRunRequest,
+        plan: WorkflowPlan,
+        tool_results: Sequence[ToolResult],
+    ) -> dict[str, Any]:
+        prescriptions = _successful_output(tool_results, "query_prescriptions")
+        medicine_box = _successful_output(tool_results, "query_medicine_box")
+        inventory = _successful_output(tool_results, "check_pharmacy_inventory")
+        prescription = _first_mapping(prescriptions.get("prescriptions"))
+        medicine = _first_mapping(
+            medicine_box.get("items") or medicine_box.get("medicines")
+        )
+        inventory_item = _first_mapping(
+            inventory.get("inventory_items") or inventory.get("candidates")
+        )
+        prescription_medicine = _first_mapping(prescription.get("medicine_items"))
+        medicine_name = (
+            request.medication_name
+            or _text(medicine.get("medicine_name"))
+            or _text(prescription_medicine.get("medicine_name"))
+            or _text(inventory_item.get("medicine_name"))
+            or "medication from verified records"
+        )
+        source_ids = [
+            source_id
+            for result in tool_results
+            if result.success
+            for source_id in [_text(result.output.get("source_id"))]
+            if source_id is not None
+        ]
+        common = {
+            "source_ids": list(dict.fromkeys(source_ids)),
+            "purpose": plan.intent,
+        }
+
+        if plan.draft_action_type == "consultation_request":
+            return {
+                "prescription_id": _text(prescription.get("prescription_id")),
+                "draft_content": "Organize existing follow-up materials for review.",
+                "material_summary": common,
+            }
+        if plan.draft_action_type == "pharmacy_option":
+            delivery_options = inventory_item.get("delivery_options")
+            delivery_option = (
+                delivery_options[0]
+                if isinstance(delivery_options, list) and delivery_options
+                else None
+            )
+            return {
+                "medicine_name": medicine_name,
+                "pharmacy_id": _text(inventory_item.get("pharmacy_id")),
+                "delivery_option": _text(delivery_option),
+                "plan_detail": common,
+            }
+        if plan.draft_action_type == "reminder_create":
+            schedule_times = (
+                ["08:00", "20:00"]
+                if _twice_daily_requested(request.user_input, medicine)
+                else ["08:00"]
+            )
+            return {
+                "medicine_name": medicine_name,
+                "medicine_box_item_id": _text(
+                    medicine.get("medicine_box_item_id")
+                ),
+                "schedule": {**common, "times": schedule_times},
+                "reminder_type": "medication",
+            }
+        remaining_days = medicine.get("estimated_remaining_days")
+        if remaining_days is None:
+            remaining_days = medicine.get("remaining_days")
+        return {
+            "medicine_name": medicine_name,
+            "prescription_id": _text(prescription.get("prescription_id")),
+            "remaining_days": _non_negative_int(remaining_days),
+            "plan_detail": common,
         }
 
 
@@ -187,6 +265,46 @@ def _is_high_risk(text: str) -> bool:
 
 def _contains_any(text: str, patterns: Sequence[str]) -> bool:
     return any(pattern in text for pattern in patterns)
+
+
+def _successful_output(
+    results: Sequence[ToolResult],
+    tool_name: str,
+) -> dict[str, Any]:
+    return next(
+        (
+            result.output
+            for result in results
+            if result.tool_name == tool_name and result.success
+        ),
+        {},
+    )
+
+
+def _first_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, list) and value and isinstance(value[0], dict):
+        return value[0]
+    return {}
+
+
+def _text(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _non_negative_int(value: Any) -> int | None:
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    return None
+
+
+def _twice_daily_requested(user_input: str, medicine: dict[str, Any]) -> bool:
+    rendered = f"{user_input} {medicine.get('frequency', '')}".casefold()
+    return any(
+        marker in rendered
+        for marker in ("早晚", "两次", "twice daily", "morning and evening")
+    )
 
 
 __all__ = [

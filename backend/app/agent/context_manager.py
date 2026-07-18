@@ -100,6 +100,7 @@ class ContextManager:
         safety_flags: list[str] | None = None,
         allowed_tools: list[str] | None = None,
         memory_refs: list[MemoryRef] | None = None,
+        conversation_source_ids: list[str] | None = None,
     ) -> ContextEnvelope:
         summary = self._summarize_user_input(user_input)
         task_state = TaskState(
@@ -118,7 +119,9 @@ class ContextManager:
             task_state=task_state,
             conversation_summary=ConversationSummary(
                 summary=summary,
-                source_ids=[f"user_input:{run_id}"],
+                source_ids=self._unique(
+                    [f"user_input:{run_id}", *(conversation_source_ids or [])]
+                ),
             ),
             tool_evidence_refs=tool_evidence_refs or [],
             rag_source_refs=rag_source_refs or [],

@@ -79,6 +79,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `codex/2g-1-langgraph-workflow` 在线性隔离历史上实现最小正式 LangGraph DAG。Planner 产生结构化计划，ContextManager 投影 Planner/角色最小视图，业务角色只能经 Tool Registry 获取 evidence；所有路径都在确认草稿和 FinalAnswer 前经过 SafetyAgent。关键动作缺少显式确认时不执行 draft handler，高风险阻断时跳过草稿；FinalAnswer 经 Model Gateway 形成冻结 RunTrace，随后 reset 并由 DeterministicEvaluator 只读评估。本阶段不新增 Agent HTTP API、不访问或持久化 runtime 数据库状态、不接外部医院/药店，也不实现自主循环 Agent。
 
+`codex/2g-2-agent-runtime-api` 在线性后继中增加 Agent Runtime 适配层。FastAPI Router 只接收运行/续跑 DTO，AgentRuntimeService 负责 demo-user/member 作用域、幂等键、真实 DB Tool Registry 注入、run/tool-call 审计和版本化冻结产物持久化。首次 run 不得直接携带确认；只有 `needs_confirmation` run 能以相同 task/member 恢复 RunSummary 和来源指针后续跑，且只创建 `not_submitted` 本地草稿。Evaluator 仍只读；不保存 raw conversation、scratchpad、Key 或 provider 原始文本，不新增 ORM/migration，不接外部系统。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

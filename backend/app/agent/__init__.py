@@ -40,9 +40,11 @@ from app.agent.run_trace_schemas import (
     SafetyTrace,
     ToolCallTrace,
 )
+from app.agent.runtime_schemas import PersistedRunArtifacts, RuntimeRequestContext
 from app.agent.workflow_schemas import (
     WorkflowFinalAnswerDraft,
     WorkflowPlan,
+    WorkflowResumeContext,
     WorkflowRunRequest,
     WorkflowRunResult,
 )
@@ -72,6 +74,7 @@ __all__ = [
     "OpenAICompatibleModelProvider",
     "RAGSourceRef",
     "RAGTrace",
+    "PersistedRunArtifacts",
     "ResetContextState",
     "RoleSpecificContextView",
     "RunTrace",
@@ -82,7 +85,9 @@ __all__ = [
     "ToolCallTrace",
     "WorkflowFinalAnswerDraft",
     "WorkflowPlan",
+    "WorkflowResumeContext",
     "WorkflowRunRequest",
     "WorkflowRunResult",
+    "RuntimeRequestContext",
     "create_model_gateway",
 ]

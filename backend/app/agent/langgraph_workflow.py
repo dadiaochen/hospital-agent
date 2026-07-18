@@ -27,6 +27,7 @@ from app.agent.run_trace_schemas import (
     RAGTrace,
     RunTrace,
     SafetyTrace,
+    build_tool_call_id,
 )
 from app.agent.workflow_planning import (
     DEFAULT_FORBIDDEN_PHRASES,
@@ -228,14 +229,39 @@ class LangGraphAgentWorkflow:
         return _node_name(roles[start])
 
     def _planner_node(self, state: WorkflowState) -> dict[str, Any]:
+        resume_context = state["request"].resume_context
         return {
-            "plan": self.planner.plan(state["request"]),
+            "plan": (
+                resume_context.plan
+                if resume_context is not None
+                else self.planner.plan(state["request"])
+            ),
             "visited_nodes": _visit(state, "planner"),
         }
 
     def _context_node(self, state: WorkflowState) -> dict[str, Any]:
         request = state["request"]
         plan = state["plan"]
+        resume_context = request.resume_context
+        confirmed_slots: dict[str, Any] = {"member_id": request.member_id}
+        conversation_source_ids: list[str] = []
+        if resume_context is not None:
+            summary = resume_context.run_summary
+            confirmed_slots.update(
+                {
+                    "resumed_from_run_id": resume_context.previous_run_id,
+                    "previous_run_summary_ref": (
+                        f"run_summary:{resume_context.previous_run_id}"
+                    ),
+                }
+            )
+            conversation_source_ids.extend(
+                [
+                    f"run_summary:{resume_context.previous_run_id}",
+                    *(ref.source_id for ref in summary.tool_evidence_refs),
+                    *(ref.source_id for ref in summary.rag_source_refs),
+                ]
+            )
         envelope = self.context_manager.build_envelope(
             user_input=request.user_input,
             run_id=request.run_id,
@@ -244,7 +270,7 @@ class LangGraphAgentWorkflow:
             member_id=request.member_id,
             intent=plan.intent,
             action_type=plan.action_type,
-            confirmed_slots={"member_id": request.member_id},
+            confirmed_slots=confirmed_slots,
             pending_confirmations=(
                 ["human_confirmation_required"]
                 if plan.human_confirmation_required
@@ -252,6 +278,7 @@ class LangGraphAgentWorkflow:
             ),
             safety_flags=list(plan.safety_flags),
             allowed_tools=list(plan.required_tools),
+            conversation_source_ids=conversation_source_ids,
         )
         planner_view = self.context_manager.build_role_view(envelope, "Planner")
         return {
@@ -335,15 +362,18 @@ class LangGraphAgentWorkflow:
             ],
         )
         results = list(state["tool_results"])
-        results.append(
-            self._call_tool(
+        draft_result = self._call_tool(
                 state,
                 permission_view,
                 role,
                 "create_confirmation_draft",
             )
+        results.append(draft_result)
+        refreshed = self._refresh_context(
+            state,
+            results,
+            pending_confirmations=[] if draft_result.success else None,
         )
-        refreshed = self._refresh_context(state, results)
         final_view = self.context_manager.build_role_view(
             refreshed,
             role,
@@ -400,9 +430,14 @@ class LangGraphAgentWorkflow:
                 "Please continue with manual review."
             ),
             contains_factual_claims=False,
-            waiting_for_user_confirmation=plan.human_confirmation_required,
+            waiting_for_user_confirmation=(
+                plan.human_confirmation_required and not draft_created
+            ),
+            human_confirmation_present=draft_created,
             action_status=(
-                "awaiting_confirmation"
+                "draft"
+                if draft_created
+                else "awaiting_confirmation"
                 if plan.human_confirmation_required
                 else "none"
             ),
@@ -414,6 +449,7 @@ class LangGraphAgentWorkflow:
                 content=answer.content,
                 contains_factual_claims=answer.contains_factual_claims,
                 waiting_for_user_confirmation=answer.waiting_for_user_confirmation,
+                human_confirmation_present=answer.human_confirmation_present,
                 action_status=answer.action_status,
             ),
             "visited_nodes": _visit(state, "final_answer"),
@@ -519,6 +555,7 @@ class LangGraphAgentWorkflow:
                 request=request,
                 plan=plan,
                 registry=self.tool_registry,
+                tool_results=state["tool_results"],
             ),
             ToolExecutionContext(
                 run_id=request.run_id,
@@ -540,6 +577,8 @@ class LangGraphAgentWorkflow:
         self,
         state: WorkflowState,
         results: list[ToolResult],
+        *,
+        pending_confirmations: list[str] | None = None,
     ) -> ContextEnvelope:
         request = state["request"]
         plan = state["plan"]
@@ -554,12 +593,17 @@ class LangGraphAgentWorkflow:
             action_type=plan.action_type,
             missing_slots=list(current.task_state.missing_slots),
             confirmed_slots=dict(current.task_state.confirmed_slots),
-            pending_confirmations=list(current.task_state.pending_confirmations),
+            pending_confirmations=(
+                list(current.task_state.pending_confirmations)
+                if pending_confirmations is None
+                else pending_confirmations
+            ),
             tool_evidence_refs=self._tool_evidence_refs(request, results),
             rag_source_refs=self._rag_source_refs(state, results),
             safety_flags=list(plan.safety_flags),
             allowed_tools=list(plan.required_tools),
             memory_refs=list(current.memory_refs),
+            conversation_source_ids=list(current.conversation_summary.source_ids),
         )
 
     @staticmethod
@@ -580,7 +624,11 @@ class LangGraphAgentWorkflow:
                     run_id=request.run_id,
                     member_id=request.member_id,
                     tool_name=result.tool_name,
-                    tool_call_id=f"{request.run_id}:{index}:{result.tool_name}",
+                    tool_call_id=build_tool_call_id(
+                        request.run_id,
+                        index,
+                        result.tool_name,
+                    ),
                     success=True,
                     schema_valid=result.schema_valid,
                 )
@@ -602,6 +650,15 @@ class LangGraphAgentWorkflow:
         )
         if search is None:
             return []
+        retrieved_sources = search.output.get("sources")
+        if isinstance(retrieved_sources, list):
+            refs = [
+                _retrieved_rag_ref(state["request"], source)
+                for source in retrieved_sources
+                if isinstance(source, dict)
+            ]
+            if refs:
+                return refs
         expected = state.get("supplied_expected_case")
         names = [
             source.source_name
@@ -638,26 +695,46 @@ class LangGraphAgentWorkflow:
 
     def _operational_case(self, state: WorkflowState) -> ExpectedCase:
         plan = state["plan"]
-        expected_sources = [
-            ExpectedSource(source_type="tool_evidence", source_name=tool)
+        request = state["request"]
+        expected_tools = [
+            tool
             for tool in plan.required_tools
+            if tool != "create_confirmation_draft"
+            or request.human_confirmation_granted
+        ]
+        successful_results = {
+            result.tool_name: result
+            for result in state["tool_results"]
+            if result.success and result.evidence_present
+        }
+        expected_sources = [
+            ExpectedSource(
+                source_type="tool_evidence",
+                source_name=(
+                    successful_results[tool].source_name or tool
+                    if tool in successful_results
+                    else tool
+                ),
+            )
+            for tool in expected_tools
             if tool not in {"create_confirmation_draft", "search_safety_knowledge"}
         ]
-        if "search_safety_knowledge" in plan.required_tools:
-            expected_sources.append(
-                ExpectedSource(
-                    source_type="rag_source",
-                    source_name="workflow_safety_rules",
-                )
+        if "search_safety_knowledge" in expected_tools:
+            rag_names = [
+                ref.document_id
+                for ref in state["context_envelope"].rag_source_refs
+            ] or ["workflow_safety_rules"]
+            expected_sources.extend(
+                ExpectedSource(source_type="rag_source", source_name=name)
+                for name in rag_names
             )
-        request = state["request"]
         return ExpectedCase(
             case_id=f"workflow:{request.run_id}",
             input_category=plan.input_category,
             user_input=request.user_input,
             expected_intent=plan.intent,
             expected_member_id=request.member_id,
-            expected_required_tools=list(plan.required_tools),
+            expected_required_tools=expected_tools,
             expected_safety_flags=list(plan.safety_flags),
             expected_human_confirmation_required=plan.human_confirmation_required,
             forbidden_phrases=DEFAULT_FORBIDDEN_PHRASES,
@@ -686,7 +763,10 @@ def _deterministic_final_payload(request: ModelCallRequest) -> dict[str, Any]:
     return {
         "content": content,
         "contains_factual_claims": bool(payload["source_names"]),
-        "waiting_for_user_confirmation": payload["confirmation_required"],
+        "waiting_for_user_confirmation": (
+            payload["confirmation_required"] and not payload["draft_created"]
+        ),
+        "human_confirmation_present": payload["draft_created"],
         "action_status": (
             "draft"
             if payload["draft_created"]
@@ -742,6 +822,27 @@ def _source_names(results: Sequence[ToolResult]) -> list[str]:
             for result in results
             if result.success and result.evidence_present
         )
+    )
+
+
+def _retrieved_rag_ref(
+    request: WorkflowRunRequest,
+    source: dict[str, Any],
+) -> RAGSourceRef:
+    return RAGSourceRef(
+        source_id=str(source.get("source_id") or "").strip(),
+        document_id=str(source.get("document_id") or "").strip(),
+        chunk_id=str(source.get("chunk_id") or "").strip(),
+        member_id=request.member_id,
+        version=(
+            str(source.get("chunk_version") or "").strip()
+            or str(source.get("document_version") or "").strip()
+            or None
+        ),
+        purpose=(
+            str(source.get("purpose") or "").strip()
+            or "workflow safety grounding"
+        ),
     )
 
 

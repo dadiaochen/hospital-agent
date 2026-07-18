@@ -201,7 +201,8 @@ class ModelGateway:
             latency_ms=sum(attempt.latency_ms for attempt in attempts),
             attempts=tuple(attempts),
         )
-        return ModelCallResult[OutputT](output=output, trace=trace)
+        result_model = ModelCallResult[response_model]  # type: ignore[valid-type]
+        return result_model(output=output, trace=trace)
 
     def _can_fallback(self) -> bool:
         return (

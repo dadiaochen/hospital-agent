@@ -16,7 +16,7 @@ User Input
   -> EvaluatorAgent review
 ```
 
-隔离分支 `codex/2g-1-langgraph-workflow` 已把上述流程接成正式的有界 LangGraph DAG；它仍使用 deterministic Planner、mock Tool Registry 和 deterministic Model Gateway，以便离线测试。HTTP Agent API、数据库持久化与同任务续跑属于 2G-2，尚未实现。
+`codex/2g-1-langgraph-workflow` 把上述流程接成有界 LangGraph DAG；线性后继 `codex/2g-2-agent-runtime-api` 再由 AgentRuntimeService 注入真实 DB Tool Registry，提供 HTTP 运行入口、持久化与同任务确认续跑。默认模型仍是 deterministic provider，方便离线复现。
 
 ## 2. 角色边界
 
@@ -65,7 +65,7 @@ ToolExecutionContext
 
 ## 5. 运行产物与评估
 
-一个可评估的 run 至少要有 ContextEnvelope、ToolResult / RAG 引用、FinalAnswerTrace、SafetyTrace 和 RunTrace。2G-1 在回答后先生成 RunSummary 并执行 reset，再由 DeterministicEvaluator 只读比较 ExpectedCase 与 RunTrace；评估完成后只回填 `evaluation_ref` 和最终 summary 状态，不修改 FinalAnswer 或业务数据。
+一个可评估的 run 至少要有 ContextEnvelope、ToolResult / RAG 引用、FinalAnswerTrace、SafetyTrace 和 RunTrace。工作流在回答后先生成 RunSummary 并执行 reset，再由 DeterministicEvaluator 只读比较 ExpectedCase 与 RunTrace；评估完成后只回填 `evaluation_ref` 和最终 summary 状态，不修改 FinalAnswer 或业务数据。2G-2 将这些冻结产物写入版本化 runtime artifact，并把工具调用逐条写入审计表。
 
 见 [CONTEXT_MANAGEMENT.md](CONTEXT_MANAGEMENT.md) 了解上下文生命周期，见 [EVALUATOR_AGENT.md](EVALUATOR_AGENT.md) 了解评估规则。
 
@@ -74,3 +74,5 @@ ToolExecutionContext
 当前 deterministic Harness 可使用 fixtures 回放规则，2G-1 LangGraph 则真实执行节点和条件边。两者复用 ExpectedCase、RunTrace 和 DeterministicEvaluator：Harness 用于固定产物回归，LangGraph 用于验证编排边界。完整节点说明见 [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md)。
 
 2E-1 的读取 API 是给 UI、Swagger 和人工核对数据使用的 HTTP 查询入口，不是 Agent 的工具替代品。Agent 仍应通过 Tool Registry 获得证据、权限检查和 trace；API 不调用 Agent workflow。
+
+2G-2 的 Agent API 是例外的正式 workflow adapter：Router 只校验 HTTP DTO，AgentRuntimeService 负责作用域、幂等、事务和持久化，LangGraph 仍只负责编排。首次 run 不允许直接确认；`needs_confirmation` 只能通过同 task 的 `/continue` 进入本地 draft 写入。完整说明见 [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md)。

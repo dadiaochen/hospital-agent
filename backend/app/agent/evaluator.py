@@ -46,6 +46,7 @@ class DeterministicEvaluator:
         human_confirmation_present = (
             trace.final_answer.waiting_for_user_confirmation
             or trace.final_answer.action_status == "awaiting_confirmation"
+            or trace.final_answer.human_confirmation_present
         )
         if (
             expected.expected_human_confirmation_required

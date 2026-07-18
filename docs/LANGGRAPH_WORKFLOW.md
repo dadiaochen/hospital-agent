@@ -134,12 +134,8 @@ python -m pytest backend\tests\test_langgraph_workflow.py backend\tests\test_con
 
 这些是 deterministic 工程验收，不是临床评测、真实 LLM 准确率或线上延迟指标。
 
-## 9. 留给 2G-2
+## 9. 2G-2 Runtime Adapter
 
-- `POST /api/agent/run` 和查询/续跑 API。
-- 注入数据库 tools 与明确事务边界。
-- 持久化 `agent_runs`、`agent_tool_calls`、sources、summary 和 evaluation refs。
-- Context Reset 后从结构化 summary 恢复同一任务。
-- 对 prompt、tool output 和 trace 做持久化脱敏。
+线性后继 `codex/2g-2-agent-runtime-api` 已在图外增加 AgentRuntimeService：由 FastAPI 运行/续跑入口注入 DB tools，持久化 `agent_runs`、`agent_tool_calls`、真实来源、RunSummary、脱敏 ModelCallTrace 和 EvaluationResult。续跑从结构化 summary/plan/source pointers 创建新 run，并重新查询 DB evidence。
 
-2G-2 仍不得加入自动诊断、自动处方、剂量调整、真实下单或模型自主无限循环。
+LangGraph 类本身仍保持可注入和可离线测试；事务、幂等、demo-user scope 与 HTTP 错误位于 service/router。完整说明见 [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md)。该适配层仍不得加入自动诊断、自动处方、剂量调整、真实下单或模型自主无限循环。

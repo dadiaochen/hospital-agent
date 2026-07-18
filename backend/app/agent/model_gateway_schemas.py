@@ -8,7 +8,12 @@ ModelMessageRole = Literal["system", "user", "assistant"]
 
 
 class ModelGatewayContract(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+        frozen=True,
+        protected_namespaces=(),
+    )
 
 
 class ModelMessage(ModelGatewayContract):

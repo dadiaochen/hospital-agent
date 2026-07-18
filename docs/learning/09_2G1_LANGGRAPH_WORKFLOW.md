@@ -20,7 +20,7 @@ LangGraph 在这里不是“让 AI 更聪明”的库，而是把步骤和条件
 - SQLAlchemy 解决 Python 对象如何查询和修改关系数据库。
 - LangGraph 解决多个有状态步骤如何按边和条件执行。
 
-2G-1 只用第三项，没有新增 HTTP 路由，也没有数据库会话。以后 2G-2 才会由 FastAPI endpoint 调用这个 workflow，并给它注入数据库工具。
+2G-1 只用第三项，没有新增 HTTP 路由，也没有数据库会话。线性后继 2G-2 已由 FastAPI endpoint 和 AgentRuntimeService 调用这个 workflow，并给它注入数据库工具；完整学习见 [10_2G2_AGENT_RUNTIME_API.md](10_2G2_AGENT_RUNTIME_API.md)。
 
 ## 3. 第一次阅读的文件顺序
 

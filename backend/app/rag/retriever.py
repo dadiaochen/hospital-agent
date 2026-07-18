@@ -251,8 +251,16 @@ def _keyword_score(query: str, record: KnowledgeRecord) -> float:
 
 
 def _query_tokens(query: str) -> tuple[str, ...]:
-    tokens = tuple(dict.fromkeys(re.findall(r"[a-z0-9_]+|[\u4e00-\u9fff]+", query)))
-    return tokens or (query,)
+    tokens: list[str] = []
+    for token in re.findall(r"[a-z0-9_]+|[\u4e00-\u9fff]+", query):
+        tokens.append(token)
+        if _is_han_text(token) and len(token) > 2:
+            tokens.extend(token[index : index + 2] for index in range(len(token) - 1))
+    return tuple(dict.fromkeys(tokens)) or (query,)
+
+
+def _is_han_text(value: str) -> bool:
+    return bool(re.fullmatch(r"[\u4e00-\u9fff]+", value))
 
 
 def _normalize(value: str) -> str:

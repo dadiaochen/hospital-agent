@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已完成至 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 的 `2D-2`，`2E-1` 基础读取 API 正在学习分支中收口。本隔离工作区按线性提交提前准备了 `2E-2` 草稿与确认 API、`2F-1` Hybrid RAG、`2F-2` Model Gateway 和 `2G-1` LangGraph 工作流；在 2E-1 完成、rebase 和完整回归之前，不改变路线图状态，也不视为已进入主线。
+项目已完成至 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 的 `2D-2`，`2E-1` 基础读取 API 正在学习分支中收口。本隔离工作区按线性提交提前准备了 `2E-2` 草稿与确认 API、`2F-1` Hybrid RAG、`2F-2` Model Gateway、`2G-1` LangGraph 工作流和 `2G-2` Agent Runtime API；在 2E-1 完成、rebase 和完整回归之前，不改变路线图状态，也不视为已进入主线。
 
 目前已经具备：
 
@@ -20,6 +20,7 @@
 - 隔离分支中的 Hybrid RAG：关键词检索始终可用，可选向量后端只返回来源指针，异常时留下原因并自动回退。
 - 隔离分支中的 Model Gateway：默认 deterministic，可选真实 HTTP provider；所有输出先过 Pydantic 与安全检查，失败留下 attempt trace 并回退。
 - 隔离分支中的有界 LangGraph DAG：按 intent 路由四类业务角色，统一经过 ContextManager、Tool Registry、SafetyAgent、确认草稿、RunTrace/reset 和只读 Evaluator。
+- 隔离分支中的 Agent Runtime API：真实 DB tools、run/tool-call 持久化、冻结产物查询、幂等运行和确认后的同任务续跑；任何动作仍只创建本地草稿。
 
 ## 四个演示场景
 
@@ -39,9 +40,12 @@ LangGraph -> ContextManager -> role view -> Tool Registry / RAG
     |              |                           |
  Planner       member isolation          evidence pointers
     |                                          |
- SafetyAgent -> confirmation gate -> Model Gateway -> FinalAnswer
+SafetyAgent -> confirmation gate -> Model Gateway -> FinalAnswer
                        |                           |
                 local draft only       RunTrace -> reset -> Evaluator
+                       \                   /
+                        AgentRuntimeService
+                     -> agent_runs / tool_calls
 ```
 
 业务 Agent 只能使用带 Pydantic 输入输出契约、角色权限、超时、重试和确认标记的工具。事实必须能回溯到数据库工具或 RAG 来源；没有来源时不能编造病史、处方、库存或医疗规则。
@@ -97,6 +101,13 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_langgraph_workflow.py backend\tests\test_context_manager.py -q -p no:cacheprovider --basetemp=.tmp\pytest-workflow
 ```
 
+只验证隔离分支的 2G-2 Agent Runtime API：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_agent_runtime_api.py -q -p no:cacheprovider --basetemp=.tmp\pytest-runtime
+```
+
 ## 文档入口
 
 从 [docs 文档导航](docs/README.md) 开始。它区分了产品、开发、技术、接口、数据库、Agent 和学习材料。
@@ -111,6 +122,7 @@ python -m pytest backend\tests\test_langgraph_workflow.py backend\tests\test_con
 - [RAG 检索设计](docs/RAG_RETRIEVAL.md)：Retriever 契约、来源回填、混合检索和降级规则。
 - [Model Gateway 设计](docs/MODEL_GATEWAY.md)：provider 契约、结构化输出、安全检查和 fallback trace。
 - [LangGraph 工作流](docs/LANGGRAPH_WORKFLOW.md)：图节点、条件路由、状态、确认门和运行产物。
+- [Agent Runtime API](docs/AGENT_RUNTIME_API.md)：运行入口、持久化、冻结回放、幂等与确认续跑。
 - [从零学习路线](docs/learning/README.md)：需求拆解、代码设计、review 和简历表达。
 
 ## 仓库结构

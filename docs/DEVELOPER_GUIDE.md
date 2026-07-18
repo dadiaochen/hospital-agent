@@ -90,6 +90,15 @@ python -m pytest backend\tests\test_langgraph_workflow.py backend\tests\test_con
 
 这些测试不会调用 LLM、数据库或 HTTP API。默认 workflow 使用 mock Tool Registry 与 deterministic Model Gateway，适合离线 review 节点路由和安全边界。
 
+只验证 2G-2 Agent Runtime API：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_agent_runtime_api.py -q -p no:cacheprovider --basetemp=.tmp\pytest-runtime
+```
+
+这组测试通过 FastAPI TestClient 和测试数据库执行真实 DB tools，但仍使用 deterministic Model Gateway，不访问外部模型、医院或药店。
+
 确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。2E-1 分支中的读取 API 需要先运行迁移和 seed；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。知识库搜索接口是学习实战题，在完成前不要假设它已经上线。
 
 ## 4. 分层与改动位置
@@ -123,5 +132,6 @@ python -m pytest backend\tests\test_langgraph_workflow.py backend\tests\test_con
 - 用户和 `member_id` 的边界已经验证。
 - 工具经过 Tool Registry，关键动作经过人工确认。
 - LangGraph 条件边有明确终点，没有依赖模型输出的无限循环；Evaluator 位于回答与 reset 之后且只读。
+- Runtime 首次 run 不能直接确认；续跑保持 task/member 隔离并且不会重复创建草稿。
 - 更新了对应的技术、接口、数据库、Agent 或测试文档。
 - README 只更新对 GitHub 访客有价值的当前状态，不追加阶段流水账。

@@ -41,7 +41,7 @@ RetrievalRequest
   -> RetrievalResult
 ```
 
-关键词检索读取文档标题、分类、来源、正文、chunk 正文与关键词，按 query token 命中位置计算归一化排序分数。排序使用分数、分类、chunk index 和 chunk ID 作为稳定 tie-breaker，同一数据库快照和请求会得到相同顺序。
+关键词检索读取文档标题、分类、来源、正文、chunk 正文与关键词，按 query token 命中位置计算归一化排序分数。英文/数字按连续词处理；连续中文保留完整片段并补充双字词，使“我现在胸痛”可以命中“胸痛”安全关键词，同时不依赖外部分词服务。排序使用分数、分类、chunk index 和 chunk ID 作为稳定 tie-breaker，同一数据库快照和请求会得到相同顺序。
 
 向量后端只能返回 `VectorMatch(document_id, chunk_id, score)`。Retriever 不信任它提供正文；必须从 PostgreSQL 重新加载，且 document/chunk 关系一致才会进入结果。这保证最终内容仍来自已审核知识表。
 

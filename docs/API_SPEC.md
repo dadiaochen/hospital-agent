@@ -119,11 +119,23 @@ draft -> rejected
 
 `ModelGateway` 是 Agent 内部的模型调用边界，不新增客户端 endpoint。它读取服务端环境变量中的 provider、base URL、模型名、Key 和 timeout；业务请求与 API DTO 不能携带或覆盖模型 Key。
 
-Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider 的未校验原始文本。后续 2G-2 Agent API 只能调用 Gateway，不能在 Router 中直接调用模型 HTTP endpoint。
+Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider 的未校验原始文本。2G-2 Agent Runtime 只通过 Gateway 获得结构化结果，并持久化脱敏 Trace；Router 不能直接调用模型 HTTP endpoint。
 
-## 8. 2G-1 内部工作流不是 Agent API
+## 8. 隔离分支中的 2G-2 Agent Runtime API
 
-2G-1 的 `LangGraphAgentWorkflow.run()` 是 Python 内部入口，不是 FastAPI endpoint。它接收 `WorkflowRunRequest`，返回 `WorkflowRunResult`，默认不访问数据库、不持久化 run，也不接受客户端提供模型 Key。`POST /api/agent/run`、run 续跑与 trace 查询写入属于 2G-2；在 Router 中直接调用 provider、工具 handler 或拼装未校验 state 都不符合设计。
+2G-1 的 `LangGraphAgentWorkflow.run()` 仍是内部 Python 入口。2G-2 通过 `AgentRuntimeService` 注入真实 DB Tool Registry，并新增以下 HTTP 边界：
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `POST` | `/api/agent-runs` | 创建并执行一次未确认的新 run；持久化 run、工具调用和冻结产物。 |
+| `GET` | `/api/agent-runs/{run_id}/artifacts` | 查询 RunTrace、RunSummary、Tool/RAG refs、SafetyTrace 和 EvaluationResult。 |
+| `POST` | `/api/agent-runs/{run_id}/continue` | 对 `needs_confirmation` run 做同任务确认续跑。 |
+
+首次请求的 `human_confirmation_granted` 只能是 `false`。需要写本地草稿时，响应状态为 `needs_confirmation`，客户端必须再调用 `/continue` 并显式提交 `true`。续跑复用原 `task_id`、结构化 RunSummary 和来源指针，但重新执行当前 DB evidence 查询；它不恢复 raw conversation、scratchpad 或 provider 原始文本。
+
+每次请求必须携带幂等键。同一首次请求可安全 replay；同一待确认 run 只有一个固定 continuation run，不同确认请求会返回 `409 idempotency_conflict`，不会创建重复草稿。所有运行仍按 demo user / member 作用域隔离，确认后固定返回 `external_action_status="not_submitted"`。
+
+完整字段、状态和持久化说明见 [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md)。
 
 ## 9. API 设计规则
 
@@ -133,4 +145,4 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 4. 不存在、越权、schema 失败和状态冲突要有可预测的错误格式。
 5. 含有医疗敏感内容的写操作在 API 层之外还必须经过 safety 与 confirmation 规则。
 
-知识库搜索完成前，2E-1 仍不应在路线图中标记为完成。本节 2E-2 API、2F 内部能力与 2G-1 工作流只存在于隔离线性分支，必须在 2E-1 完成后整合并完整回归。
+知识库搜索完成前，2E-1 仍不应在路线图中标记为完成。本节 2E-2 API、2F 内部能力与 2G 工作流/Runtime 只存在于隔离线性分支，必须在 2E-1 完成后整合并完整回归。

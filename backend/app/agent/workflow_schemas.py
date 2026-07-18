@@ -25,17 +25,6 @@ DraftActionType = Literal[
 ]
 
 
-class WorkflowRunRequest(ContractModel):
-    run_id: NonEmptyStr
-    task_id: NonEmptyStr
-    user_id: NonEmptyStr
-    member_id: NonEmptyStr
-    user_input: NonEmptyStr
-    medication_name: NonEmptyStr | None = None
-    city: NonEmptyStr | None = None
-    human_confirmation_granted: bool = False
-
-
 class WorkflowPlan(ContractModel):
     intent: Intent
     input_category: HarnessCaseCategory
@@ -57,10 +46,52 @@ class WorkflowPlan(ContractModel):
         return self
 
 
+class WorkflowResumeContext(ContractModel):
+    previous_run_id: NonEmptyStr
+    run_summary: RunSummary
+    plan: WorkflowPlan
+
+    @model_validator(mode="after")
+    def validate_previous_artifacts(self) -> "WorkflowResumeContext":
+        if self.run_summary.run_id != self.previous_run_id:
+            raise ValueError("run_summary must belong to previous_run_id")
+        if self.run_summary.intent != self.plan.intent:
+            raise ValueError("resume plan intent must match run summary intent")
+        if self.run_summary.final_status != "needs_confirmation":
+            raise ValueError("only needs_confirmation runs can be resumed")
+        return self
+
+
+class WorkflowRunRequest(ContractModel):
+    run_id: NonEmptyStr
+    task_id: NonEmptyStr
+    user_id: NonEmptyStr
+    member_id: NonEmptyStr
+    user_input: NonEmptyStr
+    medication_name: NonEmptyStr | None = None
+    city: NonEmptyStr | None = None
+    human_confirmation_granted: bool = False
+    resume_context: WorkflowResumeContext | None = None
+
+    @model_validator(mode="after")
+    def validate_resume_scope(self) -> "WorkflowRunRequest":
+        if self.resume_context is None:
+            return self
+        summary = self.resume_context.run_summary
+        if summary.task_id != self.task_id:
+            raise ValueError("resume summary task_id must match the request")
+        if summary.member_id != self.member_id:
+            raise ValueError("resume summary member_id must match the request")
+        if not self.human_confirmation_granted:
+            raise ValueError("resumed runs require explicit human confirmation")
+        return self
+
+
 class WorkflowFinalAnswerDraft(ContractModel):
     content: NonEmptyStr
     contains_factual_claims: bool
     waiting_for_user_confirmation: bool
+    human_confirmation_present: bool = False
     action_status: ActionTraceStatus
 
 
@@ -83,6 +114,7 @@ __all__ = [
     "DraftActionType",
     "WorkflowFinalAnswerDraft",
     "WorkflowPlan",
+    "WorkflowResumeContext",
     "WorkflowRunRequest",
     "WorkflowRunResult",
 ]

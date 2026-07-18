@@ -12,7 +12,8 @@
 - 区分运行时 SafetyAgent 和 post-run EvaluatorAgent，避免用事后评估代替安全拦截。
 - 在隔离 2F-1 分支实现 Hybrid RAG Retriever：保留确定性关键词基线，以来源指针回填数据库正文，并对向量后端缺失、超时和失效指针执行可追踪降级；进入主线后再作为最终交付表述。
 - 在隔离 2F-2 分支实现 Model Gateway：统一 deterministic 与 OpenAI-compatible provider 契约，在 Pydantic 解析和规则安全检查失败时执行可追踪 fallback；尚未进行真实线上模型质量评测。
-- 在隔离 2G-1 分支实现有界 LangGraph Multi-Agent DAG：以 intent 路由角色，复用 ContextManager、Tool Registry、SafetyAgent、确认门、Model Gateway、RunTrace/reset 和只读 Evaluator；尚未接入 Agent API 或 runtime 持久化。
+- 在隔离 2G-1 分支实现有界 LangGraph Multi-Agent DAG：以 intent 路由角色，复用 ContextManager、Tool Registry、SafetyAgent、确认门、Model Gateway、RunTrace/reset 和只读 Evaluator。
+- 在线性 2G-2 隔离分支实现 Agent Runtime API：注入真实 DB tools，持久化 run/tool-call 与版本化冻结产物，支持成员隔离、幂等 replay、确认后的同任务续跑和失败审计；不执行外部医疗动作。
 
 ## 简历表述示例
 
@@ -26,6 +27,8 @@
 实现可替换 Model Gateway，以 Pydantic 约束结构化输出、规则门禁拦截越权文本，并为 provider 超时、HTTP/schema/safety 失败记录逐次 Trace 和 deterministic fallback。
 
 实现有界 LangGraph 业务编排，将 Planner、角色最小上下文、证据工具、安全拦截、人工确认草稿和 post-run 评估连接为无循环 DAG；通过冻结 RunTrace 保留成员、来源、确认与失败原因。
+
+实现 Agent Runtime 适配层，将真实数据库 evidence、LangGraph 运行、run/tool-call 审计和冻结 EvaluationResult 串联；以版本化最小产物支持可查询回放，并通过固定 continuation run 与请求指纹避免重复确认草稿。
 ```
 
 ## 面试时怎么讲
@@ -41,7 +44,7 @@
 - 不要说已上线生产、接入真实医院/药店、自动开方、诊断或修改处方。
 - 不要把 deterministic mock Harness 说成真实 LLM 或临床评测。
 - 不要声称 `100% safety recall`、`0 hallucination` 或特定 p95 延迟，除非有对应真实运行的评估报告和数据范围。
-- Agent HTTP API、运行持久化、线上模型验证和前端闭环仍按 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 后续阶段实现；2G-1 工作流目前只在隔离分支中完成。
+- Agent HTTP API 与运行持久化已在 2G-2 隔离分支实现，但尚未整合进主线；线上模型验证和前端闭环仍未完成。
 - 知识库搜索 API 被保留为学习实战题；在完成并测试前不能称其已实现。
 - 不要把 RAG `score` 描述为医疗正确率，也不要声称已接入真实 Embedding 或向量数据库；当前实现的是接口、关键词基线和可测试的注入/降级机制。
 - 不要把 MockTransport 或 deterministic provider 测试描述为真实 LLM 效果，也不要宣称模型准确率、安全率、成本或 p95 延迟。

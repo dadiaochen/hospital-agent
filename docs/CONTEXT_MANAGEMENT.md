@@ -68,6 +68,8 @@ RoleSpecificContextView 的 schema 本身没有 `raw_conversation` 字段，`ext
 
 2G-1 按生命周期顺序先调用不带 EvaluationResult 的 `reset_after_run`，此时 `evaluation_ref` 可以为空；Evaluator 随后只读冻结 RunTrace，工作流再用评估结果重新生成 RunSummary 并回填引用。这样 Evaluator 不需要获得可写 business context，也不会为了填报告而推迟 scratchpad 清理。
 
+2G-2 把最终 RunSummary、ToolEvidenceRef、RAGSourceRef、RunTrace 和 EvaluationResult 放入版本化 `PersistedRunArtifacts`。续跑只从该产物恢复原计划、RunSummary 和 source IDs；新的 ContextEnvelope 使用相同 `task_id` / `member_id`，但拥有新的 `run_id`，并重新调用 DB tools。刷新角色上下文时会继续保留上一轮 summary/source 指针，不复制 raw conversation 或旧 scratchpad。
+
 ## 6. 长期记忆门槛
 
 只有用户明确确认的提醒偏好、草稿状态或常用视图可以进入长期 memory。模型猜测、未确认偏好和医疗事实即使看起来合理，也不能成为 MemoryRef。这个规则同时由文档、Pydantic validator 和 ContextManager reset 行为约束。

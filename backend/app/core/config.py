@@ -1,7 +1,7 @@
 import os
 from functools import cached_property
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 try:
     from dotenv import load_dotenv
@@ -21,6 +21,8 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 class Settings(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     app_name: str = Field(default_factory=lambda: os.getenv("APP_NAME", "Family Health Agent API"))
     app_version: str = Field(default_factory=lambda: os.getenv("APP_VERSION", "0.1.0"))
     environment: str = Field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))

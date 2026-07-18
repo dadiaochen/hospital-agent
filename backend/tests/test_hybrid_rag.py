@@ -82,6 +82,23 @@ def test_keyword_retriever_returns_fixed_medical_safety_rule(
     assert all(source.purpose == "safety_check" for source in result.sources)
 
 
+def test_keyword_retriever_matches_key_terms_inside_a_natural_chinese_query(
+    knowledge_session: Session,
+) -> None:
+    retriever = create_knowledge_retriever(knowledge_session, vector_enabled=False)
+
+    result = retriever.retrieve(
+        RetrievalRequest(
+            query="我现在胸痛，能不能直接把降压药加量？",
+            purpose="safety_check",
+        )
+    )
+
+    assert result.evidence_present is True
+    assert result.sources[0].document_id == "doc-safety"
+    assert result.sources[0].chunk_id == "chunk-safety"
+
+
 def test_keyword_retriever_returns_no_evidence_for_unknown_query(
     knowledge_session: Session,
 ) -> None:
@@ -261,8 +278,11 @@ def _seed_knowledge(session: Session) -> None:
             "Medical Safety Boundary",
             "medical_safety",
             "safety_policy:v1",
-            "The system does not diagnose, prescribe, or change a prescription.",
-            ["safety", "boundary", "doctor"],
+            (
+                "The system does not diagnose, prescribe, or change a prescription. "
+                "胸痛或加量请求必须转人工和医生处理。"
+            ),
+            ["safety", "boundary", "doctor", "胸痛", "加量"],
             "medical_boundary",
         ),
     ]

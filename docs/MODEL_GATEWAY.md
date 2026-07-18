@@ -73,7 +73,7 @@ any failure
 - latency；
 - 归一化 `error_type`。
 
-`ModelCallTrace` 聚合 requested/effective provider、是否 fallback、fallback reason、总耗时和所有 attempts。当前 Trace 是内存冻结 Pydantic 对象，2G-2 才负责持久化和 API 查询。
+`ModelCallTrace` 聚合 requested/effective provider、是否 fallback、fallback reason、总耗时和所有 attempts。2G-2 将这个脱敏冻结对象放入版本化 runtime artifact 并通过 artifacts API 查询；prompt、API Key 和 provider 原始文本不进入审计。
 
 ## 7. 失败类型
 

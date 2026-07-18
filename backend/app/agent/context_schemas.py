@@ -25,7 +25,11 @@ MemorySourceType = Literal[
 
 
 class ContractModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+        protected_namespaces=(),
+    )
 
 
 class TaskState(ContractModel):

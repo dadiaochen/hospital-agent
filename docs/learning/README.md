@@ -15,6 +15,7 @@
 | [07 2F-1 Hybrid RAG](07_2F1_HYBRID_RAG.md) | 理解 Retriever、关键词评分、来源回填、功能开关和降级测试。 | `backend/app/rag/`、`test_hybrid_rag.py` |
 | [08 2F-2 Model Gateway](08_2F2_MODEL_GATEWAY.md) | 理解 provider 抽象、结构化输出、安全门禁、fallback 和调用 Trace。 | `backend/app/agent/model_gateway.py` |
 | [09 2G-1 LangGraph 工作流](09_2G1_LANGGRAPH_WORKFLOW.md) | 从计划、状态、节点和条件边读懂四场景编排、上下文、工具、安全、确认、reset 与评估。 | `backend/app/agent/workflow_planning.py`、`langgraph_workflow.py` |
+| [10 2G-2 Agent Runtime API](10_2G2_AGENT_RUNTIME_API.md) | 从 HTTP 请求一路读到 Service、LangGraph、真实 DB tools、审计持久化、确认续跑与冻结回放。 | `agent_audit.py`、`agent_runtime_service.py`、`runtime_schemas.py` |
 
 ## 使用方法
 

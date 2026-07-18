@@ -4,7 +4,11 @@ from pydantic import BaseModel, ConfigDict
 
 
 class ApiSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid", from_attributes=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        from_attributes=True,
+        protected_namespaces=(),
+    )
 
 
 class ApiErrorDetail(ApiSchema):

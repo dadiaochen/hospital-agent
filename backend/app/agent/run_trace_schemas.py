@@ -1,4 +1,5 @@
 from typing import Literal
+from uuid import UUID, uuid5
 
 from pydantic import ConfigDict, Field
 
@@ -6,6 +7,7 @@ from app.agent.context_schemas import ContractModel, Intent, NonEmptyStr
 
 
 ActionTraceStatus = Literal["none", "draft", "awaiting_confirmation", "executed"]
+_TOOL_CALL_NAMESPACE = UUID("70f6b387-f71d-4221-bc4a-6c7b7a16c389")
 
 
 class FrozenTraceModel(ContractModel):
@@ -42,6 +44,7 @@ class FinalAnswerTrace(FrozenTraceModel):
     content: str
     contains_factual_claims: bool
     waiting_for_user_confirmation: bool = False
+    human_confirmation_present: bool = False
     action_status: ActionTraceStatus = "none"
 
 
@@ -58,3 +61,8 @@ class RunTrace(FrozenTraceModel):
     final_answer: FinalAnswerTrace
     latency_ms: int = Field(ge=0)
     schema_valid: bool = True
+
+
+def build_tool_call_id(run_id: str, index: int, tool_name: str) -> str:
+    """Return the stable database ID used by a run's ordered tool call."""
+    return str(uuid5(_TOOL_CALL_NAMESPACE, f"{run_id}:{index}:{tool_name}"))
