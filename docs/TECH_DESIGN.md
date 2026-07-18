@@ -93,6 +93,12 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 首次 run 不能携带确认；待确认任务通过固定 continuation run ID 续跑。续跑只恢复上一轮 RunSummary、计划和来源指针，重新查询当前数据库，不恢复角色 scratchpad。异常会把 run 标为 `failed` 并只保存错误类型，不把 provider 原文或内部异常消息暴露给客户端。详见 [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md)。
 
+### 4.10 前端以成员上下文消费只读契约
+
+3A 在浏览器侧增加 `MemberProvider`、统一 API client 和页面级 `useApiResource`。Provider 只保存当前选择的 `member_id`；成员切换会改变资源 key、取消旧请求并清空旧数据。家庭档案、药箱、处方、购药、确认草稿和 run 响应还要通过 `assertMemberScoped` 校验返回 `member_id`，异常时拒绝展示而不是静默过滤。
+
+页面统一区分 loading、empty、error 和 data；搜索类页面另有“尚未查询”状态。前端检查是纵深防御，后端 demo-user/member scope 仍是权限真相来源。知识页仅消费 2E-1 的 `q/category/items/source_id` 契约，不在 3A 重复实现后端练习。完整说明见 [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md)。
+
 ## 5. 当前实现边界
 
 | 已实现 | 尚未实现 |
@@ -101,6 +107,7 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 | 家庭、药箱、处方/购药、库存和 Agent 审计的只读 API | 知识库搜索 API（保留为学习实战题）。 |
 | ContextManager、Trace、fixture Harness、确定性评估；隔离分支中的 Model Gateway、LangGraph DAG 和 Agent Runtime API/持久化 | 线上模型质量验证、生产认证和外部系统集成。 |
 | 权限、成员隔离、确认门禁和失败 fallback 的单元测试；隔离分支中的关键词/混合 Retriever | 真实 Embedding provider、向量数据库和互联网知识抓取。 |
+| 隔离分支中的 3A Next.js 数据页、统一异步状态和客户端成员响应检查 | 3B Agent 对话、确认交互、Run Trace 详情；知识页真实联调等待 2E-1 合入。 |
 
 详细顺序、验收和非目标以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
 
@@ -124,4 +131,6 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 - deterministic 计划与工具入参投影：[workflow_planning.py](../backend/app/agent/workflow_planning.py)
 - Runtime 冻结契约：[runtime_schemas.py](../backend/app/agent/runtime_schemas.py)
 - Agent Runtime 事务与持久化：[agent_runtime_service.py](../backend/app/services/agent_runtime_service.py)
+- 前端 API 客户端：[client.ts](../frontend/lib/api/client.ts)
+- 前端成员上下文：[MemberProvider.tsx](../frontend/components/providers/MemberProvider.tsx)
 - Agent Runtime HTTP DTO：[agent_runtime.py](../backend/app/schemas/agent_runtime.py)

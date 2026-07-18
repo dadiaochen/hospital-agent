@@ -137,7 +137,23 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 
 完整字段、状态和持久化说明见 [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md)。
 
-## 9. API 设计规则
+## 9. 3A 前端 API 消费约定
+
+3A 页面通过 `frontend/lib/api/client.ts` 统一访问上述接口。浏览器 base URL 来自 `NEXT_PUBLIC_API_BASE_URL`，默认 `http://localhost:8000`；页面不得直接写数据库地址或模型配置。
+
+| 页面 | 消费接口 |
+| --- | --- |
+| 家庭成员 | `/api/family-members`、`/{member_id}/health-profile` |
+| 家庭药箱 | `/{member_id}/medicine-box` |
+| 续方/复诊 | `/{member_id}/prescriptions`、`/api/confirmation-drafts?member_id=` |
+| 提醒 | `/api/confirmation-drafts?member_id=`，客户端只保留 `reminder_create` |
+| 购药信息 | `/{member_id}/purchase-records`、`/api/pharmacy-inventory` |
+| 知识检索 | `/api/knowledge/search?q=&category=`，依赖学习题完成并合入 |
+| Agent runs | `/api/agent-runs?member_id=` |
+
+所有成员类 response 在后端作用域校验后，还会被浏览器检查 `member_id`。不匹配时前端抛出 `context_isolation_failed` 并停止展示；这不是认证替代品，而是防止异常 response 造成可见串扰的第二道防线。
+
+## 10. API 设计规则
 
 1. Router 只做协议转换；查询、写入和权限判断放到 service。
 2. API DTO 与 ORM 分离，不能直接把 SQLAlchemy 模型序列化给客户端。

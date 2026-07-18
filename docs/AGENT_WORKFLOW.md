@@ -76,3 +76,7 @@ ToolExecutionContext
 2E-1 的读取 API 是给 UI、Swagger 和人工核对数据使用的 HTTP 查询入口，不是 Agent 的工具替代品。Agent 仍应通过 Tool Registry 获得证据、权限检查和 trace；API 不调用 Agent workflow。
 
 2G-2 的 Agent API 是例外的正式 workflow adapter：Router 只校验 HTTP DTO，AgentRuntimeService 负责作用域、幂等、事务和持久化，LangGraph 仍只负责编排。首次 run 不允许直接确认；`needs_confirmation` 只能通过同 task 的 `/continue` 进入本地 draft 写入。完整说明见 [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md)。
+
+## 7. 3A 前端只展示运行产物
+
+3A 的 Agent run 页面只按当前 `member_id` 读取审计列表，不参与 Planner、角色路由、SafetyAgent 或 EvaluatorAgent 执行。它不会修改 FinalAnswer、EvaluationResult 或业务状态。Agent 输入、确认续跑和冻结 Trace 详情属于 3B；在此之前前端明确显示为预告，不放置伪可用执行按钮。

@@ -53,6 +53,8 @@ npm install
 npm run dev
 ```
 
+前端通过 `NEXT_PUBLIC_API_BASE_URL` 访问后端，默认是 `http://localhost:8000`。这是公开的浏览器配置，不能放数据库密码、模型 Key 或其他秘密。
+
 也可以直接用 `docker compose up --build` 启动完整演示环境。
 
 ## 3. 日常验证
@@ -99,6 +101,17 @@ python -m pytest backend\tests\test_agent_runtime_api.py -q -p no:cacheprovider 
 
 这组测试通过 FastAPI TestClient 和测试数据库执行真实 DB tools，但仍使用 deterministic Model Gateway，不访问外部模型、医院或药店。
 
+验证 3A 前端类型、成员隔离契约和生产构建：
+
+```powershell
+Set-Location frontend
+npm test
+npm run typecheck
+npm run build
+```
+
+页面联调时要分别切换本人、父亲和母亲，观察浏览器 Network 面板中的 `member_id`。知识检索页依赖 2E-1 学习题的 `/api/knowledge/search`；该接口合入前出现可解释错误是当前分支的真实状态。
+
 确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。2E-1 分支中的读取 API 需要先运行迁移和 seed；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。知识库搜索接口是学习实战题，在完成前不要假设它已经上线。
 
 ## 4. 分层与改动位置
@@ -113,6 +126,8 @@ python -m pytest backend\tests\test_agent_runtime_api.py -q -p no:cacheprovider 
 | `backend/app/agent` | Context、Trace、Harness、Model Gateway 和 LangGraph 图工作流 | 数据库业务实现 |
 | `backend/app/safety` | 医疗安全规则和人工确认判断 | 业务写入 |
 | `backend/app/rag` | 检索与来源返回 | 无来源事实生成 |
+| `frontend/lib/api` | 浏览器 API 类型、路径、错误和成员响应检查 | 数据库访问或医疗业务规则 |
+| `frontend/app` | 页面组合与展示状态 | 直接拼接数据库查询或绕过 API client |
 
 ## 5. GitHub Desktop 工作流
 
@@ -133,5 +148,6 @@ python -m pytest backend\tests\test_agent_runtime_api.py -q -p no:cacheprovider 
 - 工具经过 Tool Registry，关键动作经过人工确认。
 - LangGraph 条件边有明确终点，没有依赖模型输出的无限循环；Evaluator 位于回答与 reset 之后且只读。
 - Runtime 首次 run 不能直接确认；续跑保持 task/member 隔离并且不会重复创建草稿。
+- 前端成员页面在切换时取消旧请求，并区分 loading、empty、error；成员响应通过 `member_id` 二次检查。
 - 更新了对应的技术、接口、数据库、Agent 或测试文档。
 - README 只更新对 GitHub 访客有价值的当前状态，不追加阶段流水账。

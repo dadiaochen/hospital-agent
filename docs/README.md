@@ -31,6 +31,7 @@
 | [MODEL_GATEWAY.md](MODEL_GATEWAY.md) | 模型 provider、结构化输出、安全门禁、降级和调用 Trace。 |
 | [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md) | 有界状态图、节点路由、工具调用、确认与运行产物。 |
 | [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md) | Agent 运行 API、run/tool-call 持久化、冻结回放、幂等与确认续跑。 |
+| [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) | Next.js 数据页、成员上下文、API client 和异步状态。 |
 
 ## Agent 专项
 

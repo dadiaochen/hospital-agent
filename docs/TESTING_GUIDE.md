@@ -18,6 +18,7 @@
 | LangGraph 工作流 | `test_langgraph_workflow.py` | 四场景路由、确认不可绕过、安全拦截、成员隔离、来源保留、reset/eval 与模型失败。 |
 | Agent Runtime API | `test_agent_runtime_api.py` | 真实 DB tools、run/tool-call 持久化、冻结回放、幂等、续跑、隔离、安全与失败审计。 |
 | API | `test_health.py`、`test_read_api.py`、`test_confirmation_draft_api.py` | 健康检查、只读资源和本地草稿状态机。 |
+| 3A 前端 | `frontend/lib/api/client.test.ts`、Next production build | URL 编码、成员响应隔离、TypeScript 契约和全部页面编译。 |
 
 ## 运行命令
 
@@ -28,6 +29,17 @@ python -m compileall backend\app backend\tests
 ```
 
 只验证某个改动时，先跑对应测试文件；准备提交前再跑完整套件。Harness 的 fixture 位于 `backend/tests/fixtures/`，它们是 deterministic 演示输入，不是临床数据或线上评估数据。
+
+前端验证：
+
+```powershell
+Set-Location frontend
+npm test
+npm run typecheck
+npm run build
+```
+
+自动测试之外还要做真实联调：启动 migration、seed、后端和前端，依次切换本人、父亲、母亲，核对 Network 请求和响应中的 `member_id`。知识 API 未合入时不能用 mock 页面冒充真实联调通过。
 
 ## 如何 review 一个改动
 
@@ -49,8 +61,11 @@ Review LangGraph 时先画出节点和条件边，再看每个 node 的输入/�
 
 Review Runtime 时继续检查：Router 是否只处理 HTTP；Service 是否从当前 user 校验 member/run；`tool_call_id` 是否能定位数据库审计行；首次请求能否绕过 `/continue`；同一待确认 run 换幂等键是否会产生重复草稿；失败 run 是否保留最小审计而不泄露异常原文。
 
+Review 前端时先忽略样式，追踪 `page -> useMember -> api client -> endpoint`。确认成员切换会取消旧请求并清空旧 data，成员 response 不匹配时抛错而不是过滤；再检查 loading、empty、error、尚未查询和成功状态是否彼此独立。
+
 ## 当前常见风险
 
 - 2G-2 Agent API/runtime 持久化已在隔离分支实现，但多模型线上质量验证、生产认证和外部医院/药店集成尚未实现，不能用 deterministic 成功结果替代真实验证。
+- 3A 页面已通过契约测试、类型检查和生产构建，但知识页仍依赖 2E-1 API 合入，完整本人/父亲/母亲真实数据联调尚需在分支整合后执行。
 - `agent_eval_report.example.md` 是固定 mock fixture 的计算结果，不是生产质量、临床效果或安全率证明。
 - 本项目的配置示例只用于本地开发。生产环境必须从安全的环境变量或秘密管理系统注入连接信息和模型 Key。

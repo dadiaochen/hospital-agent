@@ -1,6 +1,5 @@
-import Link from "next/link";
-
-import { navigationItems } from "@/lib/navigation";
+import { MemberSwitcher } from "@/components/MemberSwitcher";
+import { Navigation } from "@/components/Navigation";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -8,36 +7,30 @@ type AppShellProps = {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="min-h-screen bg-[#f7faf9] text-ink">
-      <header className="border-b border-[#d9e5e1] bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-5 md:flex-row md:items-center md:justify-between">
+    <div className="min-h-screen bg-[#f4f8f6] text-ink">
+      <header className="border-b border-[#d9e5e1] bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-[1440px] flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-medium text-clinic">FamilyHealthAgent</p>
-            <h1 className="text-2xl font-semibold tracking-normal">家庭健康事务管理控制台</h1>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-clinic">
+              FamilyHealthAgent
+            </p>
+            <h1 className="mt-1 text-xl font-bold tracking-tight text-[#173c38]">
+              家庭健康事务管理台
+            </h1>
           </div>
-          <div className="rounded-md border border-[#d9e5e1] px-3 py-2 text-sm text-[#475569]">
-            Phase 1 Skeleton
-          </div>
+          <MemberSwitcher />
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-6 px-5 py-6 lg:grid-cols-[220px_1fr]">
-        <nav className="h-fit rounded-md border border-[#d9e5e1] bg-white p-3">
-          <div className="grid gap-1">
-            {navigationItems.map((item) => (
-              <Link
-                className="rounded-md px-3 py-2 text-sm font-medium text-[#334155] hover:bg-mist hover:text-clinic"
-                href={item.href}
-                key={item.href}
-              >
-                {item.label}
-              </Link>
-            ))}
+      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[224px_minmax(0,1fr)]">
+        <aside className="h-fit rounded-2xl border border-[#dbe7e3] bg-white p-3 shadow-sm">
+          <Navigation />
+          <div className="mt-3 rounded-xl bg-[#f1f7f4] p-3 text-xs leading-5 text-[#52706b]">
+            系统只整理信息和生成草稿，不诊断、不开方、不修改医生处方。
           </div>
-        </nav>
+        </aside>
         <main>{children}</main>
       </div>
     </div>
   );
 }
-

@@ -85,3 +85,5 @@ Alembic 默认将内部 `alembic_version.version_num` 建为 `VARCHAR(32)`，但
 2E-1 的读取 API 没有新增或修改任何 ORM 字段、Alembic migration 或 seed 数据；它只是将现有只读查询按 demo-user / member scope 暴露为 HTTP DTO。
 
 2G-1 也没有修改 ORM、Alembic migration 或 seed；工作流状态不能被误认为数据库事实。
+
+3A 前端数据页面同样没有修改 ORM、Alembic migration 或 seed。TypeScript response 类型只是后端 Pydantic DTO 的浏览器侧镜像，不是新的数据库 schema；字段真相仍以 ORM、migration 和 API DTO 为准。

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AppShell } from "@/components/AppShell";
+import { MemberProvider } from "@/components/providers/MemberProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,7 +17,9 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
-        <AppShell>{children}</AppShell>
+        <MemberProvider>
+          <AppShell>{children}</AppShell>
+        </MemberProvider>
       </body>
     </html>
   );

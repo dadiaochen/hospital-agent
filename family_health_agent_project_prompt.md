@@ -81,6 +81,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `codex/2g-2-agent-runtime-api` 在线性后继中增加 Agent Runtime 适配层。FastAPI Router 只接收运行/续跑 DTO，AgentRuntimeService 负责 demo-user/member 作用域、幂等键、真实 DB Tool Registry 注入、run/tool-call 审计和版本化冻结产物持久化。首次 run 不得直接携带确认；只有 `needs_confirmation` run 能以相同 task/member 恢复 RunSummary 和来源指针后续跑，且只创建 `not_submitted` 本地草稿。Evaluator 仍只读；不保存 raw conversation、scratchpad、Key 或 provider 原始文本，不新增 ORM/migration，不接外部系统。
 
+`codex/3a-core-data-pages` 在线性隔离历史上实现 Next.js 核心数据页。`MemberProvider` 提供唯一当前 `member_id`，页面通过统一 typed API client 读取真实 FastAPI 契约，并在渲染前检查成员类 response 的 `member_id`。所有数据页必须区分 loading、empty、error 和 data；知识页只消费 2E-1 学习题契约，不替学习者实现后端。3A 不实现 Agent 对话、确认动作、Run Trace 详情、登录或外部医疗系统操作。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。
