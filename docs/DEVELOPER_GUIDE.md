@@ -10,11 +10,7 @@
 
 ## 2. 本地环境
 
-第一次配置请按 [LOCAL_SETUP_AND_DEPLOYMENT.md](LOCAL_SETUP_AND_DEPLOYMENT.md) 操作。该文档解释 `.venv`、`.env`、Docker volume、主机/容器数据库地址、启动顺序和常见故障；本节只保留熟悉项目后的快捷命令。
-
-推荐 Python 3.11+、Docker Desktop（WSL 2 backend）、Node.js 20+ 和 GitHub Desktop。完整学习和本地联调以 Docker PostgreSQL/Redis 为准；pytest 仍使用内存 SQLite，保证测试快速且隔离。PowerShell 示例均从仓库根目录执行。
-
-首次拉取镜像前，在 Docker Desktop 的 `Settings -> Resources -> Advanced` 将 `Disk image location` 设为 `E:\DockerData`。不要手工移动 Docker 内部文件或 WSL 虚拟磁盘。
+推荐 Python 3.11+、Docker Desktop、Node.js 20+ 和 GitHub Desktop。PowerShell 示例均从仓库根目录执行。
 
 ```powershell
 python -m venv .venv
@@ -26,8 +22,10 @@ Copy-Item .env.example .env
 
 `.env` 只放本地配置，不能提交密钥。服务依赖可单独启动：
 
+`RAG_VECTOR_ENABLED` 默认是 `false`，此时只使用数据库关键词检索。不要仅把它改为 `true` 就假设向量检索可用；2F-1 只定义向量后端协议，真实 Embedding provider 和向量数据库尚未接入。
+
 ```powershell
-docker compose up -d postgres redis
+docker compose up postgres redis -d
 ```
 
 初始化数据库与 demo 数据：
@@ -53,7 +51,7 @@ npm install
 npm run dev
 ```
 
-需要全栈容器演示时，仍要先从主机执行 migration 和 seed，再构建 backend/frontend；完整顺序见部署指南。当前 Compose 使用开发服务器，不是生产部署。
+也可以直接用 `docker compose up --build` 启动完整演示环境。
 
 ## 3. 日常验证
 
@@ -61,14 +59,20 @@ npm run dev
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-New-Item -ItemType Directory -Force var | Out-Null
-python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest
+python -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest
 python -m compileall backend\app backend\tests
 ```
 
-Windows 某些环境会拒绝访问默认 pytest 临时目录。上面的 `--basetemp` 把临时文件固定到已被 Git 忽略的 `var\pytest`，避免把环境权限问题误判为业务测试失败。
+Windows 某些环境会拒绝访问默认 pytest 临时目录。上面的 `--basetemp` 把临时文件固定到仓库内的 `.tmp`，避免把环境权限问题误判为业务测试失败。
 
-确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。2E-1 的读取 API 需要先运行迁移和 seed；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。知识库搜索学习实战已完成，并由专用 API 测试和 PostgreSQL/Postman 联调共同验收。
+只验证 2F-1 RAG：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_hybrid_rag.py backend\tests\test_db_backed_tools.py -q --basetemp=.tmp\pytest-rag
+```
+
+确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。2E-1 分支中的读取 API 需要先运行迁移和 seed；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。知识库搜索接口是学习实战题，在完成前不要假设它已经上线。
 
 ## 4. 分层与改动位置
 

@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已完成 `2E-1` 基础读取 API，并在其线性基础上实现 `2E-2` 草稿与确认 API：状态机只改变本地记录，不会提交医院、药店或推送服务。阶段状态仍以 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 为准。
+项目已完成至 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 的 `2D-2`，`2E-1` 基础读取 API 正在学习分支中收口。本隔离工作区按线性提交提前准备了 `2E-2` 草稿与确认 API，以及 `2F-1` Hybrid RAG 内部 Retriever；在 2E-1 完成、rebase 和完整回归之前，不改变路线图状态，也不视为已进入主线。
 
 目前已经具备：
 
@@ -15,9 +15,9 @@
 - ContextManager 的角色最小视图、上下文压缩与 run 后 reset。
 - deterministic Tool Registry、固定 Harness 用例、可重复的评估和 Markdown 报告。
 - 数据库只读查询工具，以及只创建本地 draft 的确认门禁工具。
-- 家庭、药箱、处方/购药、药店库存、知识检索与 Agent 审计的只读 FastAPI 接口；知识搜索已通过专用自动化测试和 Docker PostgreSQL/Postman 验证。
-- Docker Compose 本地编排已验证 PostgreSQL、Redis、FastAPI 与 Next.js，镜像和 volume 数据位于 `E:\DockerData`；这仍是开发演示环境，不是生产部署。
-- 本地草稿创建、查询、确认和拒绝 API；状态机始终保留 `not_submitted` 外部状态。
+- 家庭、药箱、处方/购药、药店库存与 Agent 审计的只读 FastAPI 接口；知识库搜索保留为学习实战题。
+- 隔离分支中的本地草稿创建、查询、确认和拒绝 API；状态机只改变本地记录，始终保留 `not_submitted` 外部状态。
+- 隔离分支中的 Hybrid RAG：关键词检索始终可用，可选向量后端只返回来源指针，异常时留下原因并自动回退。
 
 ## 四个演示场景
 
@@ -44,33 +44,24 @@ Tool Registry -> DB / RAG evidence -> Agent runtime
 
 ## 快速开始
 
-第一次运行请阅读 [本地环境、启动与部署指南](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)。本项目的完整学习与联调主路线使用 Docker Desktop、WSL 2、PostgreSQL 和 Redis；SQLite 只用于 pytest 隔离测试或 Docker 暂不可用时的临时排错，不作为完整联调环境。
-
-首次拉取镜像前，先在 Docker Desktop 中把磁盘镜像位置设为 `E:\DockerData`。然后从仓库根目录执行：
+完整开发说明见 [开发者指南](docs/DEVELOPER_GUIDE.md)。最短的 Docker 启动方式如下：
 
 ```powershell
 Copy-Item .env.example .env
-docker compose up -d postgres redis
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m alembic upgrade head
-python scripts\seed.py
-docker compose up -d --build backend frontend
-docker compose ps
+docker compose up --build
 ```
 
-后端启动后可访问：
+启动后可访问：
 
+- 前端：`http://localhost:3000`
 - API 文档：`http://localhost:8000/docs`
 - 服务健康检查：`http://localhost:8000/health`
-
-前端的首次安装与启动见详细指南，启动后位于 `http://localhost:3000`。
 
 运行后端测试：
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-New-Item -ItemType Directory -Force var | Out-Null
-python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest
+python -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest
 python -m compileall backend\app backend\tests
 ```
 
@@ -81,6 +72,13 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_confirmation_draft_api.py backend\tests\test_confirmation_draft_tool.py -q
 ```
 
+只验证隔离分支的 2F-1 Retriever：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_hybrid_rag.py backend\tests\test_db_backed_tools.py -q --basetemp=.tmp\pytest-rag
+```
+
 ## 文档入口
 
 从 [docs 文档导航](docs/README.md) 开始。它区分了产品、开发、技术、接口、数据库、Agent 和学习材料。
@@ -89,10 +87,10 @@ python -m pytest backend\tests\test_confirmation_draft_api.py backend\tests\test
 
 - [总开发路线图](docs/DEVELOPMENT_ROADMAP.md)：阶段状态、顺序和 MVP 验收的唯一权威来源。
 - [开发者指南](docs/DEVELOPER_GUIDE.md)：环境、命令、分支、测试与提交流程。
-- [本地环境与部署](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)：从安装、`.venv`、`.env` 到 Docker、启动、停机和排错。
 - [技术设计](docs/TECH_DESIGN.md)：分层边界、数据流与当前实现边界。
 - [接口文档](docs/API_SPEC.md)：已实现接口与后续接口契约边界。
 - [Agent 工作流](docs/AGENT_WORKFLOW.md)：角色、工具、确认与安全流程。
+- [RAG 检索设计](docs/RAG_RETRIEVAL.md)：Retriever 契约、来源回填、混合检索和降级规则。
 - [从零学习路线](docs/learning/README.md)：需求拆解、代码设计、review 和简历表达。
 
 ## 仓库结构
@@ -101,7 +99,7 @@ python -m pytest backend\tests\test_confirmation_draft_api.py backend\tests\test
 backend/       FastAPI、SQLAlchemy、services、tools、agent 与测试
 frontend/      Next.js 页面与组件
 docs/          面向协作者的项目文档和学习材料
-backend/alembic/ 数据库迁移
+alembic/        数据库迁移
 scripts/       可重复 seed 等辅助脚本
 AGENTS.md      AI Coding Harness 规则
 ```

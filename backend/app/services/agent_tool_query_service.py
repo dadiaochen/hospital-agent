@@ -9,14 +9,13 @@ from sqlalchemy.orm import Session
 from app.models import (
     FamilyMember,
     HealthProfile,
-    KnowledgeChunk,
-    KnowledgeDocument,
     MedicineBoxItem,
     Pharmacy,
     PharmacyInventory,
     Prescription,
     PurchaseRecord,
 )
+from app.rag import RetrievalRequest, create_knowledge_retriever
 
 
 def get_health_profile_context(
@@ -196,63 +195,29 @@ def get_pharmacy_inventory_context(
 
 
 def search_safety_knowledge_context(db: Session, query: str) -> dict[str, Any] | None:
-    normalized_query = " ".join(query.split()).lower()
-    if not normalized_query:
-        return None
-
-    rows = list(
-        db.execute(
-            select(KnowledgeChunk, KnowledgeDocument)
-            .join(KnowledgeDocument, KnowledgeChunk.document_id == KnowledgeDocument.id)
-            .order_by(KnowledgeDocument.category, KnowledgeChunk.chunk_index)
+    result = create_knowledge_retriever(db).retrieve(
+        RetrievalRequest(
+            query=query,
+            purpose="safety_and_workflow_grounding",
         )
     )
-    matches: list[dict[str, Any]] = []
-    for chunk, document in rows:
-        haystack = " ".join(
-            [
-                document.title,
-                document.category,
-                document.source,
-                document.content,
-                chunk.content,
-                " ".join(chunk.keywords or []),
-            ]
-        ).lower()
-        if _knowledge_matches(normalized_query, haystack):
-            matches.append(
-                {
-                    "source_id": f"knowledge:{document.id}:{chunk.id}",
-                    "document_id": document.id,
-                    "chunk_id": chunk.id,
-                    "title": document.title,
-                    "category": document.category,
-                    "source": document.source,
-                    "safety_level": document.safety_level,
-                    "chunk_index": chunk.chunk_index,
-                    "content": chunk.content,
-                    "keywords": list(chunk.keywords or []),
-                }
-            )
-
-    if not matches:
+    if not result.evidence_present:
         return None
+
+    matches = [source.model_dump() for source in result.sources]
 
     return {
         "source_id": "knowledge_search:" + ",".join(item["source_id"] for item in matches),
         "source_name": "knowledge_chunks",
         "evidence_present": True,
-        "query": query,
+        "query": result.query,
+        "requested_mode": result.requested_mode,
+        "effective_mode": result.effective_mode,
+        "fallback_used": result.fallback_used,
+        "fallback_reason": result.fallback_reason,
         "sources": matches,
     }
 
 
 def _date_to_str(value: date | None) -> str | None:
     return value.isoformat() if value is not None else None
-
-
-def _knowledge_matches(query: str, haystack: str) -> bool:
-    if query in haystack:
-        return True
-    tokens = [token for token in query.replace("/", " ").split() if token]
-    return any(token in haystack for token in tokens)

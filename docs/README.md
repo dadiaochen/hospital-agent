@@ -27,6 +27,7 @@
 | [TECH_DESIGN.md](TECH_DESIGN.md) | 分层架构、数据流、安全与当前实现边界。 |
 | [API_SPEC.md](API_SPEC.md) | 已实现 HTTP 接口、未来接口的契约边界。 |
 | [DB_SCHEMA.md](DB_SCHEMA.md) | ORM 表、字段用途、关系、索引与审计原则。 |
+| [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md) | Retriever 契约、关键词基线、向量来源回填与降级。 |
 
 ## Agent 专项
 

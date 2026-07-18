@@ -2,7 +2,7 @@
 
 ## 1. 设计目标
 
-本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前实现已完成可重复的契约、deterministic 基线和 2E-1 只读 HTTP API；LLM Gateway 与 LangGraph 编排按路线图后续阶段落地。
+本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前实现优先完成可重复的契约和 deterministic 基线，真实 HTTP 业务 API、LLM Gateway 与 LangGraph 编排按路线图后续阶段落地。
 
 ## 2. 分层架构
 
@@ -65,20 +65,20 @@ Context、工具、Trace 和评估先由 Pydantic 模型定义，并使用 `extr
 
 SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权查询和跳过确认。EvaluatorAgent 是 post-run 只读评估角色：读取冻结产物，计算质量结果，不能修改答案、调用业务工具或写业务状态。
 
-### 4.6 开发数据库与测试数据库分工
+### 4.6 RAG 保留确定性关键词基线
 
-完整本地学习、migration、seed、Swagger/Postman 和前后端联调使用 Docker 中的 PostgreSQL；Redis 同时作为后续缓存与队列基础设施启动。pytest 在导入应用前把 `DATABASE_URL` 覆盖为内存 SQLite，用于快速、可重复、互不污染的自动化测试。
+2F-1 把原先位于 service 内的知识库扫描整理为 `Retriever` 协议。`KeywordRetriever` 从 PostgreSQL 的 `knowledge_documents` / `knowledge_chunks` 加载已审核内容并确定性排序；`HybridRetriever` 可以接收可选的 `VectorSearchBackend`，但向量后端只返回 `document_id`、`chunk_id` 和相关性分数，正文必须重新从数据库回填。
 
-SQLite 测试通过只证明当前契约和业务行为在测试方言下成立，不能替代 PostgreSQL 的类型、事务、并发、连接池与 SQL 兼容性验证。数据库访问统一经过 SQLAlchemy，使两套环境共享 ORM、Service 和 API 代码，但仍必须分别验收。
+`RAG_VECTOR_ENABLED` 默认关闭。显式开启后，如果后端缺失、调用异常或来源指针无法回填，系统保留关键词结果并记录 `fallback_used` / `fallback_reason`。结果中的 `score` 仅表示检索相关性，不是医疗正确率、诊断概率或执行授权。完整设计见 [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md)。
 
 ## 5. 当前实现边界
 
 | 已实现 | 尚未实现 |
 | --- | --- |
-| ORM、迁移、seed、只读 DB tools、本地 draft tool 与草稿状态机 API | 生产认证。 |
-| 家庭、药箱、处方/购药、库存、知识检索和 Agent 审计的只读 API | 真实医院、药店或推送 API。 |
+| ORM、迁移、seed、只读 DB tools、本地 draft tool；隔离分支中的草稿状态机 API | 生产认证；2E-2 尚待在 2E-1 后线性整合。 |
+| 家庭、药箱、处方/购药、库存和 Agent 审计的只读 API | 知识库搜索 API（保留为学习实战题）。 |
 | ContextManager、Trace、fixture Harness、确定性评估 | 真实 Agent API、LangGraph 节点、LLM provider。 |
-| 权限、成员隔离、确认门禁和失败 fallback 的单元测试 | 医院/药店/推送等外部系统提交。 |
+| 权限、成员隔离、确认门禁和失败 fallback 的单元测试；隔离分支中的关键词/混合 Retriever | 真实 Embedding provider、向量数据库和互联网知识抓取。 |
 
 详细顺序、验收和非目标以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
 
@@ -92,3 +92,5 @@ SQLite 测试通过只证明当前契约和业务行为在测试方言下成立�
 - 草稿 API 状态机：[confirmation_draft_api_service.py](../backend/app/services/confirmation_draft_api_service.py)
 - 评估规则：[evaluator.py](../backend/app/agent/evaluator.py)
 - 读取 API 编排：[read_api_service.py](../backend/app/services/read_api_service.py)
+- RAG 契约：[retrieval_schemas.py](../backend/app/rag/retrieval_schemas.py)
+- 关键词与混合检索：[retriever.py](../backend/app/rag/retriever.py)

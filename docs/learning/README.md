@@ -11,11 +11,12 @@
 | [03 Agent Harness](03_AGENT_HARNESS_AND_SAFETY.md) | Context、工具、Trace、安全、确认和评估。 | `backend/app/agent/`、`tools/` |
 | [04 测试、Review 与交付](04_TESTING_REVIEW_AND_DELIVERY.md) | fixture、失败路径、Git 分支、review 和文档。 | `backend/tests/`、`AGENTS.md` |
 | [05 简历与面试](05_RESUME_AND_INTERVIEW.md) | 技术亮点、故事线、追问与表达边界。 | `docs/RESUME_NOTES.md` |
-| [06 2E-1 实战题](06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md) | 在 Docker PostgreSQL 上从零完成 DTO、service、路由、测试、Swagger 与 Postman 验收，并逐层理解客户端、依赖注入和四个核心文件。 | `backend/app/api/routes/knowledge.py`、`backend/app/schemas/knowledge.py`、`backend/app/services/knowledge_read_service.py`、`backend/app/models/knowledge.py` |
+| [06 2E-1 实战题](06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md) | 独立完成一个带 DTO、service、路由和测试的知识库搜索 API。 | `backend/app/services/agent_tool_query_service.py` |
+| [07 2F-1 Hybrid RAG](07_2F1_HYBRID_RAG.md) | 理解 Retriever、关键词评分、来源回填、功能开关和降级测试。 | `backend/app/rag/`、`test_hybrid_rag.py` |
 
 ## 使用方法
 
-每一章都按同一顺序展开：先解释问题，再给出本项目的取舍，接着指向代码与字段，最后给出你可以自己完成的练习。不要只读文档：环境与真实 API 联调使用 Docker PostgreSQL，自动化测试使用内存 SQLite；每读完一章，都运行一次对应测试或在 GitHub Desktop 观察一次变更。
+每一章都按同一顺序展开：先解释问题，再给出本项目的取舍，接着指向代码与字段，最后给出你可以自己完成的练习。不要只读文档：每读完一章，都运行一次对应测试或在 GitHub Desktop 观察一次变更。
 
 ## 最小学习节奏
 

@@ -83,6 +83,10 @@ class SafetyKnowledgeOutput(ToolContractModel):
     source_name: str = Field(min_length=1)
     evidence_present: bool
     query: str = Field(min_length=1)
+    requested_mode: str = Field(min_length=1)
+    effective_mode: str = Field(min_length=1)
+    fallback_used: bool
+    fallback_reason: str | None = None
     sources: list[dict[str, Any]]
 
 

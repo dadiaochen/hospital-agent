@@ -73,6 +73,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 隔离分支 `codex/2e-2-draft-confirmation-api` 在不覆盖 2E-1 学习工作区的前提下准备草稿与确认 API：支持四类本地草稿的创建、查询、确认和拒绝；只允许 `draft -> confirmed/rejected`，决策幂等并写入现有 JSON 审计，始终保持 `external_action_status="not_submitted"`。在 2E-1 知识搜索完成并完成 rebase/回归前，不修改总路线图的 `NEXT` 状态。
 
+线性后继隔离分支 `codex/2f-1-hybrid-rag` 把知识库关键词查询整理为 Retriever 契约，并提供可注入、默认关闭的向量检索协议。关键词检索始终可用；向量后端只返回 document/chunk 指针和相关性分数，正文从数据库回填。后端缺失、异常或指针失效时必须记录原因并回退，不调用 LLM、不抓取互联网知识、不新增向量表或 migration。该分支同样不提前修改总路线图状态。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

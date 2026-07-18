@@ -29,7 +29,6 @@ FastAPI Swagger 位于 `http://localhost:8000/docs`。root 与 health response �
 | `GET` | `/api/agent-runs?member_id=` | `AgentRunListResponse` | 当前 demo user 的 run，可按成员过滤。 |
 | `GET` | `/api/agent-runs/{run_id}` | `AgentRunResponse` | 单个 run，不返回内部 `raw_state`。 |
 | `GET` | `/api/agent-runs/{run_id}/tool-calls` | `AgentToolCallListResponse` | 当前用户 run 的工具审计。 |
-| `GET` | `/api/knowledge/search?q=&category=` | `KnowledgeSearchResponse` | 确定性知识 chunk 搜索，返回稳定 `source_id`。 |
 
 成功响应的字段由 `backend/app/schemas/` 中的 Pydantic DTO 定义，时间和日期按 JSON 标准格式序列化。所有已处理错误使用同一结构：
 
@@ -45,11 +44,9 @@ FastAPI Swagger 位于 `http://localhost:8000/docs`。root 与 health response �
 
 路由不写 SQL；成员作用域、查询与空资源判断位于 `ReadApiService`。库存没有匹配项时返回空 `items`，因为搜索没有结果不是权限错误。
 
-## 4. 2E-1 学习者 API：知识库搜索
+## 4. 留给学习者的完整 API：知识库搜索
 
-`GET /api/knowledge/search` 的 DTO、service、路由注册和统一 `422` 已实现，并已在 Docker PostgreSQL seed 数据上通过真实 HTTP 验证。查询无命中返回 `200 + items=[]`；缺失或空白 `q` 返回 `422 validation_error`；每个命中项带 `knowledge:{document_id}:{chunk_id}` 来源指针。
-
-`backend/tests/test_knowledge_api.py` 已完成，覆盖正常命中、分类过滤、空结果、缺失/空白参数、统一 `422` 与 OpenAPI 注册。完整代码阅读、Postman 和测试步骤见 [06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md](learning/06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md)。
+`GET /api/knowledge/search` 属于 2E-1 范围，但在本分支刻意未实现。完整接口契约、DTO、service 查询、路由接入、错误语义、Swagger 检查和测试验收见 [06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md](learning/06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md)。完成它后，2E-1 的所有读取资源才算齐全。
 
 ## 5. 隔离分支中的 2E-2 草稿 API
 
@@ -112,7 +109,13 @@ draft -> rejected
 
 数据库 `confirmed_at` 延续 2D-2 语义，表示用户曾允许创建本地草稿；最终确认或拒绝时间记录在现有 JSON 审计的 `status_transitions` 中，并通过响应 `resolved_at` 暴露。该设计没有新增 ORM 字段或 Alembic migration。
 
-## 6. API 设计规则
+## 6. 2F-1 内部 Retriever 不是新增 HTTP API
+
+隔离分支新增的是 `backend/app/rag/` 内部检索接口。`search_safety_knowledge` Tool 已改为通过 Retriever 获取来源，但这不会自动创建 FastAPI 路由，也不会替代第 4 节留给学习者的 `GET /api/knowledge/search`。
+
+内部请求和结果由 `RetrievalRequest`、`RetrievedChunk` 与 `RetrievalResult` 描述。每个命中项带 `source_id`、document/chunk ID 与版本、相关性 `score`、本次检索 `purpose` 和 `matched_by`；结果还声明 requested/effective mode 与 fallback 原因。HTTP API 后续可以调用 Retriever，但仍应定义自己的 API DTO 和错误语义，不能直接暴露内部模型。
+
+## 7. API 设计规则
 
 1. Router 只做协议转换；查询、写入和权限判断放到 service。
 2. API DTO 与 ORM 分离，不能直接把 SQLAlchemy 模型序列化给客户端。
@@ -120,4 +123,4 @@ draft -> rejected
 4. 不存在、越权、schema 失败和状态冲突要有可预测的错误格式。
 5. 含有医疗敏感内容的写操作在 API 层之外还必须经过 safety 与 confirmation 规则。
 
-2E-1 已通过知识库搜索专用自动化测试；2E-2 草稿状态机 API 已在其线性基础上实现。两者都只处理本地数据，不代表任何外部医疗动作成功。
+知识库搜索完成前，2E-1 仍不应在路线图中标记为完成。本节 2E-2 API 与 2F-1 Retriever 只存在于隔离线性分支，必须在 2E-1 完成后整合并完整回归。

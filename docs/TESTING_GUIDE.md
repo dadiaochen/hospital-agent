@@ -13,20 +13,14 @@
 | 草稿写入 | `test_confirmation_draft_tool.py` | 确认门禁、幂等、事务回滚、只写本地 draft。 |
 | 草稿 API 状态机 | `test_confirmation_draft_api.py` | 显式确认、四类草稿、成员隔离、幂等确认/拒绝、非法终态转换和 OpenAPI。 |
 | Harness | `test_deterministic_evaluator.py`、`test_harness_runner.py`、`test_harness_runtime.py` | 固定用例回放、评估规则和汇总报告。 |
-| API | `test_health.py`、`test_read_api.py`、`test_knowledge_api.py` | HTTP 参数、依赖、Service、响应 DTO 和统一错误。 |
-
-## 数据库验证分工
-
-- pytest 在 `backend/tests/conftest.py` 中把数据库切换为 `sqlite:///:memory:`，适合快速、隔离地验证代码行为。
-- migration、seed、Swagger、Postman 和前后端联调使用 Docker PostgreSQL，验证真实驱动、类型、连接与容器网络。
-- 两者都通过才算完成本地开发验收。SQLite 绿灯不能证明 PostgreSQL 兼容；本地 PostgreSQL 绿灯也不能代表生产负载或容灾能力。
+| RAG | `test_hybrid_rag.py` | 固定安全/SOP 召回、来源版本、向量回填、去重和失败降级。 |
+| API | `test_health.py`、`test_read_api.py`、`test_confirmation_draft_api.py` | 健康检查、只读资源和本地草稿状态机。 |
 
 ## 运行命令
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-New-Item -ItemType Directory -Force var | Out-Null
-python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest
+python -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest
 python -m compileall backend\app backend\tests
 ```
 
@@ -43,6 +37,8 @@ python -m compileall backend\app backend\tests
 5. **可追踪性**：工具调用是否能产生 run、role、输入、输出、延迟、schema 和 fallback 记录？
 6. **失败路径**：没有数据、权限不足、schema 失败、数据库失败时，是否返回可解释的 fallback，而不是模型猜测？
 7. **测试与文档**：新增规则是否有一个正例、一个失败例和同步说明？
+
+Review RAG 时还要区分相关性与事实正确性：`score` 只能用于排序；正文必须来自可回溯的数据库 chunk，向量后端返回的未知或错配 ID 不能被 Agent 使用。
 
 ## 当前常见风险
 
