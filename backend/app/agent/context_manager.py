@@ -221,14 +221,14 @@ class ContextManager:
         envelope: ContextEnvelope,
         run_trace: RunTrace,
         final_answer: FinalAnswerTrace,
-        evaluation_result: EvaluationResult,
+        evaluation_result: EvaluationResult | None = None,
         confirmed_facts: list[ConfirmedFact] | None = None,
     ) -> RunSummary:
         if run_trace.run_id != envelope.run_id:
             raise ValueError("run_trace run_id must match envelope run_id")
         if final_answer.answer_id != run_trace.final_answer.answer_id:
             raise ValueError("final_answer must match run_trace final_answer")
-        if evaluation_result.run_id != envelope.run_id:
+        if evaluation_result is not None and evaluation_result.run_id != envelope.run_id:
             raise ValueError("evaluation_result run_id must match envelope run_id")
 
         return RunSummary(
@@ -243,7 +243,11 @@ class ContextManager:
             tool_evidence_refs=envelope.tool_evidence_refs,
             rag_source_refs=envelope.rag_source_refs,
             final_answer_ref=final_answer.answer_id,
-            evaluation_ref=f"evaluation:{evaluation_result.case_id}:{evaluation_result.run_id}",
+            evaluation_ref=(
+                f"evaluation:{evaluation_result.case_id}:{evaluation_result.run_id}"
+                if evaluation_result is not None
+                else None
+            ),
         )
 
     def reset_after_run(
@@ -252,7 +256,7 @@ class ContextManager:
         envelope: ContextEnvelope,
         run_trace: RunTrace,
         final_answer: FinalAnswerTrace,
-        evaluation_result: EvaluationResult,
+        evaluation_result: EvaluationResult | None = None,
         confirmed_facts: list[ConfirmedFact] | None = None,
     ) -> ResetContextState:
         summary = self.create_run_summary(
@@ -266,6 +270,7 @@ class ContextManager:
             run_summary=summary,
             retained_tool_evidence_refs=list(summary.tool_evidence_refs),
             retained_rag_source_refs=list(summary.rag_source_refs),
+            run_trace_ref=f"run_trace:{run_trace.run_id}",
             final_answer_ref=summary.final_answer_ref,
             evaluation_ref=summary.evaluation_ref,
             memory_refs=list(envelope.memory_refs),
@@ -384,11 +389,11 @@ class ContextManager:
     def _final_status(
         envelope: ContextEnvelope,
         run_trace: RunTrace,
-        evaluation_result: EvaluationResult,
+        evaluation_result: EvaluationResult | None,
     ) -> str:
         if run_trace.safety_trace.blocked:
             return "blocked"
-        if not evaluation_result.task_success:
+        if evaluation_result is not None and not evaluation_result.task_success:
             return "failed"
         if (
             envelope.task_state.pending_confirmations

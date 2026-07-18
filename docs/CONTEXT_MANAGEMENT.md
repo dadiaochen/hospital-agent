@@ -64,7 +64,9 @@ RoleSpecificContextView 的 schema 本身没有 `raw_conversation` 字段，`ext
 - 角色 scratchpad
 - 临时工具输出
 
-它保留 RunSummary、工具和 RAG 引用、答案引用、评估引用和已通过确认门槛的 memory 引用。reset 不是删除审计 trace；不相关任务或成员切换必须基于新 ContextEnvelope 重新开始。
+它保留 RunSummary、`run_trace_ref`、工具和 RAG 引用、答案引用、评估引用和已通过确认门槛的 memory 引用。reset 不是删除审计 trace；不相关任务或成员切换必须基于新 ContextEnvelope 重新开始。
+
+2G-1 按生命周期顺序先调用不带 EvaluationResult 的 `reset_after_run`，此时 `evaluation_ref` 可以为空；Evaluator 随后只读冻结 RunTrace，工作流再用评估结果重新生成 RunSummary 并回填引用。这样 Evaluator 不需要获得可写 business context，也不会为了填报告而推迟 scratchpad 清理。
 
 ## 6. 长期记忆门槛
 

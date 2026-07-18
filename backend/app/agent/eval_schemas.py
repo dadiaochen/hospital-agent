@@ -9,6 +9,7 @@ Score = Annotated[float, Field(ge=0.0, le=1.0)]
 HarnessCaseCategory = Literal[
     "refill",
     "consultation",
+    "pharmacy",
     "reminder",
     "safety",
     "tool_failure",

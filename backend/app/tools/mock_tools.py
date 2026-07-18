@@ -29,7 +29,12 @@ class SafetyKnowledgeInput(ToolContractModel):
     member_id: NonEmptyStr | None = None
 
 
-ConfirmationActionType = Literal["refill_request", "pharmacy_option", "reminder_create"]
+ConfirmationActionType = Literal[
+    "refill_request",
+    "consultation_request",
+    "pharmacy_option",
+    "reminder_create",
+]
 
 
 class ConfirmationDraftInput(MemberToolInput):
@@ -156,6 +161,7 @@ def register_mock_tools(registry: ToolRegistry) -> ToolRegistry:
             timeout_ms=500,
             retry_policy=RetryPolicy(max_attempts=1, backoff_ms=0),
             requires_human_confirmation=True,
+            read_only=False,
         ),
         create_confirmation_draft,
     )

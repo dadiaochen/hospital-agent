@@ -40,6 +40,12 @@ from app.agent.run_trace_schemas import (
     SafetyTrace,
     ToolCallTrace,
 )
+from app.agent.workflow_schemas import (
+    WorkflowFinalAnswerDraft,
+    WorkflowPlan,
+    WorkflowRunRequest,
+    WorkflowRunResult,
+)
 
 __all__ = [
     "ConfirmedFact",
@@ -74,5 +80,9 @@ __all__ = [
     "TaskState",
     "ToolEvidenceRef",
     "ToolCallTrace",
+    "WorkflowFinalAnswerDraft",
+    "WorkflowPlan",
+    "WorkflowRunRequest",
+    "WorkflowRunResult",
     "create_model_gateway",
 ]

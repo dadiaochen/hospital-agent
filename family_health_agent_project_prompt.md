@@ -77,8 +77,10 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `codex/2f-2-model-gateway` 继续在线性隔离历史上定义 Model Gateway。默认 provider 是不会联网的 deterministic 实现；可选 OpenAI-compatible HTTP adapter 的 base URL、Key、模型和 timeout 只来自环境变量。所有 provider 文本先过 JSON、目标 Pydantic schema 和输出安全检查，失败时执行同契约 fallback 并记录逐次 Trace；本阶段不接 LangGraph、不新增 Agent API、不持久化 prompt 或 Key。
 
+`codex/2g-1-langgraph-workflow` 在线性隔离历史上实现最小正式 LangGraph DAG。Planner 产生结构化计划，ContextManager 投影 Planner/角色最小视图，业务角色只能经 Tool Registry 获取 evidence；所有路径都在确认草稿和 FinalAnswer 前经过 SafetyAgent。关键动作缺少显式确认时不执行 draft handler，高风险阻断时跳过草稿；FinalAnswer 经 Model Gateway 形成冻结 RunTrace，随后 reset 并由 DeterministicEvaluator 只读评估。本阶段不新增 Agent HTTP API、不访问或持久化 runtime 数据库状态、不接外部医院/药店，也不实现自主循环 Agent。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。
-- Agent 开发者：继续阅读 [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)、[docs/CONTEXT_MANAGEMENT.md](docs/CONTEXT_MANAGEMENT.md) 和 [docs/EVALUATOR_AGENT.md](docs/EVALUATOR_AGENT.md)。
+- Agent 开发者：继续阅读 [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)、[docs/LANGGRAPH_WORKFLOW.md](docs/LANGGRAPH_WORKFLOW.md)、[docs/CONTEXT_MANAGEMENT.md](docs/CONTEXT_MANAGEMENT.md) 和 [docs/EVALUATOR_AGENT.md](docs/EVALUATOR_AGENT.md)。
 - 从零学习者：阅读 [docs/learning/README.md](docs/learning/README.md)。

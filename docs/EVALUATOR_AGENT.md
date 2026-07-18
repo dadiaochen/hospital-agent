@@ -44,4 +44,6 @@ HarnessRunner 批量加载 16 个固定 ExpectedCase 和对应 mock RunTrace，�
 
 ## 5. 当前实现与未来
 
-当前已实现 Pydantic trace、确定性规则、fixture loader、报告渲染和 mock Harness runtime。未来接入真实 Agent 后，必须把真实执行产物转换为同一 RunTrace 契约，再评估；不能让评估器直接改业务数据或答案。
+当前已实现 Pydantic trace、确定性规则、fixture loader、报告渲染、mock Harness runtime，以及 2G-1 LangGraph 运行后直接生成同一 RunTrace 的路径。工作流在 FinalAnswer、RunTrace 和 reset 之后调用 DeterministicEvaluator；FinalAnswerTrace 是冻结模型，评估器既不接收 state writer，也不调用任何业务工具。
+
+2G-1 仍不是 LLM Evaluator：Planner、默认 provider 和评估规则都可离线复现。将真实线上运行产物持久化后，2G-2 仍应调用同一个只读评估接口，而不是让评估器直接改业务数据或答案。

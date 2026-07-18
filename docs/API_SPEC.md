@@ -121,7 +121,11 @@ draft -> rejected
 
 Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider 的未校验原始文本。后续 2G-2 Agent API 只能调用 Gateway，不能在 Router 中直接调用模型 HTTP endpoint。
 
-## 8. API 设计规则
+## 8. 2G-1 内部工作流不是 Agent API
+
+2G-1 的 `LangGraphAgentWorkflow.run()` 是 Python 内部入口，不是 FastAPI endpoint。它接收 `WorkflowRunRequest`，返回 `WorkflowRunResult`，默认不访问数据库、不持久化 run，也不接受客户端提供模型 Key。`POST /api/agent/run`、run 续跑与 trace 查询写入属于 2G-2；在 Router 中直接调用 provider、工具 handler 或拼装未校验 state 都不符合设计。
+
+## 9. API 设计规则
 
 1. Router 只做协议转换；查询、写入和权限判断放到 service。
 2. API DTO 与 ORM 分离，不能直接把 SQLAlchemy 模型序列化给客户端。
@@ -129,4 +133,4 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 4. 不存在、越权、schema 失败和状态冲突要有可预测的错误格式。
 5. 含有医疗敏感内容的写操作在 API 层之外还必须经过 safety 与 confirmation 规则。
 
-知识库搜索完成前，2E-1 仍不应在路线图中标记为完成。本节 2E-2 API 与 2F-1 Retriever 只存在于隔离线性分支，必须在 2E-1 完成后整合并完整回归。
+知识库搜索完成前，2E-1 仍不应在路线图中标记为完成。本节 2E-2 API、2F 内部能力与 2G-1 工作流只存在于隔离线性分支，必须在 2E-1 完成后整合并完整回归。

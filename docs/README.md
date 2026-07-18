@@ -29,6 +29,7 @@
 | [DB_SCHEMA.md](DB_SCHEMA.md) | ORM 表、字段用途、关系、索引与审计原则。 |
 | [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md) | Retriever 契约、关键词基线、向量来源回填与降级。 |
 | [MODEL_GATEWAY.md](MODEL_GATEWAY.md) | 模型 provider、结构化输出、安全门禁、降级和调用 Trace。 |
+| [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md) | 有界状态图、节点路由、工具调用、确认与运行产物。 |
 
 ## Agent 专项
 
@@ -37,6 +38,7 @@
 | [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) | Planner、业务角色、SafetyAgent、EvaluatorAgent 的工作流。 |
 | [CONTEXT_MANAGEMENT.md](CONTEXT_MANAGEMENT.md) | ContextEnvelope、角色视图、压缩、reset 和长期记忆门槛。 |
 | [EVALUATOR_AGENT.md](EVALUATOR_AGENT.md) | 固定用例、冻结 Trace、确定性评估器和报告口径。 |
+| [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md) | Planner 到 Evaluator 的正式 LangGraph DAG 与实现边界。 |
 | [agent_eval_report.example.md](agent_eval_report.example.md) | mock fixture 运行后的示例报告，不代表生产或医疗指标。 |
 
 ## 从零学习本项目

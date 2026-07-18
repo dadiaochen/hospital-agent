@@ -3,6 +3,7 @@ HIGH_RISK_MEDICATION_PATTERNS = [
     "减量",
     "停药",
     "换药",
+    "换成",
     "替代",
     "能不能多吃",
 ]

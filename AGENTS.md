@@ -178,6 +178,17 @@ Context Compaction 规则：
 - 后续 `AgentHarness` 汇总多个 `EvaluationResult` 生成 `agent_eval_report.md`，聚合 `task_success`、`tool_call_accuracy`、`groundedness`、`schema_valid`、`hallucination_rate`、`safety_recall`、`human_confirmation_rate`、`context_isolation_pass_rate` 和 `p95_latency`。
 - 未真实跑出的指标只能写为“设计/定义/目标”，不能写成已达成结果。
 
+## 13. LangGraph 工作流规则
+
+- 正式业务工作流必须是有界、可终止的状态图；MVP 不实现依赖模型自我判断的无限循环。
+- `Planner` 只产生结构化 `WorkflowPlan`；角色路由先由 `intent` 决定，再按 `required_tools` 执行，不得仅凭工具名重叠把任务广播给所有角色。
+- 每个业务角色必须从 `ContextManager` 获取最小视图，并且只能通过 `ToolRegistry` 调用工具；节点不得直接调用数据库、service handler 或外部 API。
+- 所有用户可见模型输出必须通过 `ModelGateway` 的目标 Pydantic schema 与输出安全检查；失败的 provider 原始文本不能进入 FinalAnswer。
+- `SafetyAgent` 必须位于 confirmation draft 和 FinalAnswer 之前。阻断型安全标记出现时，不得进入草稿创建节点。
+- `create_confirmation_draft` 只有在显式 `human_confirmation_granted=true` 且 Tool Registry 校验通过后才能执行；其结果仍只能是本地 draft。
+- 工作流必须冻结 FinalAnswer 与 RunTrace，再执行 RunSummary / Context Reset，最后由 DeterministicEvaluator 只读评估并回填引用。
+- 2G-1 不持久化 runtime、不新增 Agent API；持久化与 HTTP 入口只能在路线图定义的 2G-2 实现。
+
 ## 13. Model Gateway
 
 - 模型 provider、base URL、Key、模型名和 timeout 只能来自服务端环境变量，不能由 API 请求或 Agent prompt 覆盖。

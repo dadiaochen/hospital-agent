@@ -2,7 +2,7 @@
 
 ## 1. 目标与非目标
 
-2F-2 为后续 LangGraph Agent 提供统一模型调用边界。调用方不应知道具体 HTTP provider，也不能直接信任模型字符串。Gateway 负责 provider 调用、结构化解析、安全检查、fallback 和 Trace。
+2F-2 为 Agent 提供统一模型调用边界；2G-1 的 LangGraph FinalAnswer 节点已通过该边界生成结构化答案。调用方不应知道具体 HTTP provider，也不能直接信任模型字符串。Gateway 负责 provider 调用、结构化解析、安全检查、fallback 和 Trace。
 
 本阶段不实现多模型自动路由、模型训练、成本优化、真实线上质量评估、Agent API 或 LangGraph 节点。OpenAI-compatible adapter 只代表 HTTP 契约兼容，不代表已调用某个真实厂商或完成效果验证。
 

@@ -2,16 +2,20 @@
 
 ## 1. 设计目标
 
-本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前实现优先完成可重复契约、deterministic 基线和隔离分支中的 Model Gateway；真实 LangGraph 编排和 Agent HTTP API 按路线图后续阶段落地。
+本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。隔离分支已实现可重复契约、deterministic 基线、Model Gateway 和正式 LangGraph 编排；Agent HTTP API 与运行持久化仍按路线图后续阶段落地。
 
 ## 2. 分层架构
 
 ```text
 API -> schemas -> services -> models -> database
                    ^
-Agent -> ContextManager -> Tool Registry -> services / RAG
-                   |
-        RunTrace -> DeterministicEvaluator -> report
+LangGraph -> Planner -> ContextManager -> role agents
+                                  |            |
+                           Tool Registry <- Tool / RAG evidence
+                                  |
+                  Safety -> confirmation -> Model Gateway
+                                  |
+                  RunTrace -> reset -> DeterministicEvaluator
 ```
 
 | 层 | 当前职责 | 关键原则 |
@@ -37,7 +41,7 @@ Agent -> ContextManager -> Tool Registry -> services / RAG
   -> DeterministicEvaluator -> EvaluationResult
 ```
 
-这是目标运行时的数据流，也是当前 deterministic Harness 已经可以回放的链路。真实运行时尚未接入 LangGraph 或 LLM，因此不能把 mock final answer 当作真实医疗对话能力。
+这是目标运行时的数据流。fixture Harness 可以离线回放冻结产物；2G-1 的 LangGraph 工作流实际执行这些节点，但默认仍使用 deterministic Planner、mock tools 和 deterministic provider，因此不能把通过结果当作真实医疗对话或线上模型能力。
 
 ## 4. 核心设计决策
 
@@ -77,13 +81,19 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 超时、HTTP 错误、provider response 错误、schema 失败和 safety 失败都产生 `ModelProviderAttemptTrace`。配置了 fallback 时，Gateway 再调用 deterministic provider；fallback 也失败则返回 `output=None` 和失败 Trace，不把原始文本交给 Agent。规则型输出检查是 Gateway 的最后一道文本门禁，不替代 LangGraph 中的 SafetyAgent。完整设计见 [MODEL_GATEWAY.md](MODEL_GATEWAY.md)。
 
+### 4.8 LangGraph 使用有界 DAG
+
+2G-1 用 `StateGraph` 编排 Planner、ContextManager、四类业务角色、SafetyAgent、确认草稿、FinalAnswer、RunTrace、reset 和 Evaluator。`WorkflowState` 只传 Pydantic 业务产物和节点访问记录；条件边由显式 intent/required tools 决定，不允许模型自由选择无限循环。
+
+节点只能通过 ContextManager 获得 role view，通过 Tool Registry 调用工具，通过 Model Gateway 生成结构化答案。高风险 flag 会在确认草稿前直接路由到安全答案；普通关键动作只有显式确认后才执行本地 draft 工具。图执行结束返回 `WorkflowRunResult`，不写数据库 run，也不提供 HTTP endpoint。完整设计见 [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md)。
+
 ## 5. 当前实现边界
 
 | 已实现 | 尚未实现 |
 | --- | --- |
 | ORM、迁移、seed、只读 DB tools、本地 draft tool；隔离分支中的草稿状态机 API | 生产认证；2E-2 尚待在 2E-1 后线性整合。 |
 | 家庭、药箱、处方/购药、库存和 Agent 审计的只读 API | 知识库搜索 API（保留为学习实战题）。 |
-| ContextManager、Trace、fixture Harness、确定性评估；隔离分支中的 Model Gateway 与 HTTP provider adapter | 真实 Agent API、LangGraph 节点和线上模型调用验证。 |
+| ContextManager、Trace、fixture Harness、确定性评估；隔离分支中的 Model Gateway、HTTP provider adapter 和 LangGraph 有界 DAG | Agent API、runtime/trace 持久化和线上模型调用验证。 |
 | 权限、成员隔离、确认门禁和失败 fallback 的单元测试；隔离分支中的关键词/混合 Retriever | 真实 Embedding provider、向量数据库和互联网知识抓取。 |
 
 详细顺序、验收和非目标以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
@@ -103,3 +113,6 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 - Model Gateway 契约：[model_gateway_schemas.py](../backend/app/agent/model_gateway_schemas.py)
 - Provider、解析与 fallback：[model_gateway.py](../backend/app/agent/model_gateway.py)
 - 模型输出安全检查：[model_output.py](../backend/app/safety/model_output.py)
+- LangGraph 状态与节点：[langgraph_workflow.py](../backend/app/agent/langgraph_workflow.py)
+- 工作流输入输出契约：[workflow_schemas.py](../backend/app/agent/workflow_schemas.py)
+- deterministic 计划与工具入参投影：[workflow_planning.py](../backend/app/agent/workflow_planning.py)

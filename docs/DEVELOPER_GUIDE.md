@@ -81,6 +81,15 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_model_gateway.py -q --basetemp=.tmp\pytest-model
 ```
 
+只验证 2G-1 LangGraph 工作流和上下文生命周期：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_langgraph_workflow.py backend\tests\test_context_manager.py -q -p no:cacheprovider --basetemp=.tmp\pytest-workflow
+```
+
+这些测试不会调用 LLM、数据库或 HTTP API。默认 workflow 使用 mock Tool Registry 与 deterministic Model Gateway，适合离线 review 节点路由和安全边界。
+
 确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。2E-1 分支中的读取 API 需要先运行迁移和 seed；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。知识库搜索接口是学习实战题，在完成前不要假设它已经上线。
 
 ## 4. 分层与改动位置
@@ -92,7 +101,7 @@ python -m pytest backend\tests\test_model_gateway.py -q --basetemp=.tmp\pytest-m
 | `backend/app/models` | ORM 表与关系 | 业务流程 |
 | `backend/app/services` | 查询、草稿、状态机等业务逻辑 | HTTP 处理 |
 | `backend/app/tools` | Agent 可调用的受约束工具 | 绕过权限的直接查询 |
-| `backend/app/agent` | Context、Trace、Harness、后续图工作流 | 数据库业务实现 |
+| `backend/app/agent` | Context、Trace、Harness、Model Gateway 和 LangGraph 图工作流 | 数据库业务实现 |
 | `backend/app/safety` | 医疗安全规则和人工确认判断 | 业务写入 |
 | `backend/app/rag` | 检索与来源返回 | 无来源事实生成 |
 
@@ -113,5 +122,6 @@ python -m pytest backend\tests\test_model_gateway.py -q --basetemp=.tmp\pytest-m
 - 未新增诊断、开方、剂量调整或外部医疗提交逻辑。
 - 用户和 `member_id` 的边界已经验证。
 - 工具经过 Tool Registry，关键动作经过人工确认。
+- LangGraph 条件边有明确终点，没有依赖模型输出的无限循环；Evaluator 位于回答与 reset 之后且只读。
 - 更新了对应的技术、接口、数据库、Agent 或测试文档。
 - README 只更新对 GitHub 访客有价值的当前状态，不追加阶段流水账。
