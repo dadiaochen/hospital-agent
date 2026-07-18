@@ -11,6 +11,7 @@
 | 上下文 | `test_context_manager.py` | 角色视图、成员隔离、压缩和 reset。 |
 | 工具 | `test_tool_registry.py`、`test_mock_tools.py`、`test_db_backed_tools.py` | 权限、schema、evidence、只读和失败 fallback。 |
 | 草稿写入 | `test_confirmation_draft_tool.py` | 确认门禁、幂等、事务回滚、只写本地 draft。 |
+| 草稿 API 状态机 | `test_confirmation_draft_api.py` | 显式确认、四类草稿、成员隔离、幂等确认/拒绝、非法终态转换和 OpenAPI。 |
 | Harness | `test_deterministic_evaluator.py`、`test_harness_runner.py`、`test_harness_runtime.py` | 固定用例回放、评估规则和汇总报告。 |
 | API | `test_health.py`、`test_read_api.py`、`test_knowledge_api.py` | HTTP 参数、依赖、Service、响应 DTO 和统一错误。 |
 

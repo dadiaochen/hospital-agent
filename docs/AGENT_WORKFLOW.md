@@ -52,6 +52,7 @@ ToolExecutionContext
 1. 涉及诊断、加量、减量、停药、换药、严重症状、越权查询或跳过确认时，SafetyAgent 必须先介入。
 2. 没有 DB/API/RAG 来源时，Agent 不能输出为事实的病史、处方、库存或规则。
 3. 复诊、购药与提醒都先准备 draft；用户确认只允许改变本地状态，不能宣称已提交医院或下单。
+4. HTTP 草稿 API 与 Agent Tool 共用草稿 service，但职责不同：Agent 创建必须经过 Tool Registry 的角色和确认门；API 只接受固定 demo user 的显式人工决策，并执行成员隔离和状态白名单。二者都不能触发外部动作。
 4. 工具失败必须暴露 `error_type` 与 `fallback_action`，供 Agent 转人工或要求补充信息。
 
 ## 5. 运行产物与评估

@@ -57,6 +57,10 @@ Context、工具、Trace 和评估先由 Pydantic 模型定义，并使用 `extr
 
 `create_confirmation_draft` 在确认门禁前不会执行 handler。门禁通过后也只创建 `status="draft"` 的本地记录；审计数据记录 run、幂等键和 `external_action_status="not_submitted"`。没有医院提交、下单或推送能力。
 
+2E-2 隔离分支在同一 service 之上增加 FastAPI 状态机。API 创建仍要求显式 `human_confirmation_granted`；确认或拒绝要求显式 `human_confirmation_present`。白名单只允许 `draft -> confirmed` 和 `draft -> rejected`，重复决策返回幂等 replay，终态之间不可互转。
+
+`confirmed_at` 保留“允许创建本地草稿”的既有语义。最终决策追加到各业务表已有 JSON detail 的 `_agent_audit.status_transitions`，包含 user、幂等键、时间、备注和 `external_action_status="not_submitted"`。可选 `run_id` 必须与当前 user/member 同时匹配；决策读取在 PostgreSQL 上使用行锁，减少并发重复流转。这样无需新增 migration，也不会把本地确认伪装成外部动作成功。
+
 ### 4.5 安全与评估分离
 
 SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权查询和跳过确认。EvaluatorAgent 是 post-run 只读评估角色：读取冻结产物，计算质量结果，不能修改答案、调用业务工具或写业务状态。
@@ -71,8 +75,8 @@ SQLite 测试通过只证明当前契约和业务行为在测试方言下成立�
 
 | 已实现 | 尚未实现 |
 | --- | --- |
-| ORM、迁移、seed、只读 DB tools、本地 draft tool | 草稿确认 API、生产认证。 |
-| 家庭、药箱、处方/购药、库存、知识检索和 Agent 审计的只读 API | 草稿创建、确认与拒绝 API（2E-2）。 |
+| ORM、迁移、seed、只读 DB tools、本地 draft tool 与草稿状态机 API | 生产认证。 |
+| 家庭、药箱、处方/购药、库存、知识检索和 Agent 审计的只读 API | 真实医院、药店或推送 API。 |
 | ContextManager、Trace、fixture Harness、确定性评估 | 真实 Agent API、LangGraph 节点、LLM provider。 |
 | 权限、成员隔离、确认门禁和失败 fallback 的单元测试 | 医院/药店/推送等外部系统提交。 |
 
@@ -85,5 +89,6 @@ SQLite 测试通过只证明当前契约和业务行为在测试方言下成立�
 - 工具契约：[tool_schemas.py](../backend/app/tools/tool_schemas.py)
 - 工具运行门禁：[tool_registry.py](../backend/app/tools/tool_registry.py)
 - 草稿事务：[confirmation_draft_service.py](../backend/app/services/confirmation_draft_service.py)
+- 草稿 API 状态机：[confirmation_draft_api_service.py](../backend/app/services/confirmation_draft_api_service.py)
 - 评估规则：[evaluator.py](../backend/app/agent/evaluator.py)
 - 读取 API 编排：[read_api_service.py](../backend/app/services/read_api_service.py)

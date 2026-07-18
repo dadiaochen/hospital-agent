@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已完成至 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 的 `2E-1`：现有数据库读取能力已经通过 FastAPI DTO 暴露，并完成成员隔离、统一错误和知识检索测试。下一阶段为 `2E-2` 草稿与确认 API；路线图的完成状态仍以该文件为准。
+项目已完成 `2E-1` 基础读取 API，并在其线性基础上实现 `2E-2` 草稿与确认 API：状态机只改变本地记录，不会提交医院、药店或推送服务。阶段状态仍以 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 为准。
 
 目前已经具备：
 
@@ -17,6 +17,7 @@
 - 数据库只读查询工具，以及只创建本地 draft 的确认门禁工具。
 - 家庭、药箱、处方/购药、药店库存、知识检索与 Agent 审计的只读 FastAPI 接口；知识搜索已通过专用自动化测试和 Docker PostgreSQL/Postman 验证。
 - Docker Compose 本地编排已验证 PostgreSQL、Redis、FastAPI 与 Next.js，镜像和 volume 数据位于 `E:\DockerData`；这仍是开发演示环境，不是生产部署。
+- 本地草稿创建、查询、确认和拒绝 API；状态机始终保留 `not_submitted` 外部状态。
 
 ## 四个演示场景
 
@@ -71,6 +72,13 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 New-Item -ItemType Directory -Force var | Out-Null
 python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest
 python -m compileall backend\app backend\tests
+```
+
+只验证隔离分支的草稿 API：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_confirmation_draft_api.py backend\tests\test_confirmation_draft_tool.py -q
 ```
 
 ## 文档入口

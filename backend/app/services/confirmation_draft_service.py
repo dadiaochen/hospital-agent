@@ -69,7 +69,7 @@ def create_confirmation_draft(
     member_id: str,
     action_type: ConfirmationDraftAction,
     idempotency_key: str,
-    run_id: str,
+    run_id: str | None,
     summary: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
@@ -93,6 +93,7 @@ def create_confirmation_draft(
         "user_id": user_id,
         "member_id": member_id,
         "summary": summary,
+        "created_via": "agent_tool" if run_id is not None else "api",
         "local_confirmation_recorded": True,
         "external_action_status": "not_submitted",
     }
@@ -133,6 +134,7 @@ def _build_draft(
     audit: dict[str, Any],
 ):
     confirmed_at = utc_now()
+    audit["draft_creation_confirmed_at"] = confirmed_at.isoformat()
     common = {
         "status": "draft",
         "need_human_confirmation": True,

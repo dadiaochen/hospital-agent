@@ -71,6 +71,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 本地完整联调使用 Docker PostgreSQL/Redis，pytest 使用内存 SQLite。知识搜索 DTO、service、route 和 `test_knowledge_api.py` 已完成，并通过 PostgreSQL/Postman 与自动化测试验收。PostgreSQL 实跑要求 Alembic 内部 `version_num` 容纳现有长 revision ID，该兼容修复位于对应长 revision 的迁移中，不改变 ORM 业务字段。
 
+隔离分支 `codex/2e-2-draft-confirmation-api` 在不覆盖 2E-1 学习工作区的前提下准备草稿与确认 API：支持四类本地草稿的创建、查询、确认和拒绝；只允许 `draft -> confirmed/rejected`，决策幂等并写入现有 JSON 审计，始终保持 `external_action_status="not_submitted"`。在 2E-1 知识搜索完成并完成 rebase/回归前，不修改总路线图的 `NEXT` 状态。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

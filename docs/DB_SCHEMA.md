@@ -47,6 +47,8 @@
 
 当前确认工具只写本地 `draft`，并将 run、幂等键、外部动作状态等审计数据放在现有 JSON detail 中；没有新增外部提交状态字段。
 
+2E-2 API 的确认和拒绝仍复用这四张表及现有 JSON 字段，不新增 ORM 列或 migration。每次有效终态转换追加到 `_agent_audit.status_transitions`，记录 `from_status`、`to_status`、`resolved_at`、`idempotency_key`、`user_id`、`note` 和固定的 `external_action_status="not_submitted"`。数据库 `confirmed_at` 继续表示允许创建本地草稿；最终决策时间由审计 transition 保存。
+
 ## 6. 知识库
 
 | 表 | 核心字段 | 设计意图 |

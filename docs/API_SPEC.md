@@ -51,9 +51,66 @@ FastAPI Swagger 位于 `http://localhost:8000/docs`。root 与 health response �
 
 `backend/tests/test_knowledge_api.py` 已完成，覆盖正常命中、分类过滤、空结果、缺失/空白参数、统一 `422` 与 OpenAPI 注册。完整代码阅读、Postman 和测试步骤见 [06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md](learning/06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md)。
 
-## 5. 后续草稿 API 边界
+## 5. 隔离分支中的 2E-2 草稿 API
 
-路线图的 `2E-2` 才负责本地草稿的创建、查询、确认和拒绝。其状态机必须只允许白名单转换，确认操作要幂等，并保留 `human_confirmation` 审计信息。即使确认成功，也只改变本地 draft 状态，不代表外部医疗或购药动作成功。
+以下接口已经在 `codex/2e-2-draft-confirmation-api` 隔离分支实现。它们将在 2E-1 知识搜索完成后 rebase、回归和进入主线；路线图在此之前仍保持 2E-1 为 `NEXT`。
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `POST` | `/api/confirmation-drafts` | 经显式确认后创建四类本地草稿；幂等键重复时返回原草稿。 |
+| `GET` | `/api/confirmation-drafts?member_id=&draft_type=&status=` | 查询当前 demo user 的草稿，可按成员、类型和状态过滤。 |
+| `GET` | `/api/confirmation-drafts/{draft_type}/{draft_id}` | 查询单个受成员作用域保护的草稿。 |
+| `POST` | `/api/confirmation-drafts/{draft_type}/{draft_id}/confirm` | 把本地草稿从 `draft` 转为 `confirmed`。 |
+| `POST` | `/api/confirmation-drafts/{draft_type}/{draft_id}/reject` | 把本地草稿从 `draft` 转为 `rejected`。 |
+
+支持的 `draft_type`：`refill_request`、`consultation_request`、`pharmacy_option` 和 `reminder_create`。
+
+创建请求示例：
+
+```json
+{
+  "member_id": "member-father",
+  "draft_type": "refill_request",
+  "idempotency_key": "refill-2026-001",
+  "run_id": "run-optional",
+  "summary": "Prepare refill materials for local review.",
+  "payload": {
+    "medicine_name": "amlodipine tablets",
+    "prescription_id": "prescription-id",
+    "remaining_days": 3
+  },
+  "human_confirmation_granted": true
+}
+```
+
+确认或拒绝请求示例：
+
+```json
+{
+  "idempotency_key": "confirm-refill-2026-001",
+  "human_confirmation_present": true,
+  "note": "Local decision only."
+}
+```
+
+状态机只允许：
+
+```text
+draft -> confirmed
+draft -> rejected
+```
+
+重复请求同一终态属于幂等 replay；`confirmed -> rejected`、`rejected -> confirmed` 等转换返回 `409 invalid_state_transition`。创建或决策缺少显式确认时返回 `409 human_confirmation_required`。不存在和越权资源统一返回 `404`，不暴露其他用户的数据。创建请求携带可选 `run_id` 时，该 run 必须同时属于当前 demo user 和目标 member；否则同样返回 `404`。
+
+`confirmed` 只表示用户确认了本地草稿状态，不表示医院提交、药店下单或提醒推送。所有响应都包含：
+
+```json
+{
+  "external_action_status": "not_submitted"
+}
+```
+
+数据库 `confirmed_at` 延续 2D-2 语义，表示用户曾允许创建本地草稿；最终确认或拒绝时间记录在现有 JSON 审计的 `status_transitions` 中，并通过响应 `resolved_at` 暴露。该设计没有新增 ORM 字段或 Alembic migration。
 
 ## 6. API 设计规则
 
@@ -63,4 +120,4 @@ FastAPI Swagger 位于 `http://localhost:8000/docs`。root 与 health response �
 4. 不存在、越权、schema 失败和状态冲突要有可预测的错误格式。
 5. 含有医疗敏感内容的写操作在 API 层之外还必须经过 safety 与 confirmation 规则。
 
-2E-1 已通过知识库搜索专用自动化测试。草稿和确认 API 仍属于 2E-2，不应被读取接口提前实现。
+2E-1 已通过知识库搜索专用自动化测试；2E-2 草稿状态机 API 已在其线性基础上实现。两者都只处理本地数据，不代表任何外部医疗动作成功。
