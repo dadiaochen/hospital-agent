@@ -84,7 +84,7 @@ npm run typecheck
 npm run build
 ```
 
-契约测试验证 URL 编码和跨成员响应拒绝。生产构建验证所有页面可由 Next.js 编译和生成。真实验收还需要 PostgreSQL migration、seed、后端服务，以及完成并合入 2E-1 知识检索 API。
+`client.test.ts` 验证 URL 编码和跨成员响应拒绝；`medicine-box/page.test.tsx` 在 jsdom 中渲染真实 React Provider、成员选择器和页面，验证成员切换时清理旧数据、loading、empty 以及跨成员 error。生产构建验证所有页面可由 Next.js 编译和生成。真实验收仍需要 PostgreSQL migration、seed、后端服务，以及完成并合入 2E-1 知识检索 API；mock HTTP 测试不能替代这一步。
 
 ## 8. Review 清单
 

@@ -190,11 +190,13 @@ npm run typecheck
 npm run build
 ```
 
-- `npm test`：验证 URL 构造和跨成员拒绝。
+- `npm test`：一组验证 URL 构造和 API client 隔离；另一组把 MemberProvider、选择器和药箱页面真正渲染到 jsdom，验证成员切换、loading、empty 和 error。
 - `npm run typecheck`：检查字段名、参数和组件类型。
 - `npm run build`：让 Next.js 编译全部路由，发现只有实际打包时才出现的问题。
 
 真实页面验收还要启动前后端并检查本人、父亲、母亲三次切换。知识页在你的 2E-1 接口合入前显示错误是符合当前分支事实的，不应伪造 mock 成功结果。
+
+jsdom 是测试中的浏览器 DOM 模拟器，它让 React 组件测试不必真的打开 Chrome，但它不会运行 PostgreSQL 或 FastAPI。测试中的 mock response 只能证明“页面收到这些 HTTP 结果时如何表现”，不能证明真实后端一定会返回正确数据。
 
 ## 11. 给你的练习
 

@@ -18,7 +18,7 @@
 | LangGraph 工作流 | `test_langgraph_workflow.py` | 四场景路由、确认不可绕过、安全拦截、成员隔离、来源保留、reset/eval 与模型失败。 |
 | Agent Runtime API | `test_agent_runtime_api.py` | 真实 DB tools、run/tool-call 持久化、冻结回放、幂等、续跑、隔离、安全与失败审计。 |
 | API | `test_health.py`、`test_read_api.py`、`test_confirmation_draft_api.py` | 健康检查、只读资源和本地草稿状态机。 |
-| 3A 前端 | `frontend/lib/api/client.test.ts`、Next production build | URL 编码、成员响应隔离、TypeScript 契约和全部页面编译。 |
+| 3A 前端 | `frontend/lib/api/client.test.ts`、`app/medicine-box/page.test.tsx`、Next production build | URL 编码、成员响应隔离、切换时清理旧数据、loading/empty/error、TypeScript 契约和全部页面编译。 |
 
 ## 运行命令
 
@@ -39,7 +39,7 @@ npm run typecheck
 npm run build
 ```
 
-自动测试之外还要做真实联调：启动 migration、seed、后端和前端，依次切换本人、父亲、母亲，核对 Network 请求和响应中的 `member_id`。知识 API 未合入时不能用 mock 页面冒充真实联调通过。
+组件测试使用 jsdom 和 mock HTTP，只证明 React 状态与渲染规则。自动测试之外还要做真实联调：启动 migration、seed、后端和前端，依次切换本人、父亲、母亲，核对 Network 请求和响应中的 `member_id`。知识 API 未合入时不能用 mock 页面冒充真实联调通过。
 
 ## 如何 review 一个改动
 
