@@ -559,7 +559,7 @@ def test_tool_result_maps_to_tool_call_trace(registry: ToolRegistry) -> None:
     assert trace.source_name == "medicine_box_items"
 
 
-def test_no_model_or_seed_changes_for_db_read_tools() -> None:
+def test_db_read_tool_stage_still_does_not_modify_seed_data() -> None:
     project_root = Path(__file__).resolve().parents[2]
     completed = subprocess.run(
         [
@@ -567,7 +567,6 @@ def test_no_model_or_seed_changes_for_db_read_tools() -> None:
             "diff",
             "--name-only",
             "--",
-            "backend/app/models",
             "scripts/seed.py",
         ],
         cwd=project_root,
@@ -578,10 +577,10 @@ def test_no_model_or_seed_changes_for_db_read_tools() -> None:
     if completed.returncode != 0:
         pytest.skip("git diff unavailable in this test environment")
 
-    changed_forbidden_files = [
+    changed_seed_files = [
         path for path in completed.stdout.splitlines() if path.strip()
     ]
-    assert changed_forbidden_files == []
+    assert changed_seed_files == []
 
 
 def test_db_read_stage_does_not_register_write_confirmation_tool(

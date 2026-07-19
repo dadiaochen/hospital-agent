@@ -212,12 +212,17 @@ def create_knowledge_retriever(
     vector_enabled: bool | None = None,
 ) -> HybridRetriever:
     store = SQLAlchemyKnowledgeStore(db)
+    resolved_vector_enabled = (
+        settings.rag_vector_enabled if vector_enabled is None else vector_enabled
+    )
+    if resolved_vector_enabled and vector_backend is None and vector_enabled is None:
+        from app.rag.vector_store import create_configured_vector_backend
+
+        vector_backend = create_configured_vector_backend(db)
     return HybridRetriever(
         KeywordRetriever(store),
         store,
-        vector_enabled=(
-            settings.rag_vector_enabled if vector_enabled is None else vector_enabled
-        ),
+        vector_enabled=resolved_vector_enabled,
         vector_backend=vector_backend,
     )
 

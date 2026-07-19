@@ -2,7 +2,7 @@ name: family-health-agent
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:0.8.5-pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-hospital}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hospital}
@@ -42,6 +42,12 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       DEMO_USER_PHONE: ${DEMO_USER_PHONE:-13800000001}
       RAG_VECTOR_ENABLED: ${RAG_VECTOR_ENABLED:-false}
+      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-fastembed}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-BAAI/bge-small-zh-v1.5}
+      RAG_EMBEDDING_CACHE_DIR: /app/var/models/fastembed
+      RAG_VECTOR_MIN_SCORE: ${RAG_VECTOR_MIN_SCORE:-0.35}
+      RAG_EMBEDDING_BATCH_SIZE: ${RAG_EMBEDDING_BATCH_SIZE:-16}
+      OMP_NUM_THREADS: ${RAG_EMBEDDING_THREADS:-2}
       MODEL_PROVIDER: ${MODEL_PROVIDER:-deterministic}
       MODEL_API_BASE: ${MODEL_API_BASE:-}
       MODEL_API_KEY: ${MODEL_API_KEY:-}
@@ -51,6 +57,7 @@ services:
       - "8000:8000"
     volumes:
       - ./var/demo:/app/var/demo
+      - ./var/models:/app/var/models
     depends_on:
       postgres:
         condition: service_healthy

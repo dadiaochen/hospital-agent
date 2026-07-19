@@ -36,6 +36,31 @@ class Settings(BaseModel):
     rag_vector_enabled: bool = Field(
         default_factory=lambda: _env_bool("RAG_VECTOR_ENABLED")
     )
+    rag_embedding_provider: str = Field(
+        default_factory=lambda: os.getenv("RAG_EMBEDDING_PROVIDER", "fastembed")
+    )
+    rag_embedding_model: str = Field(
+        default_factory=lambda: os.getenv(
+            "RAG_EMBEDDING_MODEL",
+            "BAAI/bge-small-zh-v1.5",
+        )
+    )
+    rag_embedding_cache_dir: str = Field(
+        default_factory=lambda: os.getenv(
+            "RAG_EMBEDDING_CACHE_DIR",
+            "var/models/fastembed",
+        )
+    )
+    rag_vector_min_score: float = Field(
+        default_factory=lambda: float(os.getenv("RAG_VECTOR_MIN_SCORE", "0.35")),
+        ge=0.0,
+        le=1.0,
+    )
+    rag_embedding_batch_size: int = Field(
+        default_factory=lambda: int(os.getenv("RAG_EMBEDDING_BATCH_SIZE", "16")),
+        ge=1,
+        le=128,
+    )
     model_provider: str = Field(
         default_factory=lambda: os.getenv("MODEL_PROVIDER", "deterministic")
     )
