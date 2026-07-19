@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.routes.agent_audit import router as agent_audit_router
 from app.api.routes.family import router as family_router
+from app.api.routes.knowledge import router as knowledge_router
 from app.api.routes.medication import router as medication_router
 from app.api.routes.pharmacy import router as pharmacy_router
 from app.api.routes.system import router as system_router
@@ -12,3 +13,4 @@ api_router.include_router(family_router, tags=["family"])
 api_router.include_router(medication_router, tags=["medication"])
 api_router.include_router(pharmacy_router, tags=["pharmacy"])
 api_router.include_router(agent_audit_router, tags=["agent-audit"])
+api_router.include_router(knowledge_router, tags=["knowledge"])
