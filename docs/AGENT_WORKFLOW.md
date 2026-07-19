@@ -77,6 +77,8 @@ ToolExecutionContext
 
 2G-2 的 Agent API 是例外的正式 workflow adapter：Router 只校验 HTTP DTO，AgentRuntimeService 负责作用域、幂等、事务和持久化，LangGraph 仍只负责编排。首次 run 不允许直接确认；`needs_confirmation` 只能通过同 task 的 `/continue` 进入本地 draft 写入。完整说明见 [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md)。
 
-## 7. 3A 前端只展示运行产物
+## 7. 3B 前端运行与只读审计
 
-3A 的 Agent run 页面只按当前 `member_id` 读取审计列表，不参与 Planner、角色路由、SafetyAgent 或 EvaluatorAgent 执行。它不会修改 FinalAnswer、EvaluationResult 或业务状态。Agent 输入、确认续跑和冻结 Trace 详情属于 3B；在此之前前端明确显示为预告，不放置伪可用执行按钮。
+3B 的 Agent 页面通过 Runtime API 发起 run，但不参与 Planner、角色路由、SafetyAgent 或 EvaluatorAgent 内部执行。首次请求固定未确认；后端返回 `needs_confirmation` 后，用户必须明确同意“只创建本地草稿”，前端才调用同任务 `/continue`。SafetyAgent 已阻断的结果没有业务继续入口。
+
+页面只展示冻结 FinalAnswer、来源、安全和 EvaluationResult。Run 详情从审计 API 读取角色、工具、耗时、错误和 fallback，不修改 FinalAnswer、EvaluationResult 或业务状态。成员切换会清除上一成员运行结果；响应中的 run、summary、model/safety trace 和 evidence refs 还要通过客户端成员检查。完整说明见 [AGENT_UI.md](AGENT_UI.md)。

@@ -32,6 +32,7 @@
 | [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md) | 有界状态图、节点路由、工具调用、确认与运行产物。 |
 | [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md) | Agent 运行 API、run/tool-call 持久化、冻结回放、幂等与确认续跑。 |
 | [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) | Next.js 数据页、成员上下文、API client 和异步状态。 |
+| [AGENT_UI.md](AGENT_UI.md) | 3B Agent 对话、确认续跑、来源、安全与 Trace/Evaluation UI。 |
 
 ## Agent 专项
 

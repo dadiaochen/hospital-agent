@@ -19,6 +19,7 @@
 | Agent Runtime API | `test_agent_runtime_api.py` | 真实 DB tools、run/tool-call 持久化、冻结回放、幂等、续跑、隔离、安全与失败审计。 |
 | API | `test_health.py`、`test_read_api.py`、`test_confirmation_draft_api.py` | 健康检查、只读资源和本地草稿状态机。 |
 | 3A 前端 | `frontend/lib/api/client.test.ts`、`app/medicine-box/page.test.tsx`、Next production build | URL 编码、成员响应隔离、切换时清理旧数据、loading/empty/error、TypeScript 契约和全部页面编译。 |
+| 3B Agent UI | `app/agent/page.test.tsx`、`components/RunTraceDetails.test.tsx`、API client 测试 | 首次未确认、显式续跑、高风险无按钮、成员切换清理、冻结产物隔离、错误/fallback 与评估字段。 |
 
 ## 运行命令
 
@@ -63,9 +64,11 @@ Review Runtime 时继续检查：Router 是否只处理 HTTP；Service 是否从
 
 Review 前端时先忽略样式，追踪 `page -> useMember -> api client -> endpoint`。确认成员切换会取消旧请求并清空旧 data，成员 response 不匹配时抛错而不是过滤；再检查 loading、empty、error、尚未查询和成功状态是否彼此独立。
 
+Review Agent UI 时再检查首次 POST 是否固定为 `false`，确认按钮是否同时依赖后端待确认状态和未阻断 SafetyTrace，续跑是否提交新的确认幂等键。Trace 页面只能展示冻结产物，不能在浏览器重写 FinalAnswer 或重算 EvaluationResult；mock 组件测试不能冒充 3C E2E。
+
 ## 当前常见风险
 
 - 2G-2 Agent API/runtime 持久化已在隔离分支实现，但多模型线上质量验证、生产认证和外部医院/药店集成尚未实现，不能用 deterministic 成功结果替代真实验证。
-- 3A 页面已通过契约测试、类型检查和生产构建，但知识页仍依赖 2E-1 API 合入，完整本人/父亲/母亲真实数据联调尚需在分支整合后执行。
+- 3A/3B 页面已通过隔离分支的契约与组件测试；生产 build 和真实 PostgreSQL/API/UI 四场景联调仍需在 2E-1 合入后统一验证。
 - `agent_eval_report.example.md` 是固定 mock fixture 的计算结果，不是生产质量、临床效果或安全率证明。
 - 本项目的配置示例只用于本地开发。生产环境必须从安全的环境变量或秘密管理系统注入连接信息和模型 Key。

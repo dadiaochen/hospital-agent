@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { AsyncContent } from "@/components/AsyncContent";
 import { PageHeader } from "@/components/PageHeader";
 import { useMember } from "@/components/providers/MemberProvider";
@@ -25,7 +27,7 @@ export default function AgentRunsPage() {
   return (
     <div className="grid gap-5">
       <PageHeader
-        description="基础列表按当前成员查询真实 agent_runs。完整工具链、来源、评估结果和确认交互将在 3B 的 Run 详情页完成。"
+        description="按当前成员查询真实 agent_runs；可进入详情查看冻结答案、工具链、来源、安全、fallback 和评估结果。"
         eyebrow="Agent Runs"
         title="Agent 执行记录"
       >
@@ -98,6 +100,14 @@ export default function AgentRunsPage() {
                   {run.final_answer}
                 </p>
               ) : null}
+              <div className="mt-4 flex justify-end">
+                <Link
+                  className="rounded-lg border border-[#bcd2cc] px-3 py-2 text-xs font-bold text-[#0f766e] hover:bg-[#edf7f3]"
+                  href={`/agent-runs/${encodeURIComponent(run.id)}`}
+                >
+                  查看 Trace 与评估
+                </Link>
+              </div>
             </article>
           ))}
         </div>

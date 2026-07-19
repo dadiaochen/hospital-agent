@@ -83,6 +83,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `codex/3a-core-data-pages` 在线性隔离历史上实现 Next.js 核心数据页。`MemberProvider` 提供唯一当前 `member_id`，页面通过统一 typed API client 读取真实 FastAPI 契约，并在渲染前检查成员类 response 的 `member_id`。所有数据页必须区分 loading、empty、error 和 data；知识页只消费 2E-1 学习题契约，不替学习者实现后端。3A 不实现 Agent 对话、确认动作、Run Trace 详情、登录或外部医疗系统操作。
 
+`codex/3b-agent-trace-ui` 在线性隔离历史上实现主要 Agent 演示入口。前端首次运行固定提交 `human_confirmation_granted=false`，展示冻结答案、Tool/RAG 来源和 SafetyTrace；只有待确认且未阻断的 run 才允许用户勾选本地草稿声明并调用 `/continue`。Run 详情只读展示角色、工具、耗时、错误、fallback、ModelCallTrace 和 EvaluationResult，成员切换清除旧结果并检查所有冻结产物作用域。本阶段不重算评估、不跑真实 E2E Harness、不提交外部医院/药店/推送动作。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

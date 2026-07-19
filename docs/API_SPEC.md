@@ -137,7 +137,7 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 
 完整字段、状态和持久化说明见 [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md)。
 
-## 9. 3A 前端 API 消费约定
+## 9. 3A/3B 前端 API 消费约定
 
 3A 页面通过 `frontend/lib/api/client.ts` 统一访问上述接口。浏览器 base URL 来自 `NEXT_PUBLIC_API_BASE_URL`，默认 `http://localhost:8000`；页面不得直接写数据库地址或模型配置。
 
@@ -150,8 +150,13 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 | 购药信息 | `/{member_id}/purchase-records`、`/api/pharmacy-inventory` |
 | 知识检索 | `/api/knowledge/search?q=&category=`，依赖学习题完成并合入 |
 | Agent runs | `/api/agent-runs?member_id=` |
+| Agent 对话 | `POST /api/agent-runs` |
+| 确认续跑 | `POST /api/agent-runs/{run_id}/continue` |
+| Run 详情 | `/api/agent-runs/{run_id}`、`/tool-calls`、`/artifacts` |
 
 所有成员类 response 在后端作用域校验后，还会被浏览器检查 `member_id`。不匹配时前端抛出 `context_isolation_failed` 并停止展示；这不是认证替代品，而是防止异常 response 造成可见串扰的第二道防线。
+
+3B 首次请求固定发送 `human_confirmation_granted=false`。只有后端返回 `needs_confirmation` 且没有 SafetyAgent 阻断时，页面才允许用户勾选本地草稿声明并调用 `/continue`。详情页只读消费冻结 FinalAnswer、Tool/RAG refs、SafetyTrace、ModelCallTrace 和 EvaluationResult，不在浏览器重算或修改它们。完整交互见 [AGENT_UI.md](AGENT_UI.md)。
 
 ## 10. API 设计规则
 

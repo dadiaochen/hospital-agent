@@ -7,7 +7,7 @@ export const navigationItems = [
   { href: "/purchase-plans", label: "购药信息" },
   { href: "/knowledge", label: "知识检索" },
   { href: "/agent-runs", label: "执行记录" },
-  { href: "/agent", label: "Agent 对话（3B）" },
+  { href: "/agent", label: "Agent 对话" },
 ];
 
 export const mvpScenarios = [

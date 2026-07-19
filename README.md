@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已完成至 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 的 `2D-2`，`2E-1` 基础读取 API 正在学习分支中收口。本隔离工作区按线性提交提前准备了 `2E-2` 草稿与确认 API、`2F-1` Hybrid RAG、`2F-2` Model Gateway、`2G-1` LangGraph 工作流、`2G-2` Agent Runtime API 和 `3A` 核心数据页面；在 2E-1 完成、rebase 和完整回归之前，不改变路线图状态，也不视为已进入主线。
+项目已完成至 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 的 `2D-2`，`2E-1` 基础读取 API 正在学习分支中收口。本隔离工作区按线性提交提前准备了 `2E-2` 草稿与确认 API、`2F-1` Hybrid RAG、`2F-2` Model Gateway、`2G-1` LangGraph 工作流、`2G-2` Agent Runtime API、`3A` 核心数据页面和 `3B` Agent/Trace UI；在 2E-1 完成、rebase 和完整回归之前，不改变路线图状态，也不视为已进入主线。
 
 目前已经具备：
 
@@ -22,6 +22,7 @@
 - 隔离分支中的有界 LangGraph DAG：按 intent 路由四类业务角色，统一经过 ContextManager、Tool Registry、SafetyAgent、确认草稿、RunTrace/reset 和只读 Evaluator。
 - 隔离分支中的 Agent Runtime API：真实 DB tools、run/tool-call 持久化、冻结产物查询、幂等运行和确认后的同任务续跑；任何动作仍只创建本地草稿。
 - 隔离分支中的 Next.js 数据页面：共享成员选择器、家庭档案、药箱、续方/复诊、提醒、购药信息、知识检索和 Agent run 列表，统一处理 loading、empty、error 与跨成员响应拒绝；知识页等待 2E-1 API 合入后做真实联调。
+- 隔离分支中的 Agent 演示入口：四类场景输入、冻结结构化答案、Tool/RAG 来源、安全提示、仅创建本地草稿的确认续跑，以及角色、工具、耗时、错误、fallback 和 EvaluationResult 详情。
 
 ## 四个演示场景
 
@@ -109,7 +110,7 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_agent_runtime_api.py -q -p no:cacheprovider --basetemp=.tmp\pytest-runtime
 ```
 
-验证隔离分支的 3A 前端：
+验证隔离分支的 3A/3B 前端：
 
 ```powershell
 Set-Location frontend
@@ -134,6 +135,7 @@ npm run build
 - [LangGraph 工作流](docs/LANGGRAPH_WORKFLOW.md)：图节点、条件路由、状态、确认门和运行产物。
 - [Agent Runtime API](docs/AGENT_RUNTIME_API.md)：运行入口、持久化、冻结回放、幂等与确认续跑。
 - [前端架构](docs/FRONTEND_ARCHITECTURE.md)：成员切换、API 客户端、页面状态和跨成员防线。
+- [Agent UI 与 Trace](docs/AGENT_UI.md)：对话提交、本地确认、冻结产物和审计详情页面。
 - [从零学习路线](docs/learning/README.md)：需求拆解、代码设计、review 和简历表达。
 
 ## 仓库结构

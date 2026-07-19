@@ -15,6 +15,7 @@
 - 在隔离 2G-1 分支实现有界 LangGraph Multi-Agent DAG：以 intent 路由角色，复用 ContextManager、Tool Registry、SafetyAgent、确认门、Model Gateway、RunTrace/reset 和只读 Evaluator。
 - 在线性 2G-2 隔离分支实现 Agent Runtime API：注入真实 DB tools，持久化 run/tool-call 与版本化冻结产物，支持成员隔离、幂等 replay、确认后的同任务续跑和失败审计；不执行外部医疗动作。
 - 在 3A 隔离分支实现 Next.js 核心数据页面：统一 API client、loading/empty/error、成员切换、旧请求取消和 response `member_id` 二次检查；知识页真实联调等待 2E-1 API 合入。
+- 在 3B 隔离工作区实现 Agent 对话与审计 UI：连接首次未确认 run、本地草稿确认续跑、冻结答案、Tool/RAG 来源、安全标记、工具错误/fallback 和单次 EvaluationResult；高风险拦截不提供业务继续入口。
 
 ## 简历表述示例
 
@@ -32,6 +33,8 @@
 实现 Agent Runtime 适配层，将真实数据库 evidence、LangGraph 运行、run/tool-call 审计和冻结 EvaluationResult 串联；以版本化最小产物支持可查询回放，并通过固定 continuation run 与请求指纹避免重复确认草稿。
 
 使用 Next.js、React 与 TypeScript 构建家庭档案、药箱、续方复诊和提醒等数据页面，统一封装异步请求状态；通过共享成员上下文、请求取消和 response member_id 校验降低家庭成员切换时的数据串扰风险。
+
+实现 Agent 对话与 Trace UI，将 typed Runtime API、浏览器幂等键、显式人工确认、冻结来源与安全结果串成可审计交互；成员切换清除旧 run，高风险阻断不可通过前端确认绕过，所有动作只落本地草稿。
 ```
 
 ## 面试时怎么讲
@@ -47,7 +50,7 @@
 - 不要说已上线生产、接入真实医院/药店、自动开方、诊断或修改处方。
 - 不要把 deterministic mock Harness 说成真实 LLM 或临床评测。
 - 不要声称 `100% safety recall`、`0 hallucination` 或特定 p95 延迟，除非有对应真实运行的评估报告和数据范围。
-- Agent HTTP API、运行持久化和 3A 数据页已在隔离分支实现，但尚未整合进主线；3B 对话、确认和 Trace UI 仍未完成。
+- Agent HTTP API、运行持久化和 3A/3B 前端已在隔离线性工作区实现，但尚未整合进主线，也未完成 3C 真实 E2E/Trace Harness。
 - 知识库搜索 API 被保留为学习实战题；在完成并测试前不能称其已实现。
 - 不要把 RAG `score` 描述为医疗正确率，也不要声称已接入真实 Embedding 或向量数据库；当前实现的是接口、关键词基线和可测试的注入/降级机制。
 - 不要把 MockTransport 或 deterministic provider 测试描述为真实 LLM 效果，也不要宣称模型准确率、安全率、成本或 p95 延迟。

@@ -101,7 +101,7 @@ python -m pytest backend\tests\test_agent_runtime_api.py -q -p no:cacheprovider 
 
 这组测试通过 FastAPI TestClient 和测试数据库执行真实 DB tools，但仍使用 deterministic Model Gateway，不访问外部模型、医院或药店。
 
-验证 3A 前端类型、成员隔离契约和生产构建：
+验证 3A/3B 前端类型、成员隔离、确认/Trace 契约和生产构建：
 
 ```powershell
 Set-Location frontend
@@ -110,7 +110,7 @@ npm run typecheck
 npm run build
 ```
 
-页面联调时要分别切换本人、父亲和母亲，观察浏览器 Network 面板中的 `member_id`。知识检索页依赖 2E-1 学习题的 `/api/knowledge/search`；该接口合入前出现可解释错误是当前分支的真实状态。
+页面联调时要分别切换本人、父亲和母亲，观察浏览器 Network 面板中的 `member_id`。3B 还要核对首次 Agent POST 固定为 false、确认续跑为 true、高风险结果没有确认按钮，以及 Trace 三个 GET 属于同一 run/member。知识检索页依赖 2E-1 学习题的 `/api/knowledge/search`；该接口合入前出现可解释错误是当前分支的真实状态。
 
 确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。2E-1 分支中的读取 API 需要先运行迁移和 seed；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。知识库搜索接口是学习实战题，在完成前不要假设它已经上线。
 
@@ -149,5 +149,6 @@ npm run build
 - LangGraph 条件边有明确终点，没有依赖模型输出的无限循环；Evaluator 位于回答与 reset 之后且只读。
 - Runtime 首次 run 不能直接确认；续跑保持 task/member 隔离并且不会重复创建草稿。
 - 前端成员页面在切换时取消旧请求，并区分 loading、empty、error；成员响应通过 `member_id` 二次检查。
+- Agent UI 首次运行固定未确认，高风险不允许续跑；确认后只显示本地草稿，Trace/Evaluation 保持只读。
 - 更新了对应的技术、接口、数据库、Agent 或测试文档。
 - README 只更新对 GitHub 访客有价值的当前状态，不追加阶段流水账。

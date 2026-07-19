@@ -126,6 +126,193 @@ export type AgentRun = {
   human_confirmation_rate: number | null;
 };
 
+export type AgentIntent = "refill" | "reminder" | "pharmacy" | "safety_check";
+
+export type AgentRunCreateRequest = {
+  member_id: string;
+  idempotency_key: string;
+  user_input: string;
+  medication_name?: string;
+  city?: string;
+  human_confirmation_granted: false;
+};
+
+export type AgentRunContinueRequest = {
+  idempotency_key: string;
+  confirmation_message: string;
+  human_confirmation_granted: true;
+};
+
+export type ToolCallTrace = {
+  tool_name: string;
+  member_id: string;
+  source_id: string | null;
+  source_name: string | null;
+  success: boolean;
+  schema_valid: boolean;
+  evidence_present: boolean;
+};
+
+export type RAGTrace = {
+  source_id: string;
+  source_name: string;
+  member_id: string | null;
+  retrieved: boolean;
+  schema_valid: boolean;
+};
+
+export type SafetyTrace = {
+  member_id: string;
+  flags: string[];
+  blocked: boolean;
+  requires_human_confirmation: boolean;
+};
+
+export type FinalAnswerTrace = {
+  answer_id: string;
+  content: string;
+  contains_factual_claims: boolean;
+  waiting_for_user_confirmation: boolean;
+  human_confirmation_present: boolean;
+  action_status: "none" | "draft" | "awaiting_confirmation" | "executed";
+};
+
+export type RunTrace = {
+  case_id: string;
+  run_id: string;
+  task_id: string;
+  user_id: string;
+  member_id: string;
+  intent: AgentIntent;
+  tool_calls: ToolCallTrace[];
+  rag_traces: RAGTrace[];
+  safety_trace: SafetyTrace;
+  final_answer: FinalAnswerTrace;
+  latency_ms: number;
+  schema_valid: boolean;
+};
+
+export type ToolEvidenceRef = {
+  source_id: string;
+  run_id: string;
+  member_id: string;
+  tool_name: string;
+  tool_call_id: string | null;
+  success: boolean;
+  schema_valid: boolean;
+};
+
+export type RAGSourceRef = {
+  source_id: string;
+  document_id: string;
+  chunk_id: string;
+  member_id: string | null;
+  version: string | null;
+  purpose: string;
+};
+
+export type ConfirmedFact = {
+  fact_key: string;
+  value: unknown;
+  source_ids: string[];
+  confirmed_by_user: boolean;
+};
+
+export type RunSummary = {
+  run_id: string;
+  task_id: string;
+  member_id: string;
+  intent: AgentIntent;
+  final_status: "completed" | "needs_confirmation" | "blocked" | "failed";
+  confirmed_facts: ConfirmedFact[];
+  pending_confirmations: string[];
+  safety_flags: string[];
+  tool_evidence_refs: ToolEvidenceRef[];
+  rag_source_refs: RAGSourceRef[];
+  final_answer_ref: string;
+  evaluation_ref: string | null;
+};
+
+export type EvaluationResult = {
+  case_id: string;
+  run_id: string;
+  task_success: boolean;
+  tool_call_accuracy: number | null;
+  groundedness: number | null;
+  schema_valid: boolean;
+  hallucination_detected: boolean;
+  safety_recall: number | null;
+  human_confirmation_required: boolean;
+  human_confirmation_present: boolean;
+  context_isolation_passed: boolean;
+  latency_ms: number;
+  failure_reasons: string[];
+};
+
+export type ModelProviderAttemptTrace = {
+  provider_name: string;
+  model_name: string;
+  success: boolean;
+  schema_valid: boolean;
+  safety_passed: boolean;
+  safety_flags: string[];
+  latency_ms: number;
+  error_type: string | null;
+};
+
+export type ModelCallTrace = {
+  run_id: string;
+  task_id: string;
+  member_id: string;
+  purpose: string;
+  requested_provider: string;
+  effective_provider: string | null;
+  success: boolean;
+  schema_valid: boolean;
+  safety_passed: boolean;
+  fallback_used: boolean;
+  fallback_reason: string | null;
+  latency_ms: number;
+  attempts: ModelProviderAttemptTrace[];
+};
+
+export type AgentRunArtifacts = {
+  run_id: string;
+  task_id: string;
+  status: string;
+  run_trace: RunTrace;
+  model_call_trace: ModelCallTrace;
+  run_summary: RunSummary;
+  tool_evidence_refs: ToolEvidenceRef[];
+  rag_source_refs: RAGSourceRef[];
+  safety_trace: SafetyTrace;
+  evaluation_result: EvaluationResult;
+  resumed_from_run_id: string | null;
+  restored_source_ids: string[];
+  external_action_status: "not_submitted";
+};
+
+export type AgentRunExecution = {
+  run: AgentRun;
+  artifacts: AgentRunArtifacts;
+  idempotent_replay: boolean;
+};
+
+export type AgentToolCall = {
+  id: string;
+  run_id: string;
+  agent_role: string;
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+  tool_output: Record<string, unknown> | null;
+  latency_ms: number | null;
+  success: boolean;
+  error_message: string | null;
+  error_type: string | null;
+  fallback_action: string | null;
+  schema_valid: boolean;
+};
+
 export type KnowledgeSearchItem = {
   source_id: string;
   document_id: string;

@@ -87,3 +87,5 @@ Alembic 默认将内部 `alembic_version.version_num` 建为 `VARCHAR(32)`，但
 2G-1 也没有修改 ORM、Alembic migration 或 seed；工作流状态不能被误认为数据库事实。
 
 3A 前端数据页面同样没有修改 ORM、Alembic migration 或 seed。TypeScript response 类型只是后端 Pydantic DTO 的浏览器侧镜像，不是新的数据库 schema；字段真相仍以 ORM、migration 和 API DTO 为准。
+
+3B Agent/Trace UI 也没有新增表或字段。页面读取现有 `agent_runs`、`agent_tool_calls` 和 `raw_state` 中的版本化冻结产物；确认续跑仍通过 AgentRuntimeService 使用现有本地草稿表，外部动作状态固定为 `not_submitted`。

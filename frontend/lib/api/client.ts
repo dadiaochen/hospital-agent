@@ -1,5 +1,10 @@
 import type {
   AgentRun,
+  AgentRunArtifacts,
+  AgentRunContinueRequest,
+  AgentRunCreateRequest,
+  AgentRunExecution,
+  AgentToolCall,
   ApiErrorBody,
   ConfirmationDraft,
   FamilyMember,
@@ -47,6 +52,15 @@ export const apiPaths = {
   },
   agentRuns: (memberId: string) =>
     `/api/agent-runs?member_id=${encodeURIComponent(memberId)}`,
+  agentRunsRoot: "/api/agent-runs",
+  agentRun: (runId: string) =>
+    `/api/agent-runs/${encodeURIComponent(runId)}`,
+  agentRunToolCalls: (runId: string) =>
+    `/api/agent-runs/${encodeURIComponent(runId)}/tool-calls`,
+  agentRunArtifacts: (runId: string) =>
+    `/api/agent-runs/${encodeURIComponent(runId)}/artifacts`,
+  continueAgentRun: (runId: string) =>
+    `/api/agent-runs/${encodeURIComponent(runId)}/continue`,
   knowledgeSearch: (queryText: string, category: string) => {
     const query = new URLSearchParams({ q: queryText.trim() });
     if (category.trim()) query.set("category", category.trim());
@@ -54,11 +68,20 @@ export const apiPaths = {
   },
 };
 
-async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+async function requestJson<T>(
+  path: string,
+  options: { method?: "GET" | "POST"; body?: unknown; signal?: AbortSignal } = {},
+): Promise<T> {
+  const method = options.method ?? "GET";
   const response = await fetch(`${API_BASE_URL}${path}`, {
     cache: "no-store",
-    headers: { Accept: "application/json" },
-    signal,
+    method,
+    headers: {
+      Accept: "application/json",
+      ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
+    },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    signal: options.signal,
   });
 
   if (!response.ok) {
@@ -78,6 +101,14 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return requestJson<T>(path, { signal });
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  return requestJson<T>(path, { method: "POST", body });
+}
+
 export function assertMemberScoped<T extends { member_id: string | null }>(
   records: T[],
   memberId: string,
@@ -94,6 +125,60 @@ export function assertMemberScoped<T extends { member_id: string | null }>(
     );
   }
   return records;
+}
+
+export function assertAgentArtifactsScoped(
+  artifacts: AgentRunArtifacts,
+  memberId: string,
+): AgentRunArtifacts {
+  const scopedMemberIds = [
+    artifacts.run_trace.member_id,
+    artifacts.run_summary.member_id,
+    artifacts.safety_trace.member_id,
+    artifacts.model_call_trace.member_id,
+    ...artifacts.run_trace.tool_calls.map((call) => call.member_id),
+    ...artifacts.run_trace.rag_traces.flatMap((reference) =>
+      reference.member_id === null ? [] : [reference.member_id],
+    ),
+    ...artifacts.tool_evidence_refs.map((reference) => reference.member_id),
+    ...artifacts.rag_source_refs.flatMap((reference) =>
+      reference.member_id === null ? [] : [reference.member_id],
+    ),
+    ...artifacts.run_summary.tool_evidence_refs.map(
+      (reference) => reference.member_id,
+    ),
+    ...artifacts.run_summary.rag_source_refs.flatMap((reference) =>
+      reference.member_id === null ? [] : [reference.member_id],
+    ),
+  ];
+  if (scopedMemberIds.some((scopedMemberId) => scopedMemberId !== memberId)) {
+    throw new ApiClientError(
+      "Agent 冻结产物包含其他家庭成员数据，页面已停止展示",
+      409,
+      "context_isolation_failed",
+    );
+  }
+  const runIds = [
+    artifacts.run_id,
+    artifacts.run_trace.run_id,
+    artifacts.run_summary.run_id,
+    artifacts.model_call_trace.run_id,
+    artifacts.evaluation_result.run_id,
+  ];
+  const taskIds = [
+    artifacts.task_id,
+    artifacts.run_trace.task_id,
+    artifacts.run_summary.task_id,
+    artifacts.model_call_trace.task_id,
+  ];
+  if (new Set(runIds).size !== 1 || new Set(taskIds).size !== 1) {
+    throw new ApiClientError(
+      "Agent 冻结产物的 run/task 引用不一致，页面已停止展示",
+      409,
+      "trace_contract_failed",
+    );
+  }
+  return artifacts;
 }
 
 export const api = {
@@ -194,6 +279,60 @@ export const api = {
       signal,
     );
     return assertMemberScoped(result.items, memberId, "Agent 执行记录");
+  },
+
+  async createAgentRun(request: AgentRunCreateRequest): Promise<AgentRunExecution> {
+    const result = await postJson<AgentRunExecution>(apiPaths.agentRunsRoot, request);
+    assertMemberScoped([result.run], request.member_id, "Agent 执行结果");
+    assertAgentArtifactsScoped(result.artifacts, request.member_id);
+    return result;
+  },
+
+  async getAgentRun(
+    runId: string,
+    memberId: string,
+    signal?: AbortSignal,
+  ): Promise<AgentRun> {
+    const result = await getJson<AgentRun>(apiPaths.agentRun(runId), signal);
+    return assertMemberScoped([result], memberId, "Agent 执行记录")[0];
+  },
+
+  async listAgentToolCalls(
+    runId: string,
+    signal?: AbortSignal,
+  ): Promise<AgentToolCall[]> {
+    return (
+      await getJson<ListResponse<AgentToolCall>>(
+        apiPaths.agentRunToolCalls(runId),
+        signal,
+      )
+    ).items;
+  },
+
+  async getAgentRunArtifacts(
+    runId: string,
+    memberId: string,
+    signal?: AbortSignal,
+  ): Promise<AgentRunArtifacts> {
+    const result = await getJson<AgentRunArtifacts>(
+      apiPaths.agentRunArtifacts(runId),
+      signal,
+    );
+    return assertAgentArtifactsScoped(result, memberId);
+  },
+
+  async continueAgentRun(
+    runId: string,
+    memberId: string,
+    request: AgentRunContinueRequest,
+  ): Promise<AgentRunExecution> {
+    const result = await postJson<AgentRunExecution>(
+      apiPaths.continueAgentRun(runId),
+      request,
+    );
+    assertMemberScoped([result.run], memberId, "Agent 续跑结果");
+    assertAgentArtifactsScoped(result.artifacts, memberId);
+    return result;
   },
 
   async searchKnowledge(
