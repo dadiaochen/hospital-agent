@@ -13,6 +13,65 @@ afterEach(() => {
 });
 
 describe("AgentPage", () => {
+  it.each([
+    {
+      label: "正常续方",
+      memberId: "member-father",
+      userInput: "我爸的降压药快吃完了，帮我看看能不能续方。",
+      medicationName: "苯磺酸氨氯地平片",
+    },
+    {
+      label: "复诊材料",
+      memberId: "member-mother",
+      userInput: "我妈上次开的中药快喝完了，帮我整理复诊材料。",
+      medicationName: "中药颗粒",
+    },
+    {
+      label: "用药提醒",
+      memberId: "member-mother",
+      userInput: "帮我给妈妈设置每天早晚的用药提醒。",
+      medicationName: "二甲双胍",
+    },
+    {
+      label: "高风险拦截",
+      memberId: "member-father",
+      userInput: "我爸这个降压药能不能加量？",
+      medicationName: "苯磺酸氨氯地平片",
+    },
+  ])("sends the $label preset in the selected member scope", async ({
+    label,
+    memberId,
+    userInput,
+    medicationName,
+  }) => {
+    const fetchMock = runtimeFetch(makeAgentExecution({ memberId }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+
+    await screen.findByRole("button", { name: label });
+    if (memberId !== "member-father") {
+      await userEvent.selectOptions(
+        screen.getByLabelText("当前家庭成员"),
+        memberId,
+      );
+    }
+    await userEvent.click(screen.getByRole("button", { name: label }));
+    await userEvent.click(screen.getByRole("button", { name: "运行 Agent" }));
+
+    await screen.findByText("结构化答案");
+    const postCall = fetchMock.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+    );
+    const body = JSON.parse(String((postCall?.[1] as RequestInit).body));
+    expect(body).toMatchObject({
+      member_id: memberId,
+      user_input: userInput,
+      medication_name: medicationName,
+      city: "上海",
+      human_confirmation_granted: false,
+    });
+  });
+
   it("renders a grounded answer and sends the initial unconfirmed contract", async () => {
     const execution = makeAgentExecution();
     const fetchMock = runtimeFetch(execution);

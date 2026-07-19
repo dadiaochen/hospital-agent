@@ -710,14 +710,11 @@ class LangGraphAgentWorkflow:
         expected_sources = [
             ExpectedSource(
                 source_type="tool_evidence",
-                source_name=(
-                    successful_results[tool].source_name or tool
-                    if tool in successful_results
-                    else tool
-                ),
+                source_name=successful_results[tool].source_name or tool,
             )
             for tool in expected_tools
             if tool not in {"create_confirmation_draft", "search_safety_knowledge"}
+            and tool in successful_results
         ]
         if "search_safety_knowledge" in expected_tools:
             rag_names = [
