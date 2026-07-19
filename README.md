@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已完成至 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 的 `2D-2`：工具层可以在确认门禁通过后创建带审计信息的本地草稿。当前分支正在实现 `2E-1` 基础读取 API；路线图的完成状态仍以该文件为准。
+项目已完成至 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 的 `2E-1`：现有数据库读取能力已经通过 FastAPI DTO 暴露，并完成成员隔离、统一错误和知识检索测试。下一阶段为 `2E-2` 草稿与确认 API；路线图的完成状态仍以该文件为准。
 
 目前已经具备：
 
@@ -15,7 +15,8 @@
 - ContextManager 的角色最小视图、上下文压缩与 run 后 reset。
 - deterministic Tool Registry、固定 Harness 用例、可重复的评估和 Markdown 报告。
 - 数据库只读查询工具，以及只创建本地 draft 的确认门禁工具。
-- 家庭、药箱、处方/购药、药店库存与 Agent 审计的只读 FastAPI 接口；知识库搜索保留为学习实战题。
+- 家庭、药箱、处方/购药、药店库存、知识检索与 Agent 审计的只读 FastAPI 接口；知识搜索已通过专用自动化测试和 Docker PostgreSQL/Postman 验证。
+- Docker Compose 本地编排已验证 PostgreSQL、Redis、FastAPI 与 Next.js，镜像和 volume 数据位于 `E:\DockerData`；这仍是开发演示环境，不是生产部署。
 
 ## 四个演示场景
 
@@ -42,24 +43,33 @@ Tool Registry -> DB / RAG evidence -> Agent runtime
 
 ## 快速开始
 
-完整开发说明见 [开发者指南](docs/DEVELOPER_GUIDE.md)。最短的 Docker 启动方式如下：
+第一次运行请阅读 [本地环境、启动与部署指南](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)。本项目的完整学习与联调主路线使用 Docker Desktop、WSL 2、PostgreSQL 和 Redis；SQLite 只用于 pytest 隔离测试或 Docker 暂不可用时的临时排错，不作为完整联调环境。
+
+首次拉取镜像前，先在 Docker Desktop 中把磁盘镜像位置设为 `E:\DockerData`。然后从仓库根目录执行：
 
 ```powershell
 Copy-Item .env.example .env
-docker compose up --build
+docker compose up -d postgres redis
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m alembic upgrade head
+python scripts\seed.py
+docker compose up -d --build backend frontend
+docker compose ps
 ```
 
-启动后可访问：
+后端启动后可访问：
 
-- 前端：`http://localhost:3000`
 - API 文档：`http://localhost:8000/docs`
 - 服务健康检查：`http://localhost:8000/health`
+
+前端的首次安装与启动见详细指南，启动后位于 `http://localhost:3000`。
 
 运行后端测试：
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest
+New-Item -ItemType Directory -Force var | Out-Null
+python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest
 python -m compileall backend\app backend\tests
 ```
 
@@ -71,6 +81,7 @@ python -m compileall backend\app backend\tests
 
 - [总开发路线图](docs/DEVELOPMENT_ROADMAP.md)：阶段状态、顺序和 MVP 验收的唯一权威来源。
 - [开发者指南](docs/DEVELOPER_GUIDE.md)：环境、命令、分支、测试与提交流程。
+- [本地环境与部署](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)：从安装、`.venv`、`.env` 到 Docker、启动、停机和排错。
 - [技术设计](docs/TECH_DESIGN.md)：分层边界、数据流与当前实现边界。
 - [接口文档](docs/API_SPEC.md)：已实现接口与后续接口契约边界。
 - [Agent 工作流](docs/AGENT_WORKFLOW.md)：角色、工具、确认与安全流程。
@@ -82,7 +93,7 @@ python -m compileall backend\app backend\tests
 backend/       FastAPI、SQLAlchemy、services、tools、agent 与测试
 frontend/      Next.js 页面与组件
 docs/          面向协作者的项目文档和学习材料
-alembic/        数据库迁移
+backend/alembic/ 数据库迁移
 scripts/       可重复 seed 等辅助脚本
 AGENTS.md      AI Coding Harness 规则
 ```

@@ -70,7 +70,8 @@ pytest 默认将临时文件放到用户临时目录；某些 Windows 权限设�
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest
+New-Item -ItemType Directory -Force var | Out-Null
+python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest
 ```
 
 这把临时目录放到可控的项目目录，先排除环境噪声，再判断真正的断言失败。

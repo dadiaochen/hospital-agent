@@ -2,7 +2,7 @@
 
 ## 1. 设计目标
 
-本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前实现优先完成可重复的契约和 deterministic 基线，真实 HTTP 业务 API、LLM Gateway 与 LangGraph 编排按路线图后续阶段落地。
+本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前实现已完成可重复的契约、deterministic 基线和 2E-1 只读 HTTP API；LLM Gateway 与 LangGraph 编排按路线图后续阶段落地。
 
 ## 2. 分层架构
 
@@ -61,12 +61,18 @@ Context、工具、Trace 和评估先由 Pydantic 模型定义，并使用 `extr
 
 SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权查询和跳过确认。EvaluatorAgent 是 post-run 只读评估角色：读取冻结产物，计算质量结果，不能修改答案、调用业务工具或写业务状态。
 
+### 4.6 开发数据库与测试数据库分工
+
+完整本地学习、migration、seed、Swagger/Postman 和前后端联调使用 Docker 中的 PostgreSQL；Redis 同时作为后续缓存与队列基础设施启动。pytest 在导入应用前把 `DATABASE_URL` 覆盖为内存 SQLite，用于快速、可重复、互不污染的自动化测试。
+
+SQLite 测试通过只证明当前契约和业务行为在测试方言下成立，不能替代 PostgreSQL 的类型、事务、并发、连接池与 SQL 兼容性验证。数据库访问统一经过 SQLAlchemy，使两套环境共享 ORM、Service 和 API 代码，但仍必须分别验收。
+
 ## 5. 当前实现边界
 
 | 已实现 | 尚未实现 |
 | --- | --- |
 | ORM、迁移、seed、只读 DB tools、本地 draft tool | 草稿确认 API、生产认证。 |
-| 家庭、药箱、处方/购药、库存和 Agent 审计的只读 API | 知识库搜索 API（保留为学习实战题）。 |
+| 家庭、药箱、处方/购药、库存、知识检索和 Agent 审计的只读 API | 草稿创建、确认与拒绝 API（2E-2）。 |
 | ContextManager、Trace、fixture Harness、确定性评估 | 真实 Agent API、LangGraph 节点、LLM provider。 |
 | 权限、成员隔离、确认门禁和失败 fallback 的单元测试 | 医院/药店/推送等外部系统提交。 |
 

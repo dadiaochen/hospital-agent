@@ -5,7 +5,7 @@
 ## 新加入项目
 
 1. 阅读 [PRD.md](PRD.md)，理解业务问题、用户和非目标。
-2. 阅读 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)，完成环境启动、测试和分支准备。
+2. 第一次运行先阅读 [LOCAL_SETUP_AND_DEPLOYMENT.md](LOCAL_SETUP_AND_DEPLOYMENT.md)，再阅读 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) 准备分支和提交。
 3. 阅读 [TECH_DESIGN.md](TECH_DESIGN.md)，理解后端、数据、工具和 Agent 的边界。
 4. 根据要修改的模块继续阅读接口、数据库或 Agent 专项文档。
 
@@ -13,6 +13,7 @@
 
 | 文档 | 何时阅读 | 负责回答的问题 |
 | --- | --- | --- |
+| [LOCAL_SETUP_AND_DEPLOYMENT.md](LOCAL_SETUP_AND_DEPLOYMENT.md) | 第一次运行或环境故障时 | 如何配置 WSL 2、把 Docker 数据放到 E 盘、启动 PostgreSQL/Redis、停机和排错？ |
 | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | 开始开发前 | 如何启动、测试、分支和提交？ |
 | [TESTING_GUIDE.md](TESTING_GUIDE.md) | 编码和 review 时 | 测什么、如何复现、如何审查？ |
 | [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) | 选择下一项工作前 | 现在到哪个阶段，下一步能做什么？ |
@@ -38,7 +39,7 @@
 
 ## 从零学习本项目
 
-学习材料在 [learning/README.md](learning/README.md)。它不是运行手册，而是把本项目作为一堂完整工程课：从需求和风险边界开始，经过数据与后端、Agent Harness、测试 review，最后落到简历和面试表达。
+学习材料在 [learning/README.md](learning/README.md)。它不是运行手册，而是把本项目作为一堂完整工程课：从需求和风险边界开始，经过 Docker/PostgreSQL 环境、数据与后端、Agent Harness、测试 review，最后落到简历和面试表达。
 
 ## 文档维护规则
 

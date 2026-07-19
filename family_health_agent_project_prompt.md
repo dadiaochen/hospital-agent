@@ -67,7 +67,9 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 4. 代码完成后同步 README、技术/接口/数据库/Agent 文档和测试指南。
 5. 只有真实运行过的评估报告才能支持指标结论；mock fixture 指标只能说明规则已被计算。
 
-当前 `2E-1` 的 API 层只暴露已有 service 的读取能力，使用固定 demo user 做成员作用域隔离，并返回统一错误响应。不得在读取 API 中加入草稿写入、确认状态机、LangGraph、LLM 或外部医疗集成。
+已完成的 `2E-1` API 层只暴露已有 service 的读取能力，使用固定 demo user 做成员作用域隔离，并返回统一错误响应。不得在读取 API 中加入草稿写入、确认状态机、LangGraph、LLM 或外部医疗集成。
+
+本地完整联调使用 Docker PostgreSQL/Redis，pytest 使用内存 SQLite。知识搜索 DTO、service、route 和 `test_knowledge_api.py` 已完成，并通过 PostgreSQL/Postman 与自动化测试验收。PostgreSQL 实跑要求 Alembic 内部 `version_num` 容纳现有长 revision ID，该兼容修复位于对应长 revision 的迁移中，不改变 ORM 业务字段。
 
 ## 7. 阅读顺序
 

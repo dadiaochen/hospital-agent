@@ -77,8 +77,8 @@
 | 2C-2 | `DONE` | Deterministic AgentHarnessRuntime | 16 条 fixture 可离线回放 |
 | 2D-1 | `DONE` | 五类数据库只读工具 | DB 工具与 2C Harness 联合测试通过 |
 | 2D-2 | `DONE` | 待确认草稿写入工具 | 只写本地 draft / confirmation 审计 |
-| 2E-1 | `NEXT` | 基础读取 API | 家庭、药箱、处方、知识、run 可查询 |
-| 2E-2 | `PLANNED` | 草稿与确认 API | 本地状态机和幂等确认通过 |
+| 2E-1 | `DONE` | 基础读取 API | 家庭、药箱、处方、知识、run 可查询 |
+| 2E-2 | `NEXT` | 草稿与确认 API | 本地状态机和幂等确认通过 |
 | 2F-1 | `PLANNED` | Hybrid RAG | 关键词稳定、向量检索可选 |
 | 2F-2 | `PLANNED` | Model Gateway | LLM 与 deterministic fallback 同契约 |
 | 2G-1 | `PLANNED` | LangGraph Multi-Agent 工作流 | 四场景节点和 SafetyAgent 跑通 |
@@ -98,9 +98,10 @@ main
   -> 2C-2 deterministic Harness Runtime
   -> 2D-1 database-backed read-only tools
   -> 2D-2 confirmation-gated local draft writes
+  -> 2E-1 scoped read APIs and knowledge search
 ```
 
-2A 至 2B-3 已包含在初始项目基线中。2C-1、2C-2、2D-1 已拆成独立提交；2D-2 在其线性基础上实现，并通过完整后端测试。旧平行分支和 GitHub Desktop stash 暂时只作为恢复备份，待远程推送确认后再清理。
+2A 至 2B-3 已包含在初始项目基线中。2C-1 至 2E-1 已按阶段形成线性提交；2E-1 完成固定 demo-user 作用域的读取 API、知识检索学习实战、PostgreSQL/Postman 验证和完整后端回归。
 
 ## 8. 后续阶段详细定义
 

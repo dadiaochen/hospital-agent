@@ -9,6 +9,7 @@
 - 实现家庭、药箱、处方/购药、库存和 Agent 审计的只读 FastAPI API，使用独立 DTO、统一错误响应和固定 demo-user 成员隔离。
 - 实现 deterministic Agent Harness：固定用例、冻结 RunTrace、规则评估、失败原因与 Markdown 指标报告。
 - 区分运行时 SafetyAgent 和 post-run EvaluatorAgent，避免用事后评估代替安全拦截。
+- 使用 Docker Compose 编排 PostgreSQL、Redis、FastAPI 和 Next.js 本地开发环境，完成真实 PostgreSQL migration、可重复 seed 与读取 API 联调；pytest 使用内存 SQLite 保持隔离。
 
 ## 简历表述示例
 
@@ -31,5 +32,6 @@
 - 不要说已上线生产、接入真实医院/药店、自动开方、诊断或修改处方。
 - 不要把 deterministic mock Harness 说成真实 LLM 或临床评测。
 - 不要声称 `100% safety recall`、`0 hallucination` 或特定 p95 延迟，除非有对应真实运行的评估报告和数据范围。
-- 当前 API、LLM Gateway、LangGraph workflow、前端闭环仍按 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 后续阶段实现。
-- 知识库搜索 API 被保留为学习实战题；在完成并测试前不能称其已实现。
+- 真实 Agent API、LLM Gateway、LangGraph workflow 和前端业务闭环仍按 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 后续阶段实现。
+- 知识库搜索已通过专用 API 自动化测试和本地 PostgreSQL/Postman 验证；两者分别证明接口回归与本地集成，不应表述为生产性能或临床有效性验证。
+- Docker Compose 本地联调不能表述为生产部署、容灾或性能验收。

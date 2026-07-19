@@ -12,13 +12,20 @@
 | 工具 | `test_tool_registry.py`、`test_mock_tools.py`、`test_db_backed_tools.py` | 权限、schema、evidence、只读和失败 fallback。 |
 | 草稿写入 | `test_confirmation_draft_tool.py` | 确认门禁、幂等、事务回滚、只写本地 draft。 |
 | Harness | `test_deterministic_evaluator.py`、`test_harness_runner.py`、`test_harness_runtime.py` | 固定用例回放、评估规则和汇总报告。 |
-| API | `test_health.py` | 当前已经实现的系统健康检查。 |
+| API | `test_health.py`、`test_read_api.py`、`test_knowledge_api.py` | HTTP 参数、依赖、Service、响应 DTO 和统一错误。 |
+
+## 数据库验证分工
+
+- pytest 在 `backend/tests/conftest.py` 中把数据库切换为 `sqlite:///:memory:`，适合快速、隔离地验证代码行为。
+- migration、seed、Swagger、Postman 和前后端联调使用 Docker PostgreSQL，验证真实驱动、类型、连接与容器网络。
+- 两者都通过才算完成本地开发验收。SQLite 绿灯不能证明 PostgreSQL 兼容；本地 PostgreSQL 绿灯也不能代表生产负载或容灾能力。
 
 ## 运行命令
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest
+New-Item -ItemType Directory -Force var | Out-Null
+python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest
 python -m compileall backend\app backend\tests
 ```
 

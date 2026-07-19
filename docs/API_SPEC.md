@@ -29,6 +29,7 @@ FastAPI Swagger 位于 `http://localhost:8000/docs`。root 与 health response �
 | `GET` | `/api/agent-runs?member_id=` | `AgentRunListResponse` | 当前 demo user 的 run，可按成员过滤。 |
 | `GET` | `/api/agent-runs/{run_id}` | `AgentRunResponse` | 单个 run，不返回内部 `raw_state`。 |
 | `GET` | `/api/agent-runs/{run_id}/tool-calls` | `AgentToolCallListResponse` | 当前用户 run 的工具审计。 |
+| `GET` | `/api/knowledge/search?q=&category=` | `KnowledgeSearchResponse` | 确定性知识 chunk 搜索，返回稳定 `source_id`。 |
 
 成功响应的字段由 `backend/app/schemas/` 中的 Pydantic DTO 定义，时间和日期按 JSON 标准格式序列化。所有已处理错误使用同一结构：
 
@@ -44,9 +45,11 @@ FastAPI Swagger 位于 `http://localhost:8000/docs`。root 与 health response �
 
 路由不写 SQL；成员作用域、查询与空资源判断位于 `ReadApiService`。库存没有匹配项时返回空 `items`，因为搜索没有结果不是权限错误。
 
-## 4. 留给学习者的完整 API：知识库搜索
+## 4. 2E-1 学习者 API：知识库搜索
 
-`GET /api/knowledge/search` 属于 2E-1 范围，但在本分支刻意未实现。完整接口契约、DTO、service 查询、路由接入、错误语义、Swagger 检查和测试验收见 [06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md](learning/06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md)。完成它后，2E-1 的所有读取资源才算齐全。
+`GET /api/knowledge/search` 的 DTO、service、路由注册和统一 `422` 已实现，并已在 Docker PostgreSQL seed 数据上通过真实 HTTP 验证。查询无命中返回 `200 + items=[]`；缺失或空白 `q` 返回 `422 validation_error`；每个命中项带 `knowledge:{document_id}:{chunk_id}` 来源指针。
+
+`backend/tests/test_knowledge_api.py` 已完成，覆盖正常命中、分类过滤、空结果、缺失/空白参数、统一 `422` 与 OpenAPI 注册。完整代码阅读、Postman 和测试步骤见 [06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md](learning/06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md)。
 
 ## 5. 后续草稿 API 边界
 
@@ -60,4 +63,4 @@ FastAPI Swagger 位于 `http://localhost:8000/docs`。root 与 health response �
 4. 不存在、越权、schema 失败和状态冲突要有可预测的错误格式。
 5. 含有医疗敏感内容的写操作在 API 层之外还必须经过 safety 与 confirmation 规则。
 
-知识库搜索完成前，2E-1 仍不应在路线图中标记为完成。草稿和确认 API 仍属于 2E-2，不应被读取接口提前实现。
+2E-1 已通过知识库搜索专用自动化测试。草稿和确认 API 仍属于 2E-2，不应被读取接口提前实现。
