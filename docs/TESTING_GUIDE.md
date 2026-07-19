@@ -70,5 +70,6 @@ Review Agent UI 时再检查首次 POST 是否固定为 `false`，确认按钮�
 
 - 2G-2 Agent API/runtime 持久化已实现，但多模型线上质量验证、生产认证和外部医院/药店集成尚未实现，不能用 deterministic 成功结果替代真实验证。
 - 3A/3B 页面已具备契约与组件测试；3C 仍需补充真实 PostgreSQL/API/UI 四场景 E2E 与真实 Trace Harness。
+- 2026-07-19 使用 npm 官方 registry 执行 `npm audit --omit=dev` 时，Next 14 生产依赖报告 1 项 high 和 1 项 moderate；官方自动修复建议升级到 Next 16，属于 major upgrade。当前本地演示不因此冒充生产安全版本，升级与回归应作为部署前独立任务处理。
 - `agent_eval_report.example.md` 是固定 mock fixture 的计算结果，不是生产质量、临床效果或安全率证明。
 - 本项目的配置示例只用于本地开发。生产环境必须从安全的环境变量或秘密管理系统注入连接信息和模型 Key。
