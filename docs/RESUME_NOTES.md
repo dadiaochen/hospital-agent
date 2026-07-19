@@ -65,3 +65,5 @@
 - 4B 已验证配置契约、Runtime 接线、HTTP mock、fallback 和无 Key 模式；没有用户真实 Key，所以不能说某个云模型或本地 LLM 已在业务四场景通过真实质量验收。
 
 本地报告记录的 18 ms 是冻结 Trace 内工具与 deterministic model gateway 累计 latency 的 p95，不是浏览器端到端延迟或服务 SLO。简历优先描述“建立评估维度与可重复 E2E”，只有在面试官追问报告范围时再说明样本、环境和口径。
+
+项目化面试回答、原题归并和记忆框架统一维护在 [learning/INTERVIEW_QUESTION_BANK.md](learning/INTERVIEW_QUESTION_BANK.md)。该题库必须引用当前代码事实；新问题涉及未使用技术时先记录取舍，不能为了丰富简历临时虚构技术栈。

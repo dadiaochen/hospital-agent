@@ -89,7 +89,7 @@
 | 3D | `DONE` | 一键演示与项目收口 | Docker、演示脚本、README、简历材料完成 |
 | 4A | `DONE` | 轻量向量 RAG | pgvector + 本地 Embedding 可选启用，关键词模式仍可独立运行 |
 | 4B | `DONE` | 真实 LLM 接入与验证 | OpenAI-compatible 配置、连通性检查、失败回退可复现 |
-| 4C | `NEXT` | 面经学习与项目答题库 | 原题归并、项目化回答、理解记忆和技术取舍持续维护 |
+| 4C | `DONE` | 面经学习与项目答题库 | 原题归并、项目化回答、理解记忆和技术取舍持续维护 |
 
 ## 7. 已完成阶段基线
 
@@ -113,9 +113,10 @@ main
   -> 3D one-command demo and MVP closure
   -> 4A lightweight pgvector and FastEmbed RAG
   -> 4B runtime-wired optional LLM and provider diagnostics
+  -> 4C maintainable project interview question bank
 ```
 
-2A 至 2B-3 已包含在初始项目基线中。2C-1 至 4B 已按阶段形成唯一线性历史。3D 形成可重复的本地 MVP 交付；4A 复用 PostgreSQL 接入 pgvector 与按需加载的 FastEmbed 中文模型；4B 将可选 provider 接入 Runtime 默认创建链，并增加默认不联网、显式 `--live` 才调用外部模型的诊断。项目仍保持 MVP Complete；当前唯一 `NEXT` 为 4C。
+2A 至 2B-3 已包含在初始项目基线中。2C-1 至 4C 已按阶段形成唯一线性历史。3D 形成可重复的本地 MVP 交付；4A 增加轻量向量 RAG；4B 补全双模式 LLM Runtime 与诊断；4C 建立保留原题、归并答案和记录技术取舍的面经问题库。项目仍保持 MVP Complete；当前没有新的 `NEXT`，任何新增阶段必须先在本文档定义。
 
 ## 8. 阶段详细定义
 
@@ -329,6 +330,8 @@ User Input
 - 新面经先做相似题归并；相似题追加原句，不重复维护冲突答案；新主题才新增条目。
 - 项目未使用的技术必须标记为“未使用”，并记录“略过 / 仅学习 / 进入路线图”的取舍，不能包装成已实现亮点。
 - 题库至少初始化 RAG、LLM、Dify 工作流、自研 Agent、环境口径、Loop 和后端分层主题。
+
+完成证据：`docs/learning/INTERVIEW_QUESTION_BANK.md` 已按七个主题归并当前对话中的原题，分别提供 30 秒回答、项目展开、技术解释、代码证据、记忆框架和追问；未实现的 RAGFlow、真实 LLM 质量、生产环境和提醒闭环均有明确取舍与真实性边界。
 
 禁止范围：虚构生产经历、虚构性能/安全指标、为迎合面试临时引入无必要的复杂依赖。
 

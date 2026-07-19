@@ -25,7 +25,7 @@ MockTransport 覆盖：
 - Runtime 默认工作流使用环境感知工厂；
 - 工作流只关闭自己创建的 Gateway。
 
-## 2. Docker 无 Key实跑
+## 2. Docker 无 Key 实跑
 
 使用根目录 `.env.example` 默认值重建 Compose：
 

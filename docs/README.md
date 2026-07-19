@@ -32,7 +32,7 @@
 | [vector_rag_report.4a.md](vector_rag_report.4a.md) | 4A 本地 pgvector/FastEmbed 语义 smoke、四场景回归和资源快照口径。 |
 | [MODEL_GATEWAY.md](MODEL_GATEWAY.md) | 模型 provider、结构化输出、安全门禁、降级和调用 Trace。 |
 | [LLM_CONFIGURATION.md](LLM_CONFIGURATION.md) | deterministic/OpenAI-compatible 双模式、`.env` 字段、诊断和恢复离线模式。 |
-| [model_gateway_report.4b.md](model_gateway_report.4b.md) | 4B 自动化、Docker 无 Key实跑和真实 provider 待验证口径。 |
+| [model_gateway_report.4b.md](model_gateway_report.4b.md) | 4B 自动化、Docker 无 Key 实跑和真实 provider 待验证口径。 |
 | [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md) | 有界状态图、节点路由、工具调用、确认与运行产物。 |
 | [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md) | Agent 运行 API、run/tool-call 持久化、冻结回放、幂等与确认续跑。 |
 | [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) | Next.js 数据页、成员上下文、API client 和异步状态。 |
@@ -57,6 +57,8 @@
 ## 从零学习本项目
 
 学习材料在 [learning/README.md](learning/README.md)。它不是运行手册，而是把本项目作为一堂完整工程课：从需求和风险边界开始，经过 Docker/PostgreSQL 环境、数据与后端、Agent Harness、测试 review，最后落到简历和面试表达。
+
+持续追加的真实面试问法统一进入 [项目面经问题库](learning/INTERVIEW_QUESTION_BANK.md)。相似原题追加到同一主题；项目未使用的技术必须先记录取舍，不能直接包装成已实现亮点。
 
 ## 文档维护规则
 

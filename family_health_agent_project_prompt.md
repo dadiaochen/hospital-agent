@@ -93,6 +93,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `4B` 补全可选真实 LLM 的运行时接线。`LangGraphAgentWorkflow` 默认通过环境感知工厂创建 Model Gateway；无 Key 时继续使用 deterministic provider，配置 `openai_compatible` 时只有 FinalAnswer 节点调用外部模型。独立诊断命令默认不联网，显式 `--live` 才发送一次结构化非医疗请求，并区分 primary 验证与 fallback 成功。Runtime 在每次 run 后释放自有 HTTP client；Key、完整 prompt 和原始 provider 文本不进入 Trace。自动化只证明契约和失败处理，未提供真实 Key 时不得声称真实模型质量、成本或延迟指标。
 
+`4C` 建立持续维护的项目面经问题库。每个主题保留用户或面试官原题原句，并提供 30 秒短答、项目展开回答、技术解释、代码证据、记忆方法和可能追问。相似题追加到已有主题，不复制冲突答案；新考点才新增条目。项目未使用的技术必须标记为仅学习、候选或明确不做，并先讨论必要性再决定是否进入路线图，不能包装成已实现经历。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

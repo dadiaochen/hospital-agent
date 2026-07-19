@@ -22,6 +22,7 @@
 | [14 3D MVP 交付](14_3D_MVP_DELIVERY.md) | 从零理解 Docker 初始化链、healthcheck、固定演示、关键词/向量 RAG 和 deterministic/真实 LLM 的边界。 | `docker-compose.yml`、`docker-entrypoint.sh`、`demo_runner.py`、`start_demo.ps1` |
 | [15 4A 轻量向量 RAG](15_4A_LIGHTWEIGHT_VECTOR_RAG.md) | 从零理解 Embedding、pgvector、索引字段、query/passage 编码、来源回填、降级、部署和 review。 | `embedding_provider.py`、`vector_store.py`、`0003_lightweight_vector_rag.py`、`test_vector_rag.py` |
 | [16 4B LLM 双模式](16_4B_LLM_DUAL_MODE.md) | 理解无 Key deterministic 与真实 OpenAI-compatible provider 如何共用 Gateway，以及配置、诊断、资源释放和失败 review。 | `model_gateway.py`、`model_provider_diagnostic.py`、`langgraph_workflow.py`、`agent_runtime_service.py` |
+| [项目面经问题库](INTERVIEW_QUESTION_BANK.md) | 保留真实原题并按考点归并，练习 30 秒/2 分钟回答、代码证据、记忆方法和未使用技术取舍。 | 本仓库实现与各阶段学习章 |
 
 ## 使用方法
 
@@ -32,3 +33,5 @@
 第一周完成模块 01 和 02：理解范围、数据模型和后端分层。第二周完成模块 03：理解为什么 Agent 需要 Context、工具和安全门禁。第三周完成模块 04 和 05：学会写测试、review PR，并把项目讲成一个可信的实习作品。
 
 学习资料讲解的是当前代码与设计，不会替代 [DEVELOPMENT_ROADMAP.md](../DEVELOPMENT_ROADMAP.md) 的实施顺序。
+
+以后收到新面经时，优先更新 [项目面经问题库](INTERVIEW_QUESTION_BANK.md)：相似题只追加原句和必要差异，新考点才新增主题。若题目涉及项目未使用技术，先讨论“略过、仅学习或进入路线图”，再决定是否改代码。

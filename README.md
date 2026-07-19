@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已按 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 完成 `4B`，保持本地演示级 **MVP Complete**：既可启用轻量向量 RAG，也可选择真实 OpenAI-compatible LLM；二者默认关闭，无模型和无 Key 时仍可完整运行。当前唯一下一阶段是 `4C` 面经学习与项目答题库。
+项目已按 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 完成当前定义到 `4C` 的全部阶段，保持本地演示级 **MVP Complete**：既可启用轻量向量 RAG，也可选择真实 OpenAI-compatible LLM；二者默认关闭，无模型和无 Key 时仍可完整运行。面经问题库已建立；若要增加新代码阶段，必须先更新唯一总路线图。
 
 目前已经具备：
 
@@ -24,6 +24,7 @@
 - Next.js 数据页面与 Agent 演示入口：共享成员选择、四类场景、Tool/RAG 来源、安全提示、确认续跑和 Trace/Evaluation 详情。
 - Runtime E2E Harness：从 FastAPI 外部驱动 7 条 Trace 和 2 条 API Guard，将真实冻结产物经脱敏 adapter 交给独立 Evaluator，并生成 JSON/Markdown 报告。
 - 一键演示交付：Compose 自动执行 migration 与幂等 seed，production-mode Next.js 和 FastAPI 通过 healthcheck 后运行固定四场景，并生成不含成员/run ID 或答案正文的脱敏报告。
+- 可持续面经题库：保留每道原题原句，将相似问题归并到项目化回答，补充原理、代码证据、记忆方法、追问和未使用技术取舍。
 
 ## 四个演示场景
 
@@ -213,7 +214,7 @@ python -m pytest backend\tests\test_mvp_demo_runner.py -q `
 - [RAG 检索设计](docs/RAG_RETRIEVAL.md)：Retriever 契约、来源回填、混合检索和降级规则。
 - [Model Gateway 设计](docs/MODEL_GATEWAY.md)：provider 契约、结构化输出、安全检查和 fallback trace。
 - [LLM 双模式配置](docs/LLM_CONFIGURATION.md)：在哪里填 Key/base/model、怎样离线检查、真实连通和恢复默认模式。
-- [4B Model Gateway 验证报告](docs/model_gateway_report.4b.md)：自动化、Docker 无 Key实跑和尚未验证范围。
+- [4B Model Gateway 验证报告](docs/model_gateway_report.4b.md)：自动化、Docker 无 Key 实跑和尚未验证范围。
 - [LangGraph 工作流](docs/LANGGRAPH_WORKFLOW.md)：图节点、条件路由、状态、确认门和运行产物。
 - [Agent Runtime API](docs/AGENT_RUNTIME_API.md)：运行入口、持久化、冻结回放、幂等与确认续跑。
 - [前端架构](docs/FRONTEND_ARCHITECTURE.md)：成员切换、API 客户端、页面状态和跨成员防线。
@@ -221,6 +222,7 @@ python -m pytest backend\tests\test_mvp_demo_runner.py -q `
 - [Runtime E2E Harness](docs/RUNTIME_E2E_HARNESS.md)：真实 API Trace、脱敏 adapter、Guard、指标和报告运行方式。
 - [3D 交付学习章](docs/learning/14_3D_MVP_DELIVERY.md)：从零理解 Docker 初始化链、固定 Demo Runner、关键词 RAG 与真实 LLM 接入边界。
 - [4B LLM 双模式学习章](docs/learning/16_4B_LLM_DUAL_MODE.md)：从配置、运行时接线、资源所有权到失败 review。
+- [项目面经问题库](docs/learning/INTERVIEW_QUESTION_BANK.md)：原题归并、30 秒/2 分钟回答、代码证据、理解记忆和技术取舍。
 - [从零学习路线](docs/learning/README.md)：需求拆解、代码设计、review 和简历表达。
 
 ## 仓库结构
@@ -236,6 +238,6 @@ AGENTS.md      AI Coding Harness 规则
 
 ## 贡献方式
 
-从最新 `main` 创建一个只对应单一目标的 `codex/...` 分支。完成最小实现、测试和文档同步后再 review、合并与推送。当前路线图的唯一下一阶段是 `4C`；若要扩展其他范围，先在 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 中定义，而不是在 README 临时编号。
+从最新 `main` 创建一个只对应单一目标的 `codex/...` 分支。完成最小实现、测试和文档同步后再 review、合并与推送。当前路线图没有新的 `NEXT`；若要扩展范围，先在 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 中定义，而不是在 README 临时编号。
 
 项目亮点和简历表达边界见 [RESUME_NOTES.md](docs/RESUME_NOTES.md)。
