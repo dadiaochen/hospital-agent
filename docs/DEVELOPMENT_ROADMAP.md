@@ -87,6 +87,9 @@
 | 3B | `DONE` | Agent 对话、确认与 Trace UI | 四场景前端闭环可演示 |
 | 3C | `DONE` | E2E 与真实 Trace Harness | API/UI 场景、隔离、安全回归通过 |
 | 3D | `DONE` | 一键演示与项目收口 | Docker、演示脚本、README、简历材料完成 |
+| 4A | `NEXT` | 轻量向量 RAG | pgvector + 本地 Embedding 可选启用，关键词模式仍可独立运行 |
+| 4B | `PLANNED` | 真实 LLM 接入与验证 | OpenAI-compatible 配置、连通性检查、失败回退可复现 |
+| 4C | `PLANNED` | 面经学习与项目答题库 | 原题归并、项目化回答、理解记忆和技术取舍持续维护 |
 
 ## 7. 已完成阶段基线
 
@@ -110,7 +113,7 @@ main
   -> 3D one-command demo and MVP closure
 ```
 
-2A 至 2B-3 已包含在初始项目基线中。2C-1 至 3D 已按阶段形成唯一线性历史。3D 在全新 Docker PostgreSQL volume 上验证 migration、幂等 seed、四项 healthcheck 与固定四场景，形成可重复的本地 MVP 交付。当前没有已定义的 `NEXT`；项目状态为本路线图口径下的 MVP Complete。
+2A 至 2B-3 已包含在初始项目基线中。2C-1 至 3D 已按阶段形成唯一线性历史。3D 在全新 Docker PostgreSQL volume 上验证 migration、幂等 seed、四项 healthcheck 与固定四场景，形成可重复的本地 MVP 交付。项目仍保持 MVP Complete；4A 至 4C 是不改变医疗安全边界的后 MVP 学习与工程增强，当前唯一 `NEXT` 为 4A。
 
 ## 8. 阶段详细定义
 
@@ -271,6 +274,59 @@ User Input
 - README 包含架构、运行、测试、演示和限制。
 - API、数据库、Agent、Context、Evaluator 和 Roadmap 文档一致。
 - 简历描述只陈述真实实现和真实报告结果。
+
+### 4A 轻量向量 RAG
+
+目标：在不引入 RAGFlow 整套服务的前提下，为现有 Hybrid Retriever 接入可真实运行的本地 Embedding 与 PostgreSQL 向量检索；默认关键词模式和 3D 演示不得依赖模型下载。
+
+前置依赖：3D 已完成并形成可回滚里程碑。
+
+允许范围：知识库 ORM 的向量字段、独立 Alembic migration、`backend/app/rag/`、索引脚本、RAG 配置、Docker PostgreSQL 镜像、RAG 测试和相关文档。
+
+验收：
+
+- PostgreSQL 使用 pgvector 扩展；查询采用精确余弦距离，不为小型演示库提前引入高内存向量服务。
+- 本地 Embedding 默认使用轻量中文模型，模型缓存落在 E 盘项目 `var/models`，只在显式启用或执行索引时加载。
+- `RAG_VECTOR_ENABLED=false` 时不加载 Embedding，关键词检索和全部既有测试保持可用。
+- 向量模式返回既有 `source_id`、`document_id`、`chunk_id`、版本和用途，不能返回无法回溯的文本。
+- Embedding 缺失、索引缺失或向量查询失败时安全回退关键词检索，并记录明确的 fallback reason。
+- 固定中文同义表达可以通过真实向量检索命中知识分块，并有 PostgreSQL 集成验证步骤。
+
+禁止范围：部署 RAGFlow、抓取未经审核的互联网医疗内容、由模型生成知识并自动写回、把向量服务设为默认启动前置条件。
+
+### 4B 真实 LLM 接入与验证
+
+目标：在保留 deterministic 默认模式的同时，提供清晰的 OpenAI-compatible provider 配置位置、无密钥检查、带密钥连通性检查和安全 fallback 验证。
+
+前置依赖：4A 完成。
+
+允许范围：Model Gateway 配置与诊断脚本、环境变量示例、测试和部署/学习文档。
+
+验收：
+
+- 仓库不保存真实 API Key；用户只在根目录 `.env` 填写 provider、base URL、模型名和 Key。
+- 未配置 Key 时项目继续使用 deterministic provider，前后端和固定演示照常运行。
+- 配置 OpenAI-compatible provider 后可执行独立连通性检查；超时、HTTP 错误、schema 错误和不安全输出仍回退。
+- 文档明确哪些模型可接、如何切换、如何确认实际调用和如何恢复离线模式。
+
+禁止范围：提交密钥、实现多模型调度平台、宣称未实际验证的模型效果或成本指标。
+
+### 4C 面经学习与项目答题库
+
+目标：建立可增量维护的面经文档，把相同或相似原题归到同一知识主题，同时保留每一道原题的原句，并给出基于本项目真实实现的回答、技术解释和记忆方法。
+
+前置依赖：4B 完成。
+
+允许范围：`docs/learning/`、文档导航、README 学习入口和项目变更记录。
+
+验收：
+
+- 每个主题包含原题原句列表、面试短答、项目展开回答、原理解释、代码证据、记忆框架和可能追问。
+- 新面经先做相似题归并；相似题追加原句，不重复维护冲突答案；新主题才新增条目。
+- 项目未使用的技术必须标记为“未使用”，并记录“略过 / 仅学习 / 进入路线图”的取舍，不能包装成已实现亮点。
+- 题库至少初始化 RAG、LLM、Dify 工作流、自研 Agent、环境口径、Loop 和后端分层主题。
+
+禁止范围：虚构生产经历、虚构性能/安全指标、为迎合面试临时引入无必要的复杂依赖。
 
 ## 9. MVP 完成定义
 
