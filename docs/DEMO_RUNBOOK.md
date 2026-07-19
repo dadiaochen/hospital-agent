@@ -102,7 +102,7 @@ MODEL_TIMEOUT_MS=10000
 docker compose up -d --build backend frontend --wait
 ```
 
-真实 provider 输出仍必须通过 JSON、Pydantic schema 和安全检查；超时、HTTP、schema 或 safety 失败会记录脱敏 attempt trace 并回退 deterministic provider。当前没有真实 LLM 质量报告，因此不能宣称模型准确率或线上安全率。
+真实 provider 输出仍必须通过 JSON、Pydantic schema 和安全检查；超时、HTTP、schema 或 safety 失败会记录脱敏 attempt trace 并回退 deterministic provider。重建 backend 后先运行 `docker compose exec -T backend python -m scripts.check_model_provider --live`；只有 `primary_provider_verified=true` 才能说明 primary 连通。当前没有真实 LLM 质量报告，因此不能宣称模型准确率或线上安全率。配置字段与排错见 [LLM_CONFIGURATION.md](LLM_CONFIGURATION.md)。
 
 ### 可选向量检索
 

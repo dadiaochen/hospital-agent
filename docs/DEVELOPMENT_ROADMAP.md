@@ -88,8 +88,8 @@
 | 3C | `DONE` | E2E 与真实 Trace Harness | API/UI 场景、隔离、安全回归通过 |
 | 3D | `DONE` | 一键演示与项目收口 | Docker、演示脚本、README、简历材料完成 |
 | 4A | `DONE` | 轻量向量 RAG | pgvector + 本地 Embedding 可选启用，关键词模式仍可独立运行 |
-| 4B | `NEXT` | 真实 LLM 接入与验证 | OpenAI-compatible 配置、连通性检查、失败回退可复现 |
-| 4C | `PLANNED` | 面经学习与项目答题库 | 原题归并、项目化回答、理解记忆和技术取舍持续维护 |
+| 4B | `DONE` | 真实 LLM 接入与验证 | OpenAI-compatible 配置、连通性检查、失败回退可复现 |
+| 4C | `NEXT` | 面经学习与项目答题库 | 原题归并、项目化回答、理解记忆和技术取舍持续维护 |
 
 ## 7. 已完成阶段基线
 
@@ -112,9 +112,10 @@ main
   -> 3C Runtime E2E and real Trace Harness
   -> 3D one-command demo and MVP closure
   -> 4A lightweight pgvector and FastEmbed RAG
+  -> 4B runtime-wired optional LLM and provider diagnostics
 ```
 
-2A 至 2B-3 已包含在初始项目基线中。2C-1 至 4A 已按阶段形成唯一线性历史。3D 形成可重复的本地 MVP 交付；4A 复用 PostgreSQL 接入 pgvector 0.8.5 与按需加载的 FastEmbed 中文 512 维模型，并保留默认关键词模式。项目仍保持 MVP Complete；当前唯一 `NEXT` 为 4B。
+2A 至 2B-3 已包含在初始项目基线中。2C-1 至 4B 已按阶段形成唯一线性历史。3D 形成可重复的本地 MVP 交付；4A 复用 PostgreSQL 接入 pgvector 与按需加载的 FastEmbed 中文模型；4B 将可选 provider 接入 Runtime 默认创建链，并增加默认不联网、显式 `--live` 才调用外部模型的诊断。项目仍保持 MVP Complete；当前唯一 `NEXT` 为 4C。
 
 ## 8. 阶段详细定义
 
@@ -309,6 +310,8 @@ User Input
 - 未配置 Key 时项目继续使用 deterministic provider，前后端和固定演示照常运行。
 - 配置 OpenAI-compatible provider 后可执行独立连通性检查；超时、HTTP 错误、schema 错误和不安全输出仍回退。
 - 文档明确哪些模型可接、如何切换、如何确认实际调用和如何恢复离线模式。
+
+完成证据：Runtime 默认工作流已使用环境感知工厂；无 `--live` 的诊断不发 HTTP，显式 live 会区分 primary 成功与 fallback 成功；自动化覆盖配置、HTTP 契约、密钥不泄露、失败回退和 HTTP client 所有权。未提供真实 Key，因此不产生真实模型效果指标。
 
 禁止范围：提交密钥、实现多模型调度平台、宣称未实际验证的模型效果或成本指标。
 

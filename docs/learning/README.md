@@ -21,6 +21,7 @@
 | [13 3C Runtime E2E 与 Dify](13_3C_RUNTIME_E2E_AND_DIFY.md) | 从 Dify 节点设计过渡到自研 Runtime Harness，理解环境、真实 Trace、脱敏、Guard 与面试表达。 | `runtime_harness.py`、`runtime_trace_adapter.py`、`test_runtime_e2e_harness.py` |
 | [14 3D MVP 交付](14_3D_MVP_DELIVERY.md) | 从零理解 Docker 初始化链、healthcheck、固定演示、关键词/向量 RAG 和 deterministic/真实 LLM 的边界。 | `docker-compose.yml`、`docker-entrypoint.sh`、`demo_runner.py`、`start_demo.ps1` |
 | [15 4A 轻量向量 RAG](15_4A_LIGHTWEIGHT_VECTOR_RAG.md) | 从零理解 Embedding、pgvector、索引字段、query/passage 编码、来源回填、降级、部署和 review。 | `embedding_provider.py`、`vector_store.py`、`0003_lightweight_vector_rag.py`、`test_vector_rag.py` |
+| [16 4B LLM 双模式](16_4B_LLM_DUAL_MODE.md) | 理解无 Key deterministic 与真实 OpenAI-compatible provider 如何共用 Gateway，以及配置、诊断、资源释放和失败 review。 | `model_gateway.py`、`model_provider_diagnostic.py`、`langgraph_workflow.py`、`agent_runtime_service.py` |
 
 ## 使用方法
 

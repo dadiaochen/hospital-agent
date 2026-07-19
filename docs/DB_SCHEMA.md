@@ -93,3 +93,6 @@ Alembic 默认将内部 `alembic_version.version_num` 建为 `VARCHAR(32)`，但
 3C Runtime E2E 同样没有修改 ORM、Alembic migration 或 seed。Runner 只通过现有 HTTP API 触发 run 并读取冻结 artifacts；脱敏 JSON/Markdown 报告属于测试产物，不写入业务表。PostgreSQL 集成报告复用现有 seed 数据，pytest 则继续使用隔离 SQLite。
 
 3D 没有新增 ORM 字段或 migration，也没有修改 seed 业务内容。Docker backend 入口只是自动执行现有 `alembic upgrade head` 与幂等 seed；固定四场景通过现有 API 创建 run、tool-call 审计和本地草稿，外部状态始终是 `not_submitted`。
+## 10. 4B 模型接入说明
+
+4B 没有新增 ORM 字段或 Alembic migration。模型 provider 配置只来自 backend 环境变量；Key、完整 prompt 和 provider 原始文本不写入数据库。既有 `agent_runs.raw_state` 只保存版本化、脱敏的 `ModelCallTrace`。

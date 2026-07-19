@@ -28,7 +28,7 @@
 
 设计 Hybrid RAG 检索层，以 PostgreSQL 关键词检索作为稳定基线，接入 FastEmbed CPU 中文模型与 pgvector 精确余弦检索；向量召回只提供 document/chunk 指针，正文由权威知识表回填，索引/模型异常时记录原因并安全降级。
 
-实现可替换 Model Gateway，以 Pydantic 约束结构化输出、规则门禁拦截越权文本，并为 provider 超时、HTTP/schema/safety 失败记录逐次 Trace 和 deterministic fallback。
+实现可替换 Model Gateway，将 deterministic 与 OpenAI-compatible provider 接入同一 Runtime 创建链；以 Pydantic 约束结构化输出、规则门禁拦截越权文本，并为 provider 超时、HTTP/schema/safety 失败记录逐次 Trace 和 deterministic fallback。提供默认不联网、显式 live 才发请求的诊断器，区分 primary 成功与降级成功。
 
 实现有界 LangGraph 业务编排，将 Planner、角色最小上下文、证据工具、安全拦截、人工确认草稿和 post-run 评估连接为无循环 DAG；通过冻结 RunTrace 保留成员、来源、确认与失败原因。
 
@@ -62,5 +62,6 @@
 - 知识库搜索已完成自动化与本地 PostgreSQL/Postman 验证，但不能把本地联调描述为生产检索质量或临床有效性验证。
 - 不要把 RAG `score` 描述为医疗正确率。4A 的 90.81 MB 缓存、容器内存和 4/4 场景是一次本地开发验证，不是容量、p95、临床安全或生产 SLO。
 - 不要把 MockTransport 或 deterministic provider 测试描述为真实 LLM 效果，也不要宣称模型准确率、安全率、成本或 p95 延迟。
+- 4B 已验证配置契约、Runtime 接线、HTTP mock、fallback 和无 Key 模式；没有用户真实 Key，所以不能说某个云模型或本地 LLM 已在业务四场景通过真实质量验收。
 
 本地报告记录的 18 ms 是冻结 Trace 内工具与 deterministic model gateway 累计 latency 的 p95，不是浏览器端到端延迟或服务 SLO。简历优先描述“建立评估维度与可重复 E2E”，只有在面试官追问报告范围时再说明样本、环境和口径。

@@ -514,3 +514,24 @@ docker compose exec -T backend python -m scripts.check_vector_rag
 ```
 
 关闭并恢复默认模式：先执行 `.\scripts\stop_demo.ps1`，再执行 `.\scripts\start_demo.ps1`。停止容器不会删除模型或 PostgreSQL 数据；不要为切换模式运行 `docker compose down -v`。
+
+## 14. 可选真实 LLM
+
+默认 `.env.example` 使用 `MODEL_PROVIDER=deterministic`，所以不配置 Key 也能启动、测试和演示。真实 provider 只在根目录未提交的 `.env` 中配置：
+
+```env
+MODEL_PROVIDER=openai_compatible
+MODEL_API_BASE=https://your-provider.example/v1
+MODEL_API_KEY=your-real-key
+MODEL_NAME=your-real-model-name
+MODEL_TIMEOUT_MS=10000
+```
+
+配置后重建 backend，并先执行一次 live 诊断：
+
+```powershell
+docker compose up -d --build backend
+docker compose exec -T backend python -m scripts.check_model_provider --live
+```
+
+看到 `primary_provider_verified=true` 才说明外部 primary 真正连通。`effective_provider=deterministic` 只能说明发生了 fallback。完整 URL 规则、Ollama 宿主机地址、退出码与恢复步骤见 [LLM_CONFIGURATION.md](LLM_CONFIGURATION.md)。

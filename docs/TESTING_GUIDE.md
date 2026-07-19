@@ -112,3 +112,19 @@ Get-Content var\demo\mvp-demo.md
 ```
 
 pytest 使用隔离 SQLite 证明契约；一键脚本使用 Docker PostgreSQL 证明打包、初始化、网络、健康检查和公开 API。二者不能互相替代。
+
+## 4B Model Gateway 专项命令
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest `
+  backend\tests\test_model_gateway.py `
+  backend\tests\test_model_provider_diagnostic.py `
+  backend\tests\test_langgraph_workflow.py `
+  backend\tests\test_agent_runtime_api.py -q `
+  -p no:cacheprovider --basetemp=var\pytest\4b
+
+python -m scripts.check_model_provider
+```
+
+自动化使用 fake provider 和 `httpx.MockTransport`，检查 HTTP URL、结构化解析、安全门禁、fallback、Runtime 接线、资源所有权与密钥不泄露，不访问真实厂商。配置真实 `.env` 后必须另跑 `python -m scripts.check_model_provider --live`；只有 `primary_provider_verified=true` 才是外部连通成功，fallback 成功不能替代这项证据。

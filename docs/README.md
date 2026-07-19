@@ -31,6 +31,8 @@
 | [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md) | Retriever 契约、关键词基线、向量来源回填与降级。 |
 | [vector_rag_report.4a.md](vector_rag_report.4a.md) | 4A 本地 pgvector/FastEmbed 语义 smoke、四场景回归和资源快照口径。 |
 | [MODEL_GATEWAY.md](MODEL_GATEWAY.md) | 模型 provider、结构化输出、安全门禁、降级和调用 Trace。 |
+| [LLM_CONFIGURATION.md](LLM_CONFIGURATION.md) | deterministic/OpenAI-compatible 双模式、`.env` 字段、诊断和恢复离线模式。 |
+| [model_gateway_report.4b.md](model_gateway_report.4b.md) | 4B 自动化、Docker 无 Key实跑和真实 provider 待验证口径。 |
 | [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md) | 有界状态图、节点路由、工具调用、确认与运行产物。 |
 | [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md) | Agent 运行 API、run/tool-call 持久化、冻结回放、幂等与确认续跑。 |
 | [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) | Next.js 数据页、成员上下文、API client 和异步状态。 |

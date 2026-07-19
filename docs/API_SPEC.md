@@ -182,3 +182,7 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 ## 12. 3D 固定演示不新增 HTTP API
 
 `MvpDemoRunner` 复用 `GET /api/family-members`、`POST /api/agent-runs` 和 `POST /api/agent-runs/{run_id}/continue`。它不会增加测试专用 endpoint、绕开 demo-user/member scope 或直接访问数据库。三条正常场景按 API 契约先等待确认，高风险场景不调用 continuation；报告只保存脱敏的状态和来源数量。
+
+## 13. 4B 模型诊断不暴露 HTTP API
+
+4B 没有新增模型配置或诊断 endpoint。模型 Key 只由 backend 环境变量读取，不能从浏览器或业务 API 提交。`python -m scripts.check_model_provider` 是运维/开发 CLI；Runtime 的既有 artifacts API 继续只返回脱敏 `ModelCallTrace`，不返回 Key、完整 prompt 或 provider 原始文本。

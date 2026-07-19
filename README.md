@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已按 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 完成 `4A`，保持本地演示级 **MVP Complete**，并增加可选的真实轻量向量 RAG。当前唯一下一阶段是 `4B` 真实 LLM 接入与验证。
+项目已按 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 完成 `4B`，保持本地演示级 **MVP Complete**：既可启用轻量向量 RAG，也可选择真实 OpenAI-compatible LLM；二者默认关闭，无模型和无 Key 时仍可完整运行。当前唯一下一阶段是 `4C` 面经学习与项目答题库。
 
 目前已经具备：
 
@@ -18,7 +18,7 @@
 - 家庭、药箱、处方/购药、药店库存、知识检索与 Agent 审计的只读 FastAPI 接口；知识检索已完成自动化与 PostgreSQL/Postman 验证。
 - 本地草稿创建、查询、确认和拒绝 API；状态机只改变本地记录，始终保留 `not_submitted` 外部状态。
 - Hybrid RAG：关键词检索始终可用；可选 FastEmbed 中文 512 维模型与 PostgreSQL pgvector 做真实语义召回，向量结果只返回来源指针并从权威表回填，异常时留下原因并自动回退。
-- Model Gateway：默认 deterministic，可选真实 HTTP provider；所有输出先过 Pydantic 与安全检查，失败留下 attempt trace 并回退。
+- Model Gateway：运行时默认 deterministic；配置完整时 FinalAnswer 节点调用 OpenAI-compatible provider，所有输出先过 Pydantic 与安全检查，失败留下 attempt trace 并回退；独立诊断器不会把 fallback 成功冒充成外部模型成功。
 - 有界 LangGraph DAG：按 intent 路由四类业务角色，统一经过 ContextManager、Tool Registry、SafetyAgent、确认草稿、RunTrace/reset 和只读 Evaluator。
 - Agent Runtime API：真实 DB tools、run/tool-call 持久化、冻结产物查询、幂等运行和确认后的同任务续跑；任何动作仍只创建本地草稿。
 - Next.js 数据页面与 Agent 演示入口：共享成员选择、四类场景、Tool/RAG 来源、安全提示、确认续跑和 Trace/Evaluation 详情。
@@ -78,7 +78,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 报告写到本地 `var\demo\`。2026-07-19 在全新 Docker PostgreSQL volume、seed 数据和 deterministic provider 上实跑为 4/4 场景通过：三条正常业务均先等待确认再完成本地草稿，高风险加量请求保持阻断，所有结果的外部动作状态均为 `not_submitted`。可提交的脱敏快照见 [3D MVP 演示报告](docs/mvp_demo_report.3d.md)。
 
-默认 `RAG_VECTOR_ENABLED=false`，使用 PostgreSQL 关键词检索并保留 document/chunk/version/source 指针，没有调用 Embedding 模型。默认 `MODEL_PROVIDER=deterministic`，问答由规则/模板生成，不调用真实 LLM；项目已有可选 OpenAI-compatible provider、schema/safety 校验和 deterministic fallback，Key 只能配置在未提交的本机 `.env`。完整区别见 [MVP 演示手册](docs/DEMO_RUNBOOK.md#5-rag-与模型模式)。
+默认 `RAG_VECTOR_ENABLED=false`，使用 PostgreSQL 关键词检索并保留 document/chunk/version/source 指针，没有调用 Embedding 模型。默认 `MODEL_PROVIDER=deterministic`，问答由规则/模板生成，不调用真实 LLM；Key、base URL 与模型名只能配置在未提交的本机 `.env`。完整区别见 [MVP 演示手册](docs/DEMO_RUNBOOK.md#5-rag-与模型模式) 和 [LLM 双模式配置](docs/LLM_CONFIGURATION.md)。
 
 一键启用 4A 真实向量模式：
 
@@ -87,6 +87,23 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
 首次运行把约 90 MB 模型缓存到 `E:\project_code\hospital\var\models\fastembed`，自动执行 migration、seed、幂等索引和语义 smoke test。2026-07-20 的本机验证使用 pgvector 0.8.5、`BAAI/bge-small-zh-v1.5` 和 4 个已审核 seed chunk，语义查询无 fallback 且向量模式四场景仍为 4/4；详见 [4A 验证报告](docs/vector_rag_report.4a.md)。
+
+检查当前模型模式（默认不联网）：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m scripts.check_model_provider
+```
+
+配置真实 provider 后，只有显式增加 `--live` 才发送一次连通性请求：
+
+```powershell
+docker compose exec -T backend python -m scripts.check_model_provider --live
+```
+
+具体 `.env` 字段、Docker URL、退出码和恢复离线模式见 [LLM 双模式配置](docs/LLM_CONFIGURATION.md)。当前仓库没有真实 Key，因此只完成了配置、MockTransport HTTP 契约、失败回退和无 Key 实跑验证，尚无真实模型质量报告。
+
+2026-07-20 的 4B 无 Key验收为后端 `196 passed`、compileall 通过、Docker 四项 healthy、固定场景 4/4；容器诊断确认未发生外部调用。详见 [4B 验证报告](docs/model_gateway_report.4b.md)。
 
 运行后端测试：
 
@@ -120,11 +137,14 @@ python -m pytest backend\tests\test_vector_rag.py backend\tests\test_hybrid_rag.
   --basetemp=var\pytest\vector-rag
 ```
 
-只验证 2F-2 Model Gateway：
+只验证 2F-2/4B Model Gateway 与双模式接线：
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests\test_model_gateway.py -q --basetemp=.tmp\pytest-model
+python -m pytest backend\tests\test_model_gateway.py `
+  backend\tests\test_model_provider_diagnostic.py `
+  backend\tests\test_langgraph_workflow.py -q `
+  -p no:cacheprovider --basetemp=var\pytest\model
 ```
 
 只验证 2G-1 LangGraph 工作流：
@@ -174,7 +194,7 @@ python -m pytest backend\tests\test_mvp_demo_runner.py -q `
 
 - 当前是本地开发/集成演示环境，不是生产部署；没有 JWT/OAuth、真实患者流量、HTTPS、秘密管理、高可用、SLA 或生产监控。
 - 不接真实医院、医生、处方、药店、支付、物流或提醒推送；确认只写本地草稿。
-- 默认没有真实 LLM，向量模式也默认关闭；OpenAI-compatible provider 尚未形成真实质量报告。4A 的本地 Embedding/pgvector 只验证了 4 个已审核 seed chunk，不代表生产检索质量或医疗效果。
+- 默认没有真实 LLM，向量模式也默认关闭；4B 已把 OpenAI-compatible provider 接入真实 Runtime 创建链并提供显式 live 诊断，但未提供 Key，因而尚未形成真实模型质量报告。4A 的本地 Embedding/pgvector 只验证了 4 个已审核 seed chunk，不代表生产检索质量或医疗效果。
 - 固定 Harness 和 3D 的 4/4 只证明当前 seed + deterministic 规则的回归结果，不能外推为临床安全率、线上幻觉率或服务 SLO。
 - 2026-07-19 的 `npm audit --omit=dev` 对 Next 14 生产依赖仍报告 1 项 high 和 1 项 moderate；官方自动修复涉及 Next 16 major upgrade，应在生产化前独立升级并做完整回归。
 
@@ -192,12 +212,15 @@ python -m pytest backend\tests\test_mvp_demo_runner.py -q `
 - [Agent 工作流](docs/AGENT_WORKFLOW.md)：角色、工具、确认与安全流程。
 - [RAG 检索设计](docs/RAG_RETRIEVAL.md)：Retriever 契约、来源回填、混合检索和降级规则。
 - [Model Gateway 设计](docs/MODEL_GATEWAY.md)：provider 契约、结构化输出、安全检查和 fallback trace。
+- [LLM 双模式配置](docs/LLM_CONFIGURATION.md)：在哪里填 Key/base/model、怎样离线检查、真实连通和恢复默认模式。
+- [4B Model Gateway 验证报告](docs/model_gateway_report.4b.md)：自动化、Docker 无 Key实跑和尚未验证范围。
 - [LangGraph 工作流](docs/LANGGRAPH_WORKFLOW.md)：图节点、条件路由、状态、确认门和运行产物。
 - [Agent Runtime API](docs/AGENT_RUNTIME_API.md)：运行入口、持久化、冻结回放、幂等与确认续跑。
 - [前端架构](docs/FRONTEND_ARCHITECTURE.md)：成员切换、API 客户端、页面状态和跨成员防线。
 - [Agent UI 与 Trace](docs/AGENT_UI.md)：对话提交、本地确认、冻结产物和审计详情页面。
 - [Runtime E2E Harness](docs/RUNTIME_E2E_HARNESS.md)：真实 API Trace、脱敏 adapter、Guard、指标和报告运行方式。
 - [3D 交付学习章](docs/learning/14_3D_MVP_DELIVERY.md)：从零理解 Docker 初始化链、固定 Demo Runner、关键词 RAG 与真实 LLM 接入边界。
+- [4B LLM 双模式学习章](docs/learning/16_4B_LLM_DUAL_MODE.md)：从配置、运行时接线、资源所有权到失败 review。
 - [从零学习路线](docs/learning/README.md)：需求拆解、代码设计、review 和简历表达。
 
 ## 仓库结构
@@ -213,6 +236,6 @@ AGENTS.md      AI Coding Harness 规则
 
 ## 贡献方式
 
-从最新 `main` 创建一个只对应单一目标的 `codex/...` 分支。完成最小实现、测试和文档同步后再 review、合并与推送。当前路线图没有后续阶段；若要扩展范围，先在 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 中定义，而不是在 README 临时编号。
+从最新 `main` 创建一个只对应单一目标的 `codex/...` 分支。完成最小实现、测试和文档同步后再 review、合并与推送。当前路线图的唯一下一阶段是 `4C`；若要扩展其他范围，先在 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 中定义，而不是在 README 临时编号。
 
 项目亮点和简历表达边界见 [RESUME_NOTES.md](docs/RESUME_NOTES.md)。

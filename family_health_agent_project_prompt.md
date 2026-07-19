@@ -91,6 +91,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `4A` 在不改变默认 3D 演示的前提下实现轻量真实向量 RAG。Migration `0003_lightweight_vector_rag` 为 `knowledge_chunks` 增加可空 512 维 pgvector、模型名、内容哈希和索引时间；FastEmbed provider 仅在启用时加载 `BAAI/bge-small-zh-v1.5`，模型缓存位于项目 `var/models`。Indexer 只重建变化 chunk；pgvector 后端只返回 document/chunk 指针并由权威知识表回填正文。默认开关仍为 false，模型/索引/数据库异常必须留下 fallback reason 并回退关键词。本阶段不部署 RAGFlow，不抓取互联网医疗知识，不自动生成知识写回。
 
+`4B` 补全可选真实 LLM 的运行时接线。`LangGraphAgentWorkflow` 默认通过环境感知工厂创建 Model Gateway；无 Key 时继续使用 deterministic provider，配置 `openai_compatible` 时只有 FinalAnswer 节点调用外部模型。独立诊断命令默认不联网，显式 `--live` 才发送一次结构化非医疗请求，并区分 primary 验证与 fallback 成功。Runtime 在每次 run 后释放自有 HTTP client；Key、完整 prompt 和原始 provider 文本不进入 Trace。自动化只证明契约和失败处理，未提供真实 Key 时不得声称真实模型质量、成本或延迟指标。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

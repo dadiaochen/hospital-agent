@@ -79,6 +79,10 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 2F-2 定义 `ModelProvider` 与 `ModelGateway`。自动测试和无 Key 环境使用 `DeterministicModelProvider`；配置完整时可以使用 OpenAI-compatible HTTP adapter。Provider 只返回文本，Gateway 必须依次执行 JSON 解析、目标 Pydantic schema 校验和独立输出安全检查，全部通过后才返回结构化对象。
 
+4B 补全了运行时接线：`LangGraphAgentWorkflow` 的默认 Gateway 通过环境感知工厂创建，而不是硬编码 deterministic provider。真实模型当前只位于 FinalAnswer 节点；Planner、工具、RAG、SafetyAgent、确认状态机和 Evaluator 不交给模型自由控制。`AgentRuntimeService` 在 `finally` 中释放工作流自有 HTTP client，调用方注入的 Gateway 保持由调用方管理。
+
+独立模型诊断器默认只校验配置和 deterministic 契约，显式 `--live` 才发一次结构化请求。报告分别记录 primary 是否验证和 fallback 是否使用，避免把降级后的成功答案误报为外部模型连通。
+
 超时、HTTP 错误、provider response 错误、schema 失败和 safety 失败都产生 `ModelProviderAttemptTrace`。配置了 fallback 时，Gateway 再调用 deterministic provider；fallback 也失败则返回 `output=None` 和失败 Trace，不把原始文本交给 Agent。规则型输出检查是 Gateway 的最后一道文本门禁，不替代 LangGraph 中的 SafetyAgent。完整设计见 [MODEL_GATEWAY.md](MODEL_GATEWAY.md)。
 
 ### 4.8 LangGraph 使用有界 DAG
@@ -117,7 +121,7 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 | --- | --- |
 | ORM、迁移、seed、只读 DB tools、本地 draft tool 与草稿状态机 API | 生产认证和外部业务提交。 |
 | 家庭、药箱、处方/购药、库存、知识检索和 Agent 审计的只读 API | 真实医院、药店和推送 API。 |
-| ContextManager、Trace、fixture Harness、确定性评估、Model Gateway、LangGraph DAG 和 Agent Runtime API/持久化 | 线上模型质量验证、生产认证和外部系统集成。 |
+| ContextManager、Trace、fixture Harness、确定性评估、双模式 Model Gateway、LangGraph DAG 和 Agent Runtime API/持久化 | 真实厂商模型质量报告、生产认证和外部系统集成。 |
 | 权限、成员隔离、确认门禁、失败 fallback、关键词 Retriever 与可选 FastEmbed/pgvector 混合检索 | 文档摄取平台、大规模 ANN/reranker 和互联网知识抓取。 |
 | 3A/3B Next.js 数据页、Agent 对话、本地确认续跑、Trace/Evaluation 详情和客户端成员响应检查 | 生产浏览器监控、真实登录和外部系统集成。 |
 | 3C Runtime E2E、Trace 脱敏 adapter、API Guard 和本地 PostgreSQL 报告 | 生产流量回放、临床有效性或真实 LLM 质量评测。 |
@@ -139,6 +143,7 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 - 关键词与混合检索：[retriever.py](../backend/app/rag/retriever.py)
 - Model Gateway 契约：[model_gateway_schemas.py](../backend/app/agent/model_gateway_schemas.py)
 - Provider、解析与 fallback：[model_gateway.py](../backend/app/agent/model_gateway.py)
+- Provider 配置与 live 诊断：[model_provider_diagnostic.py](../backend/app/agent/model_provider_diagnostic.py)
 - 模型输出安全检查：[model_output.py](../backend/app/safety/model_output.py)
 - LangGraph 状态与节点：[langgraph_workflow.py](../backend/app/agent/langgraph_workflow.py)
 - 工作流输入输出契约：[workflow_schemas.py](../backend/app/agent/workflow_schemas.py)
