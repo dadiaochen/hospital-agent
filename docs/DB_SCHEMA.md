@@ -66,7 +66,7 @@ RAG 输出必须带来源指针；没有命中文档或工具 evidence 时不能
 | `agent_runs` | `user_id`、`member_id`、`user_goal`、`intent`、`status`、`final_answer`、`safety_result`、`raw_state`、`started_at`、`ended_at`、`duration_ms`、`step_count`、`task_success`、`groundedness_score`、`hallucination_flag`、`human_confirmation_rate` | 一次运行的可观测性记录。 |
 | `agent_tool_calls` | `run_id`、`agent_role`、`tool_name`、`tool_input`、`tool_output`、`latency_ms`、`success`、`error_message`、`error_type`、`fallback_action`、`schema_valid` | run 内每次工具调用的审计记录。 |
 
-2G-2 已在隔离分支使用现有两张审计表实现 runtime 持久化，不新增 ORM 字段或 migration。`agent_runs.raw_state` 保存版本化 `PersistedRunArtifacts`，包含冻结 RunTrace、脱敏 ModelCallTrace、RunSummary、来源 refs、EvaluationResult、续跑引用和请求指纹；不保存 role views、raw conversation、scratchpad、API Key、完整 prompt 或 provider 原始文本。`agent_tool_calls.id` 使用稳定 UUID，并与 ToolEvidenceRef 的 `tool_call_id` 对齐。
+2G-2 使用现有两张审计表实现 runtime 持久化，不新增 ORM 字段或 migration。`agent_runs.raw_state` 保存版本化 `PersistedRunArtifacts`，包含冻结 RunTrace、脱敏 ModelCallTrace、RunSummary、来源 refs、EvaluationResult、续跑引用和请求指纹；不保存 role views、raw conversation、scratchpad、API Key、完整 prompt 或 provider 原始文本。`agent_tool_calls.id` 使用稳定 UUID，并与 ToolEvidenceRef 的 `tool_call_id` 对齐。
 
 2F-2 的 `ModelCallTrace` 和 provider attempt trace 不新增 ORM 字段或 migration；2G-2 将其脱敏结构放入版本化 runtime artifact。API Key、完整 prompt 和 provider 原始文本不得写入审计表。
 

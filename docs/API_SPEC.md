@@ -2,7 +2,7 @@
 
 ## 1. 文档边界
 
-本文件区分“当前可调用的接口”“本分支已实现的读取接口”和“路线图已定义、但尚未实现的接口”。不要根据 ORM、service 或 ToolRegistry 的存在推断 HTTP endpoint 已上线。
+本文件区分当前可调用的 HTTP 接口与只供 Agent 内部使用的 Python 契约。不要根据 ORM、service 或 ToolRegistry 的存在推断 HTTP endpoint 已上线。
 
 ## 2. 系统接口
 
@@ -14,7 +14,7 @@
 
 FastAPI Swagger 位于 `http://localhost:8000/docs`。root 与 health response 的 `phase` 仍是骨架服务标识，不是总路线图的状态机；项目阶段请查看 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)。
 
-## 3. 本分支已实现的 2E-1 读取接口
+## 3. 已实现的 2E-1 读取接口
 
 所有端点只读，使用环境变量 `DEMO_USER_PHONE` 定位固定 demo user。成员类路径必须属于该用户；不属于当前 demo user 的成员或 run 一律返回 `404`，不暴露其存在。
 
@@ -29,6 +29,7 @@ FastAPI Swagger 位于 `http://localhost:8000/docs`。root 与 health response �
 | `GET` | `/api/agent-runs?member_id=` | `AgentRunListResponse` | 当前 demo user 的 run，可按成员过滤。 |
 | `GET` | `/api/agent-runs/{run_id}` | `AgentRunResponse` | 单个 run，不返回内部 `raw_state`。 |
 | `GET` | `/api/agent-runs/{run_id}/tool-calls` | `AgentToolCallListResponse` | 当前用户 run 的工具审计。 |
+| `GET` | `/api/knowledge/search?q=&category=` | `KnowledgeSearchResponse` | 确定性知识 chunk 搜索，返回稳定 `source_id`。 |
 
 成功响应的字段由 `backend/app/schemas/` 中的 Pydantic DTO 定义，时间和日期按 JSON 标准格式序列化。所有已处理错误使用同一结构：
 
@@ -44,13 +45,13 @@ FastAPI Swagger 位于 `http://localhost:8000/docs`。root 与 health response �
 
 路由不写 SQL；成员作用域、查询与空资源判断位于 `ReadApiService`。库存没有匹配项时返回空 `items`，因为搜索没有结果不是权限错误。
 
-## 4. 留给学习者的完整 API：知识库搜索
+## 4. 2E-1 学习 API：知识库搜索
 
-`GET /api/knowledge/search` 属于 2E-1 范围，但在本分支刻意未实现。完整接口契约、DTO、service 查询、路由接入、错误语义、Swagger 检查和测试验收见 [06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md](learning/06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md)。完成它后，2E-1 的所有读取资源才算齐全。
+`GET /api/knowledge/search` 已完成 DTO、service 查询、路由接入、统一 `422` 和专用 API 测试。无命中返回 `200 + items=[]`，每个命中项包含 `knowledge:{document_id}:{chunk_id}` 来源指针。完整代码阅读、Swagger/Postman 和测试复盘见 [06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md](learning/06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md)。
 
-## 5. 隔离分支中的 2E-2 草稿 API
+## 5. 2E-2 草稿 API
 
-以下接口已经在 `codex/2e-2-draft-confirmation-api` 隔离分支实现。它们将在 2E-1 知识搜索完成后 rebase、回归和进入主线；路线图在此之前仍保持 2E-1 为 `NEXT`。
+以下接口已经在线性历史中实现，并与 2E-1 读取 API 一起注册到 FastAPI。
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
@@ -111,7 +112,7 @@ draft -> rejected
 
 ## 6. 2F-1 内部 Retriever 不是新增 HTTP API
 
-隔离分支新增的是 `backend/app/rag/` 内部检索接口。`search_safety_knowledge` Tool 已改为通过 Retriever 获取来源，但这不会自动创建 FastAPI 路由，也不会替代第 4 节留给学习者的 `GET /api/knowledge/search`。
+`backend/app/rag/` 提供 Agent 内部检索接口。`search_safety_knowledge` Tool 通过 Retriever 获取来源，但它不会创建新的 FastAPI 路由，也不会替代第 4 节面向客户端的 `GET /api/knowledge/search`。
 
 内部请求和结果由 `RetrievalRequest`、`RetrievedChunk` 与 `RetrievalResult` 描述。每个命中项带 `source_id`、document/chunk ID 与版本、相关性 `score`、本次检索 `purpose` 和 `matched_by`；结果还声明 requested/effective mode 与 fallback 原因。HTTP API 后续可以调用 Retriever，但仍应定义自己的 API DTO 和错误语义，不能直接暴露内部模型。
 
@@ -121,7 +122,7 @@ draft -> rejected
 
 Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider 的未校验原始文本。2G-2 Agent Runtime 只通过 Gateway 获得结构化结果，并持久化脱敏 Trace；Router 不能直接调用模型 HTTP endpoint。
 
-## 8. 隔离分支中的 2G-2 Agent Runtime API
+## 8. 2G-2 Agent Runtime API
 
 2G-1 的 `LangGraphAgentWorkflow.run()` 仍是内部 Python 入口。2G-2 通过 `AgentRuntimeService` 注入真实 DB Tool Registry，并新增以下 HTTP 边界：
 

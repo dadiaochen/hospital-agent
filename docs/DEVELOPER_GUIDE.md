@@ -12,6 +12,8 @@
 
 推荐 Python 3.11+、Docker Desktop、Node.js 20+ 和 GitHub Desktop。PowerShell 示例均从仓库根目录执行。
 
+首次安装、WSL 2、Docker 数据迁移到 E 盘、PostgreSQL 初始化、前后端启动和常见故障见 [LOCAL_SETUP_AND_DEPLOYMENT.md](LOCAL_SETUP_AND_DEPLOYMENT.md)。下面保留日常开发所需的最短命令。
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1

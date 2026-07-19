@@ -2,7 +2,7 @@
 
 ## 1. 设计目标
 
-本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。隔离分支已实现可重复契约、deterministic 基线、Model Gateway、正式 LangGraph 编排和 2G-2 Runtime 持久化/API；这些线性后继仍需在 2E-1 学习分支完成后统一整合。
+本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前线性基线已实现可重复契约、deterministic Harness、2E API、Hybrid RAG、Model Gateway、LangGraph 编排、Runtime 持久化/API 和 3A/3B 前端。
 
 ## 2. 分层架构
 
@@ -61,7 +61,7 @@ Context、工具、Trace 和评估先由 Pydantic 模型定义，并使用 `extr
 
 `create_confirmation_draft` 在确认门禁前不会执行 handler。门禁通过后也只创建 `status="draft"` 的本地记录；审计数据记录 run、幂等键和 `external_action_status="not_submitted"`。没有医院提交、下单或推送能力。
 
-2E-2 隔离分支在同一 service 之上增加 FastAPI 状态机。API 创建仍要求显式 `human_confirmation_granted`；确认或拒绝要求显式 `human_confirmation_present`。白名单只允许 `draft -> confirmed` 和 `draft -> rejected`，重复决策返回幂等 replay，终态之间不可互转。
+2E-2 在同一 service 之上增加 FastAPI 状态机。API 创建仍要求显式 `human_confirmation_granted`；确认或拒绝要求显式 `human_confirmation_present`。白名单只允许 `draft -> confirmed` 和 `draft -> rejected`，重复决策返回幂等 replay，终态之间不可互转。
 
 `confirmed_at` 保留“允许创建本地草稿”的既有语义。最终决策追加到各业务表已有 JSON detail 的 `_agent_audit.status_transitions`，包含 user、幂等键、时间、备注和 `external_action_status="not_submitted"`。可选 `run_id` 必须与当前 user/member 同时匹配；决策读取在 PostgreSQL 上使用行锁，减少并发重复流转。这样无需新增 migration，也不会把本地确认伪装成外部动作成功。
 
@@ -103,11 +103,11 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 | 已实现 | 尚未实现 |
 | --- | --- |
-| ORM、迁移、seed、只读 DB tools、本地 draft tool；隔离分支中的草稿状态机 API | 生产认证；2E-2 尚待在 2E-1 后线性整合。 |
-| 家庭、药箱、处方/购药、库存和 Agent 审计的只读 API | 知识库搜索 API（保留为学习实战题）。 |
-| ContextManager、Trace、fixture Harness、确定性评估；隔离分支中的 Model Gateway、LangGraph DAG 和 Agent Runtime API/持久化 | 线上模型质量验证、生产认证和外部系统集成。 |
-| 权限、成员隔离、确认门禁和失败 fallback 的单元测试；隔离分支中的关键词/混合 Retriever | 真实 Embedding provider、向量数据库和互联网知识抓取。 |
-| 隔离分支中的 3A/3B Next.js 数据页、Agent 对话、本地确认续跑、Trace/Evaluation 详情和客户端成员响应检查 | 3C 真实 Trace Harness、完整 E2E 与知识页真实联调；等待 2E-1 合入后统一回归。 |
+| ORM、迁移、seed、只读 DB tools、本地 draft tool 与草稿状态机 API | 生产认证和外部业务提交。 |
+| 家庭、药箱、处方/购药、库存、知识检索和 Agent 审计的只读 API | 真实医院、药店和推送 API。 |
+| ContextManager、Trace、fixture Harness、确定性评估、Model Gateway、LangGraph DAG 和 Agent Runtime API/持久化 | 线上模型质量验证、生产认证和外部系统集成。 |
+| 权限、成员隔离、确认门禁、失败 fallback 与关键词/混合 Retriever | 真实 Embedding provider、向量数据库和互联网知识抓取。 |
+| 3A/3B Next.js 数据页、Agent 对话、本地确认续跑、Trace/Evaluation 详情和客户端成员响应检查 | 3C 四场景 E2E 与真实 Trace Harness。 |
 
 详细顺序、验收和非目标以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
 

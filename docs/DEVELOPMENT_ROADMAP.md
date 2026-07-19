@@ -78,14 +78,14 @@
 | 2D-1 | `DONE` | 五类数据库只读工具 | DB 工具与 2C Harness 联合测试通过 |
 | 2D-2 | `DONE` | 待确认草稿写入工具 | 只写本地 draft / confirmation 审计 |
 | 2E-1 | `DONE` | 基础读取 API | 家庭、药箱、处方、知识、run 可查询 |
-| 2E-2 | `NEXT` | 草稿与确认 API | 本地状态机和幂等确认通过 |
-| 2F-1 | `PLANNED` | Hybrid RAG | 关键词稳定、向量检索可选 |
-| 2F-2 | `PLANNED` | Model Gateway | LLM 与 deterministic fallback 同契约 |
-| 2G-1 | `PLANNED` | LangGraph Multi-Agent 工作流 | 四场景节点和 SafetyAgent 跑通 |
-| 2G-2 | `PLANNED` | Runtime 持久化与 Agent API | run/tool trace、reset、续跑可查询 |
-| 3A | `PLANNED` | 核心数据页面接入 API | 家庭、药箱、续方、提醒页面可用 |
-| 3B | `PLANNED` | Agent 对话、确认与 Trace UI | 四场景前端闭环可演示 |
-| 3C | `PLANNED` | E2E 与真实 Trace Harness | API/UI 场景、隔离、安全回归通过 |
+| 2E-2 | `DONE` | 草稿与确认 API | 本地状态机和幂等确认通过 |
+| 2F-1 | `DONE` | Hybrid RAG | 关键词稳定、向量检索可选 |
+| 2F-2 | `DONE` | Model Gateway | LLM 与 deterministic fallback 同契约 |
+| 2G-1 | `DONE` | LangGraph Multi-Agent 工作流 | 四场景节点和 SafetyAgent 跑通 |
+| 2G-2 | `DONE` | Runtime 持久化与 Agent API | run/tool trace、reset、续跑可查询 |
+| 3A | `DONE` | 核心数据页面接入 API | 家庭、药箱、续方、提醒页面可用 |
+| 3B | `DONE` | Agent 对话、确认与 Trace UI | 四场景前端闭环可演示 |
+| 3C | `NEXT` | E2E 与真实 Trace Harness | API/UI 场景、隔离、安全回归通过 |
 | 3D | `PLANNED` | 一键演示与项目收口 | Docker、演示脚本、README、简历材料完成 |
 
 ## 7. 已完成阶段基线
@@ -99,11 +99,18 @@ main
   -> 2D-1 database-backed read-only tools
   -> 2D-2 confirmation-gated local draft writes
   -> 2E-1 scoped read APIs and knowledge search
+  -> 2E-2 draft confirmation API
+  -> 2F-1 deterministic hybrid retriever
+  -> 2F-2 structured model gateway
+  -> 2G-1 bounded LangGraph workflow
+  -> 2G-2 persisted Agent runtime API
+  -> 3A member-scoped data pages
+  -> 3B Agent conversation and Trace UI
 ```
 
-2A 至 2B-3 已包含在初始项目基线中。2C-1 至 2E-1 已按阶段形成线性提交；2E-1 完成固定 demo-user 作用域的读取 API、知识检索学习实战、PostgreSQL/Postman 验证和完整后端回归。
+2A 至 2B-3 已包含在初始项目基线中。2C-1 至 3B 已按阶段形成唯一线性历史；2E-1 学习工作区和后续隔离工作区已完成 rebase、冲突审查与统一回归。`3C` 是当前唯一 `NEXT`。
 
-## 8. 后续阶段详细定义
+## 8. 阶段详细定义
 
 ### 2D-2 待确认草稿写入工具
 

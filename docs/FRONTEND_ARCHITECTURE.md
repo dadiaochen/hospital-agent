@@ -63,7 +63,7 @@ assertMemberScoped(result.items, memberId, "家庭药箱");
 | Agent 对话 | `POST /api/agent-runs`、`POST /api/agent-runs/{run_id}/continue` | 是；首次固定未确认，续跑必须显式确认 |
 | Run Trace | `/{run_id}`、`/{run_id}/tool-calls`、`/{run_id}/artifacts` | 是；页面拒绝跨成员冻结产物 |
 
-知识页只消费 2E-1 学习题定义的契约。该 API 尚未整合到当前隔离分支时，页面会显示可解释错误；前端不会复制或绕过学习题的 Router、Schema 和 Service。
+知识页只消费 2E-1 学习题定义并已集成的契约。前端不会复制或绕过后端 Router、Schema 和 Service；网络或统一 API 错误会进入可解释的 error 状态。
 
 ## 6. 请求状态规则
 

@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已完成至 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 的 `2D-2`，`2E-1` 基础读取 API 正在学习分支中收口。本隔离工作区按线性提交提前准备了 `2E-2` 草稿与确认 API、`2F-1` Hybrid RAG、`2F-2` Model Gateway、`2G-1` LangGraph 工作流、`2G-2` Agent Runtime API、`3A` 核心数据页面和 `3B` Agent/Trace UI；在 2E-1 完成、rebase 和完整回归之前，不改变路线图状态，也不视为已进入主线。
+项目已按 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 完成至 `3B`，并将 2E-1 学习成果与 2E-2 至 3B 的阶段提交整理为唯一线性历史。当前唯一下一阶段是 `3C`：真实 PostgreSQL/API/UI 场景的 E2E 与 Trace Harness。
 
 目前已经具备：
 
@@ -15,14 +15,13 @@
 - ContextManager 的角色最小视图、上下文压缩与 run 后 reset。
 - deterministic Tool Registry、固定 Harness 用例、可重复的评估和 Markdown 报告。
 - 数据库只读查询工具，以及只创建本地 draft 的确认门禁工具。
-- 家庭、药箱、处方/购药、药店库存与 Agent 审计的只读 FastAPI 接口；知识库搜索保留为学习实战题。
-- 隔离分支中的本地草稿创建、查询、确认和拒绝 API；状态机只改变本地记录，始终保留 `not_submitted` 外部状态。
-- 隔离分支中的 Hybrid RAG：关键词检索始终可用，可选向量后端只返回来源指针，异常时留下原因并自动回退。
-- 隔离分支中的 Model Gateway：默认 deterministic，可选真实 HTTP provider；所有输出先过 Pydantic 与安全检查，失败留下 attempt trace 并回退。
-- 隔离分支中的有界 LangGraph DAG：按 intent 路由四类业务角色，统一经过 ContextManager、Tool Registry、SafetyAgent、确认草稿、RunTrace/reset 和只读 Evaluator。
-- 隔离分支中的 Agent Runtime API：真实 DB tools、run/tool-call 持久化、冻结产物查询、幂等运行和确认后的同任务续跑；任何动作仍只创建本地草稿。
-- 隔离分支中的 Next.js 数据页面：共享成员选择器、家庭档案、药箱、续方/复诊、提醒、购药信息、知识检索和 Agent run 列表，统一处理 loading、empty、error 与跨成员响应拒绝；知识页等待 2E-1 API 合入后做真实联调。
-- 隔离分支中的 Agent 演示入口：四类场景输入、冻结结构化答案、Tool/RAG 来源、安全提示、仅创建本地草稿的确认续跑，以及角色、工具、耗时、错误、fallback 和 EvaluationResult 详情。
+- 家庭、药箱、处方/购药、药店库存、知识检索与 Agent 审计的只读 FastAPI 接口；知识检索已完成自动化与 PostgreSQL/Postman 验证。
+- 本地草稿创建、查询、确认和拒绝 API；状态机只改变本地记录，始终保留 `not_submitted` 外部状态。
+- Hybrid RAG：关键词检索始终可用，可选向量后端只返回来源指针，异常时留下原因并自动回退。
+- Model Gateway：默认 deterministic，可选真实 HTTP provider；所有输出先过 Pydantic 与安全检查，失败留下 attempt trace 并回退。
+- 有界 LangGraph DAG：按 intent 路由四类业务角色，统一经过 ContextManager、Tool Registry、SafetyAgent、确认草稿、RunTrace/reset 和只读 Evaluator。
+- Agent Runtime API：真实 DB tools、run/tool-call 持久化、冻结产物查询、幂等运行和确认后的同任务续跑；任何动作仍只创建本地草稿。
+- Next.js 数据页面与 Agent 演示入口：共享成员选择、四类场景、Tool/RAG 来源、安全提示、确认续跑和 Trace/Evaluation 详情。
 
 ## 四个演示场景
 
@@ -54,7 +53,7 @@ SafetyAgent -> confirmation gate -> Model Gateway -> FinalAnswer
 
 ## 快速开始
 
-完整开发说明见 [开发者指南](docs/DEVELOPER_GUIDE.md)。最短的 Docker 启动方式如下：
+第一次运行请先阅读 [本地环境、启动与部署指南](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)，日常开发流程见 [开发者指南](docs/DEVELOPER_GUIDE.md)。最短的 Docker 启动方式如下：
 
 ```powershell
 Copy-Item .env.example .env
@@ -75,42 +74,42 @@ python -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest
 python -m compileall backend\app backend\tests
 ```
 
-只验证隔离分支的草稿 API：
+只验证草稿 API：
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_confirmation_draft_api.py backend\tests\test_confirmation_draft_tool.py -q
 ```
 
-只验证隔离分支的 2F-1 Retriever：
+只验证 2F-1 Retriever：
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_hybrid_rag.py backend\tests\test_db_backed_tools.py -q --basetemp=.tmp\pytest-rag
 ```
 
-只验证隔离分支的 2F-2 Model Gateway：
+只验证 2F-2 Model Gateway：
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_model_gateway.py -q --basetemp=.tmp\pytest-model
 ```
 
-只验证隔离分支的 2G-1 LangGraph 工作流：
+只验证 2G-1 LangGraph 工作流：
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_langgraph_workflow.py backend\tests\test_context_manager.py -q -p no:cacheprovider --basetemp=.tmp\pytest-workflow
 ```
 
-只验证隔离分支的 2G-2 Agent Runtime API：
+只验证 2G-2 Agent Runtime API：
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_agent_runtime_api.py -q -p no:cacheprovider --basetemp=.tmp\pytest-runtime
 ```
 
-验证隔离分支的 3A/3B 前端：
+验证 3A/3B 前端：
 
 ```powershell
 Set-Location frontend
@@ -144,7 +143,7 @@ npm run build
 backend/       FastAPI、SQLAlchemy、services、tools、agent 与测试
 frontend/      Next.js 页面与组件
 docs/          面向协作者的项目文档和学习材料
-alembic/        数据库迁移
+backend/alembic/ 数据库迁移
 scripts/       可重复 seed 等辅助脚本
 AGENTS.md      AI Coding Harness 规则
 ```

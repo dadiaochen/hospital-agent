@@ -71,19 +71,19 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 本地完整联调使用 Docker PostgreSQL/Redis，pytest 使用内存 SQLite。知识搜索 DTO、service、route 和 `test_knowledge_api.py` 已完成，并通过 PostgreSQL/Postman 与自动化测试验收。PostgreSQL 实跑要求 Alembic 内部 `version_num` 容纳现有长 revision ID，该兼容修复位于对应长 revision 的迁移中，不改变 ORM 业务字段。
 
-隔离分支 `codex/2e-2-draft-confirmation-api` 在不覆盖 2E-1 学习工作区的前提下准备草稿与确认 API：支持四类本地草稿的创建、查询、确认和拒绝；只允许 `draft -> confirmed/rejected`，决策幂等并写入现有 JSON 审计，始终保持 `external_action_status="not_submitted"`。在 2E-1 知识搜索完成并完成 rebase/回归前，不修改总路线图的 `NEXT` 状态。
+已集成的 `2E-2` 草稿与确认 API 支持四类本地草稿的创建、查询、确认和拒绝；只允许 `draft -> confirmed/rejected`，决策幂等并写入现有 JSON 审计，始终保持 `external_action_status="not_submitted"`。
 
-线性后继隔离分支 `codex/2f-1-hybrid-rag` 把知识库关键词查询整理为 Retriever 契约，并提供可注入、默认关闭的向量检索协议。关键词检索始终可用；向量后端只返回 document/chunk 指针和相关性分数，正文从数据库回填。后端缺失、异常或指针失效时必须记录原因并回退，不调用 LLM、不抓取互联网知识、不新增向量表或 migration。该分支同样不提前修改总路线图状态。
+已集成的 `2F-1` 把知识库关键词查询整理为 Retriever 契约，并提供可注入、默认关闭的向量检索协议。关键词检索始终可用；向量后端只返回 document/chunk 指针和相关性分数，正文从数据库回填。后端缺失、异常或指针失效时必须记录原因并回退，不调用 LLM、不抓取互联网知识、不新增向量表或 migration。
 
-`codex/2f-2-model-gateway` 继续在线性隔离历史上定义 Model Gateway。默认 provider 是不会联网的 deterministic 实现；可选 OpenAI-compatible HTTP adapter 的 base URL、Key、模型和 timeout 只来自环境变量。所有 provider 文本先过 JSON、目标 Pydantic schema 和输出安全检查，失败时执行同契约 fallback 并记录逐次 Trace；本阶段不接 LangGraph、不新增 Agent API、不持久化 prompt 或 Key。
+`2F-2` 定义 Model Gateway。默认 provider 是不会联网的 deterministic 实现；可选 OpenAI-compatible HTTP adapter 的 base URL、Key、模型和 timeout 只来自环境变量。所有 provider 文本先过 JSON、目标 Pydantic schema 和输出安全检查，失败时执行同契约 fallback 并记录逐次 Trace；不持久化 prompt 或 Key。
 
-`codex/2g-1-langgraph-workflow` 在线性隔离历史上实现最小正式 LangGraph DAG。Planner 产生结构化计划，ContextManager 投影 Planner/角色最小视图，业务角色只能经 Tool Registry 获取 evidence；所有路径都在确认草稿和 FinalAnswer 前经过 SafetyAgent。关键动作缺少显式确认时不执行 draft handler，高风险阻断时跳过草稿；FinalAnswer 经 Model Gateway 形成冻结 RunTrace，随后 reset 并由 DeterministicEvaluator 只读评估。本阶段不新增 Agent HTTP API、不访问或持久化 runtime 数据库状态、不接外部医院/药店，也不实现自主循环 Agent。
+`2G-1` 实现最小正式 LangGraph DAG。Planner 产生结构化计划，ContextManager 投影 Planner/角色最小视图，业务角色只能经 Tool Registry 获取 evidence；所有路径都在确认草稿和 FinalAnswer 前经过 SafetyAgent。关键动作缺少显式确认时不执行 draft handler，高风险阻断时跳过草稿；FinalAnswer 经 Model Gateway 形成冻结 RunTrace，随后 reset 并由 DeterministicEvaluator 只读评估。工作流不接外部医院/药店，也不实现自主循环 Agent。
 
-`codex/2g-2-agent-runtime-api` 在线性后继中增加 Agent Runtime 适配层。FastAPI Router 只接收运行/续跑 DTO，AgentRuntimeService 负责 demo-user/member 作用域、幂等键、真实 DB Tool Registry 注入、run/tool-call 审计和版本化冻结产物持久化。首次 run 不得直接携带确认；只有 `needs_confirmation` run 能以相同 task/member 恢复 RunSummary 和来源指针后续跑，且只创建 `not_submitted` 本地草稿。Evaluator 仍只读；不保存 raw conversation、scratchpad、Key 或 provider 原始文本，不新增 ORM/migration，不接外部系统。
+`2G-2` 增加 Agent Runtime 适配层。FastAPI Router 只接收运行/续跑 DTO，AgentRuntimeService 负责 demo-user/member 作用域、幂等键、真实 DB Tool Registry 注入、run/tool-call 审计和版本化冻结产物持久化。首次 run 不得直接携带确认；只有 `needs_confirmation` run 能以相同 task/member 恢复 RunSummary 和来源指针后续跑，且只创建 `not_submitted` 本地草稿。Evaluator 仍只读；不保存 raw conversation、scratchpad、Key 或 provider 原始文本，不新增 ORM/migration，不接外部系统。
 
-`codex/3a-core-data-pages` 在线性隔离历史上实现 Next.js 核心数据页。`MemberProvider` 提供唯一当前 `member_id`，页面通过统一 typed API client 读取真实 FastAPI 契约，并在渲染前检查成员类 response 的 `member_id`。所有数据页必须区分 loading、empty、error 和 data；知识页只消费 2E-1 学习题契约，不替学习者实现后端。3A 不实现 Agent 对话、确认动作、Run Trace 详情、登录或外部医疗系统操作。
+`3A` 实现 Next.js 核心数据页。`MemberProvider` 提供唯一当前 `member_id`，页面通过统一 typed API client 读取真实 FastAPI 契约，并在渲染前检查成员类 response 的 `member_id`。所有数据页必须区分 loading、empty、error 和 data；知识页只消费 2E-1 已实现契约，不复制后端逻辑。3A 不实现登录或外部医疗系统操作。
 
-`codex/3b-agent-trace-ui` 在线性隔离历史上实现主要 Agent 演示入口。前端首次运行固定提交 `human_confirmation_granted=false`，展示冻结答案、Tool/RAG 来源和 SafetyTrace；只有待确认且未阻断的 run 才允许用户勾选本地草稿声明并调用 `/continue`。Run 详情只读展示角色、工具、耗时、错误、fallback、ModelCallTrace 和 EvaluationResult，成员切换清除旧结果并检查所有冻结产物作用域。本阶段不重算评估、不跑真实 E2E Harness、不提交外部医院/药店/推送动作。
+`3B` 实现主要 Agent 演示入口。前端首次运行固定提交 `human_confirmation_granted=false`，展示冻结答案、Tool/RAG 来源和 SafetyTrace；只有待确认且未阻断的 run 才允许用户勾选本地草稿声明并调用 `/continue`。Run 详情只读展示角色、工具、耗时、错误、fallback、ModelCallTrace 和 EvaluationResult，成员切换清除旧结果并检查所有冻结产物作用域。本阶段不重算评估、不跑 3C 真实 E2E Harness、不提交外部医院/药店/推送动作。
 
 ## 7. 阅读顺序
 
