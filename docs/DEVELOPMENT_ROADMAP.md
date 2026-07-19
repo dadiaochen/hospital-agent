@@ -87,8 +87,8 @@
 | 3B | `DONE` | Agent 对话、确认与 Trace UI | 四场景前端闭环可演示 |
 | 3C | `DONE` | E2E 与真实 Trace Harness | API/UI 场景、隔离、安全回归通过 |
 | 3D | `DONE` | 一键演示与项目收口 | Docker、演示脚本、README、简历材料完成 |
-| 4A | `NEXT` | 轻量向量 RAG | pgvector + 本地 Embedding 可选启用，关键词模式仍可独立运行 |
-| 4B | `PLANNED` | 真实 LLM 接入与验证 | OpenAI-compatible 配置、连通性检查、失败回退可复现 |
+| 4A | `DONE` | 轻量向量 RAG | pgvector + 本地 Embedding 可选启用，关键词模式仍可独立运行 |
+| 4B | `NEXT` | 真实 LLM 接入与验证 | OpenAI-compatible 配置、连通性检查、失败回退可复现 |
 | 4C | `PLANNED` | 面经学习与项目答题库 | 原题归并、项目化回答、理解记忆和技术取舍持续维护 |
 
 ## 7. 已完成阶段基线
@@ -111,9 +111,10 @@ main
   -> 3B Agent conversation and Trace UI
   -> 3C Runtime E2E and real Trace Harness
   -> 3D one-command demo and MVP closure
+  -> 4A lightweight pgvector and FastEmbed RAG
 ```
 
-2A 至 2B-3 已包含在初始项目基线中。2C-1 至 3D 已按阶段形成唯一线性历史。3D 在全新 Docker PostgreSQL volume 上验证 migration、幂等 seed、四项 healthcheck 与固定四场景，形成可重复的本地 MVP 交付。项目仍保持 MVP Complete；4A 至 4C 是不改变医疗安全边界的后 MVP 学习与工程增强，当前唯一 `NEXT` 为 4A。
+2A 至 2B-3 已包含在初始项目基线中。2C-1 至 4A 已按阶段形成唯一线性历史。3D 形成可重复的本地 MVP 交付；4A 复用 PostgreSQL 接入 pgvector 0.8.5 与按需加载的 FastEmbed 中文 512 维模型，并保留默认关键词模式。项目仍保持 MVP Complete；当前唯一 `NEXT` 为 4B。
 
 ## 8. 阶段详细定义
 

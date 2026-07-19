@@ -89,6 +89,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `3D` 完成本地 MVP 收口。Compose backend 镜像包含现有 Alembic 和 seed，并在 Uvicorn 前自动执行 migration 与幂等初始化；PostgreSQL、Redis、FastAPI 和 production-mode Next.js 通过 healthcheck 有序启动。固定 Demo Runner 只调用公开 Runtime API，按父亲续方、母亲复诊、母亲提醒和高风险加量阻断四场景生成脱敏报告。默认仍是关键词 RAG 与 deterministic provider，不使用 Embedding 或真实模型 Key；可选 OpenAI-compatible provider 失败时保持 schema/safety 检查与 deterministic fallback。3D 不新增 ORM/migration，不接外部医院、药店、支付或推送。
 
+`4A` 在不改变默认 3D 演示的前提下实现轻量真实向量 RAG。Migration `0003_lightweight_vector_rag` 为 `knowledge_chunks` 增加可空 512 维 pgvector、模型名、内容哈希和索引时间；FastEmbed provider 仅在启用时加载 `BAAI/bge-small-zh-v1.5`，模型缓存位于项目 `var/models`。Indexer 只重建变化 chunk；pgvector 后端只返回 document/chunk 指针并由权威知识表回填正文。默认开关仍为 false，模型/索引/数据库异常必须留下 fallback reason 并回退关键词。本阶段不部署 RAGFlow，不抓取互联网医疗知识，不自动生成知识写回。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

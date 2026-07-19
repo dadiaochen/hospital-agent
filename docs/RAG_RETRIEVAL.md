@@ -1,91 +1,142 @@
 # RAG 检索设计
 
-## 1. 目标与边界
+## 1. 当前结论
 
-2F-1 的目标是把已有知识库关键词查询整理成可替换、可测试、可追踪的 Retriever。它不调用 LLM，不生成 Embedding，不连接真实向量数据库，不抓取互联网医疗内容，也不新增 ORM 字段或 Alembic migration。
-
-关键词检索必须始终可用。向量检索只是可选的召回增强，不能成为项目启动或医疗安全规则查询的单点依赖。
-
-## 2. 契约
-
-`RetrievalRequest` 描述一次检索：
-
-| 字段 | 含义 |
-| --- | --- |
-| `query` | 用户或 Agent 需要查找的文本。 |
-| `purpose` | 本次 run 为什么需要这些来源，例如 `safety_check` 或 `refill_sop`。 |
-| `mode` | `keyword` 或 `hybrid`；默认 `hybrid`，但功能开关关闭时实际只跑关键词。 |
-| `limit` | 最多返回的 chunk 数，范围 1 到 50。 |
-
-`RetrievedChunk` 返回稳定 `source_id`、document/chunk ID、两级版本、文档分类、来源、安全级别、正文、关键词、排序分数、用途和 `matched_by`。
-
-`category` 是文档固有分类；`purpose` 是本次任务使用它的原因。`score` 只表示检索相关性，不代表医疗正确率、疾病概率或 Agent 动作权限。
-
-`RetrievalResult` 同时记录：
-
-- `requested_mode`：调用方希望采用的模式。
-- `effective_mode`：本次实际成功使用的模式。
-- `fallback_used` / `fallback_reason`：是否发生降级及原因。
-- `evidence_present`：是否存在可回溯来源。
-
-## 3. 运行流程
+4A 已将原有 2F-1 Hybrid Retriever 接入真实可运行的轻量向量链路：
 
 ```text
-RetrievalRequest
-  -> SQLAlchemyKnowledgeStore
-  -> KeywordRetriever (always available)
-  -> optional VectorSearchBackend
-  -> hydrate vector document_id/chunk_id from PostgreSQL
-  -> deduplicate by chunk_id
-  -> deterministic ranking
-  -> RetrievalResult
+reviewed knowledge_chunks
+  -> FastEmbed passage embedding
+  -> PostgreSQL pgvector VECTOR(512)
+
+user/agent query
+  -> keyword retrieval (always)
+  -> FastEmbed query embedding (optional)
+  -> pgvector exact cosine search (optional)
+  -> document_id/chunk_id hydrate from authoritative tables
+  -> deduplicate/rank -> RetrievedChunk with source pointers
 ```
 
-关键词检索读取文档标题、分类、来源、正文、chunk 正文与关键词，按 query token 命中位置计算归一化排序分数。英文/数字按连续词处理；连续中文保留完整片段并补充双字词，使“我现在胸痛”可以命中“胸痛”安全关键词，同时不依赖外部分词服务。排序使用分数、分类、chunk index 和 chunk ID 作为稳定 tie-breaker，同一数据库快照和请求会得到相同顺序。
+默认仍是 `RAG_VECTOR_ENABLED=false`。此时不加载 FastEmbed、不下载模型、不执行向量查询，3D 演示只使用确定性关键词检索。向量模式是召回增强，不是系统启动和医疗安全规则查询的单点依赖。
 
-向量后端只能返回 `VectorMatch(document_id, chunk_id, score)`。Retriever 不信任它提供正文；必须从 PostgreSQL 重新加载，且 document/chunk 关系一致才会进入结果。这保证最终内容仍来自已审核知识表。
+## 2. 为什么没有部署 RAGFlow
 
-两路命中同一 chunk 时按 `chunk_id` 去重，`matched_by` 保存 `keyword` 与 `vector`，不会把重复正文两次放入 Agent context。
+RAGFlow 是完整 RAG 平台，适合多数据源摄取、解析、管理和较大规模检索，但其自托管栈包含额外数据库、对象存储、搜索引擎和缓存组件。当前仓库只有 4 个已审核知识分块，已有 PostgreSQL，目标又是低内存、易理解的实习项目，因此选择：
 
-## 4. 功能开关与降级
+- PostgreSQL + pgvector：复用现有数据库、事务、备份和来源表。
+- FastEmbed CPU：使用 ONNX Runtime，不引入 PyTorch/CUDA；默认中文模型约 90 MB。
+- 精确余弦检索：小数据无需 HNSW/IVFFlat 索引和参数调优。
+- 关键词基线：任何模型、网络或向量异常都能降级。
+
+当知识量、文件解析、多人知识管理或检索运营成为真实需求时，再评估 RAGFlow，而不是为了简历堆叠服务。
+
+## 3. 数据字段
+
+`knowledge_documents` / `knowledge_chunks` 的正文仍是事实来源。4A 只给 chunk 增加可空索引数据：
+
+| 字段 | 作用 |
+| --- | --- |
+| `embedding` | `VECTOR(512)`；存储 chunk 的数值语义表示，SQLite 测试使用 JSON variant。 |
+| `embedding_model` | 记录生成向量的模型；查询只使用与当前模型相同的向量。 |
+| `embedding_content_hash` | 对“模型名 + 实际索引文本”做 SHA-256；正文、标题、分类或关键词改变后触发重建。 |
+| `embedded_at` | 最近成功生成索引的时间，用于排错和审计。 |
+
+这些字段都允许 `NULL`，因此 migration 后即使不下载模型，关键词模式仍能运行。Migration `0003_lightweight_vector_rag` 只在 PostgreSQL 创建 `vector` extension；不创建新的外部向量服务。
+
+## 4. Embedding provider
 
 默认配置：
 
 ```env
-RAG_VECTOR_ENABLED=false
+RAG_EMBEDDING_PROVIDER=fastembed
+RAG_EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
+RAG_EMBEDDING_CACHE_DIR=var/models/fastembed
+RAG_EMBEDDING_BATCH_SIZE=16
+RAG_VECTOR_MIN_SCORE=0.35
 ```
 
-| 场景 | effective mode | fallback |
-| --- | --- | --- |
-| 功能开关关闭 | `keyword` | 否，属于预期配置。 |
-| 显式请求 keyword | `keyword` | 否。 |
-| 开关开启且向量后端成功 | `hybrid` | 否。 |
-| 开关开启但没有后端 | `keyword` | `vector_backend_unavailable`。 |
-| 向量后端异常 | `keyword` | `vector_backend_error:<type>`。 |
-| 向量指针无法从数据库回填 | `keyword` | `vector_sources_not_found`。 |
+`FastEmbedEmbeddingProvider` 是 lazy adapter：构造对象时不 import 模型、不创建缓存目录；第一次 `embed_query` 或 `embed_passages` 才加载模型。文档索引使用 `passage_embed`，查询使用 `query_embed`，两者表达同一个向量空间中的不同检索角色。
 
-降级不等于静默忽略错误。关键词结果继续服务当前任务，原因则进入 Tool 输出和后续 trace，供测试、Evaluator 与运维判断向量链路质量。
+数据库列固定为 512 维。更换其他维度模型必须新增 migration，不能只改环境变量；维度不匹配会在写数据库前失败并留下可解释的 fallback。
 
-## 5. 与 API、Tool 和 Agent 的关系
+## 5. 索引流程
 
-- `Retriever` 是内部 RAG 接口，不是 HTTP endpoint。
-- `search_safety_knowledge` Tool 通过 Retriever 获取已审核知识，并继续经过 Tool Registry 的 schema、角色与 trace 门禁。
-- 学习者正在实现的 `GET /api/knowledge/search` 仍需要 Router、API DTO 和 HTTP 错误语义；它可以在后续整合时调用 Retriever。
-- Agent 只能使用返回的来源指针和正文；没有 evidence 时不能让模型补写医疗规则。
-
-## 6. 验证
+`KnowledgeEmbeddingIndexer` 按 chunk ID 稳定排序，索引文本由标题、分类、chunk 正文和关键词组成。它比较当前模型和内容哈希，只处理新增或变化的 chunk；`--force` 才重建全部向量。
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests\test_hybrid_rag.py backend\tests\test_db_backed_tools.py -q --basetemp=.tmp\pytest-rag
+$env:RAG_VECTOR_ENABLED='true'
+python -m scripts.index_knowledge
+python -m scripts.index_knowledge --force
 ```
 
-专项测试覆盖续方 SOP、安全边界、空命中、功能开关、后端缺失、后端超时、来源回填、错误来源拒绝、两路去重和现有 DB Tool 兼容性。
+Compose 在 `RAG_VECTOR_ENABLED=true` 时按以下顺序启动 backend：migration -> seed -> index -> Uvicorn。索引失败会阻止 backend 被标记 healthy，避免配置声称启用向量但实际静默运行空索引。
 
-## 7. 尚未实现
+## 6. 查询与来源安全
 
-- Embedding provider 和模型调用。
-- pgvector 或独立向量数据库。
-- 文档摄取、切块、审核和索引重建流水线。
-- 真实线上检索质量指标和医疗效果评估。
-- 互联网医疗知识自动抓取或模型生成内容写回。
+`PgVectorSearchBackend` 先确认当前 PostgreSQL 至少有一条同模型向量，再生成 query embedding，并用 pgvector `<=>` 余弦距离做精确排序。距离转换为 `1 - distance` 的相关性分数，并按 `RAG_VECTOR_MIN_SCORE` 过滤。
+
+向量后端只返回 `VectorMatch(document_id, chunk_id, score)`。Hybrid Retriever 不信任向量结果中的正文，必须从 PostgreSQL 重新加载 chunk，并验证 document/chunk 关系；不存在或错配的指针不会进入 Agent context。
+
+两路命中同一 chunk 时按 `chunk_id` 去重，`matched_by` 保存 `keyword` 和 `vector`。`score` 只用于检索排序，不代表医疗正确率、诊断概率、安全率或动作权限。
+
+## 7. 功能开关与降级
+
+| 场景 | effective mode | fallback |
+| --- | --- | --- |
+| 开关关闭或显式 keyword | `keyword` | 否，这是预期配置。 |
+| 向量链路成功 | `hybrid` | 否。 |
+| 非 PostgreSQL、无兼容索引 | `keyword` | `vector_backend_error:VectorIndexUnavailableError`。 |
+| 模型缺失/下载失败 | `keyword` | `vector_backend_error:EmbeddingProviderUnavailableError`。 |
+| 查询或数据库异常 | `keyword` | `vector_backend_error:<ExceptionType>`。 |
+| 向量 ID 无法回填 | `keyword` | `vector_sources_not_found`。 |
+
+fallback reason 会进入 Tool 输出和 Trace。没有任何关键词或向量 evidence 时，Agent 仍必须拒绝编造安全规则。
+
+## 8. 一键运行
+
+默认低资源模式：
+
+```powershell
+.\scripts\start_demo.ps1
+```
+
+启用真实向量模式：
+
+```powershell
+.\scripts\start_vector_rag.ps1
+```
+
+脚本会构建/启动服务、下载模型到仓库 `var\models\fastembed`、幂等索引知识并执行同义表达 smoke test。合并到主工作区后明确路径是：
+
+```text
+E:\project_code\hospital\var\models\fastembed
+```
+
+只检查当前已启动容器：
+
+```powershell
+docker compose exec -T backend python -m scripts.check_vector_rag
+```
+
+## 9. 验证结果与口径
+
+2026-07-20 在本机 Docker 开发环境实测：pgvector extension `0.8.5`，模型 `BAAI/bge-small-zh-v1.5`，4/4 seed chunk 有向量；同义查询返回 `effective_mode="hybrid"`、`fallback_used=false`，首条命中“人工确认规则”。向量模式下 3D 固定业务场景仍为 4/4 通过。
+
+模型缓存为 90.81 MB。一次查询后的容器内存快照为 backend 177.7 MiB、PostgreSQL 31.34 MiB、Redis 7.78 MiB、frontend 45.48 MiB。它只描述这台电脑、4 个 seed chunk 和该时刻，不是 p95、容量规划或生产 SLO。
+
+专项测试：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+New-Item -ItemType Directory -Force var\pytest | Out-Null
+python -m pytest backend\tests\test_vector_rag.py backend\tests\test_hybrid_rag.py -q `
+  --basetemp var\pytest\vector-rag
+```
+
+## 10. 尚未实现
+
+- PDF/网页摄取、自动切块、审核发布和删除同步流水线。
+- 大规模 ANN 索引、reranker、召回质量数据集和参数调优。
+- 未经审核的互联网医疗知识抓取或模型生成知识写回。
+- 生产备份、监控、容量规划和医疗效果评估。

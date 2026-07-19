@@ -2,7 +2,7 @@
 
 ## 1. 设计目标
 
-本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前线性基线已实现可重复契约、deterministic Harness、2E API、Hybrid RAG、Model Gateway、LangGraph 编排、Runtime 持久化/API、3A/3B 前端、3C Runtime E2E Harness 和 3D 一键演示交付。
+本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前线性基线已实现可重复契约、deterministic Harness、2E API、Hybrid RAG、Model Gateway、LangGraph 编排、Runtime 持久化/API、3A/3B 前端、3C Runtime E2E Harness、3D 一键演示和 4A 轻量向量检索。
 
 ## 2. 分层架构
 
@@ -69,11 +69,11 @@ Context、工具、Trace 和评估先由 Pydantic 模型定义，并使用 `extr
 
 SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权查询和跳过确认。EvaluatorAgent 是 post-run 只读评估角色：读取冻结产物，计算质量结果，不能修改答案、调用业务工具或写业务状态。
 
-### 4.6 RAG 保留确定性关键词基线
+### 4.6 RAG 以关键词为基线并可选接入真实向量召回
 
-2F-1 把原先位于 service 内的知识库扫描整理为 `Retriever` 协议。`KeywordRetriever` 从 PostgreSQL 的 `knowledge_documents` / `knowledge_chunks` 加载已审核内容并确定性排序；`HybridRetriever` 可以接收可选的 `VectorSearchBackend`，但向量后端只返回 `document_id`、`chunk_id` 和相关性分数，正文必须重新从数据库回填。
+2F-1 把原先位于 service 内的知识库扫描整理为 `Retriever` 协议。4A 在同一契约后接入 FastEmbed `BAAI/bge-small-zh-v1.5` 与 PostgreSQL pgvector：Indexer 为已审核 chunk 生成 512 维 passage embedding；查询使用 query embedding 和精确余弦距离。向量后端仍只返回 `document_id`、`chunk_id` 和相关性分数，正文必须重新从数据库回填。
 
-`RAG_VECTOR_ENABLED` 默认关闭。显式开启后，如果后端缺失、调用异常或来源指针无法回填，系统保留关键词结果并记录 `fallback_used` / `fallback_reason`。结果中的 `score` 仅表示检索相关性，不是医疗正确率、诊断概率或执行授权。完整设计见 [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md)。
+`RAG_VECTOR_ENABLED` 默认关闭，关闭时不加载模型。显式开启后，Compose 在 migration/seed 后幂等索引；模型、索引、查询异常或来源指针无法回填时，系统保留关键词结果并记录 `fallback_used` / `fallback_reason`。结果中的 `score` 仅表示检索相关性，不是医疗正确率、诊断概率或执行授权。完整设计见 [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md)。
 
 ### 4.7 Model Gateway 先解析再使用
 
@@ -118,7 +118,7 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 | ORM、迁移、seed、只读 DB tools、本地 draft tool 与草稿状态机 API | 生产认证和外部业务提交。 |
 | 家庭、药箱、处方/购药、库存、知识检索和 Agent 审计的只读 API | 真实医院、药店和推送 API。 |
 | ContextManager、Trace、fixture Harness、确定性评估、Model Gateway、LangGraph DAG 和 Agent Runtime API/持久化 | 线上模型质量验证、生产认证和外部系统集成。 |
-| 权限、成员隔离、确认门禁、失败 fallback 与关键词/混合 Retriever | 真实 Embedding provider、向量数据库和互联网知识抓取。 |
+| 权限、成员隔离、确认门禁、失败 fallback、关键词 Retriever 与可选 FastEmbed/pgvector 混合检索 | 文档摄取平台、大规模 ANN/reranker 和互联网知识抓取。 |
 | 3A/3B Next.js 数据页、Agent 对话、本地确认续跑、Trace/Evaluation 详情和客户端成员响应检查 | 生产浏览器监控、真实登录和外部系统集成。 |
 | 3C Runtime E2E、Trace 脱敏 adapter、API Guard 和本地 PostgreSQL 报告 | 生产流量回放、临床有效性或真实 LLM 质量评测。 |
 | 3D Compose 自动 migration/seed、四项 healthcheck、固定四场景和脱敏演示报告 | 生产编排、真实登录、秘密管理、HTTPS、浏览器自动化和高可用。 |

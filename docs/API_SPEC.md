@@ -116,6 +116,8 @@ draft -> rejected
 
 内部请求和结果由 `RetrievalRequest`、`RetrievedChunk` 与 `RetrievalResult` 描述。每个命中项带 `source_id`、document/chunk ID 与版本、相关性 `score`、本次检索 `purpose` 和 `matched_by`；结果还声明 requested/effective mode 与 fallback 原因。HTTP API 后续可以调用 Retriever，但仍应定义自己的 API DTO 和错误语义，不能直接暴露内部模型。
 
+4A 为这个内部 Retriever 接入 FastEmbed + pgvector，不新增 HTTP endpoint，也不改变 `GET /api/knowledge/search` 的既有响应 DTO。Agent Tool 在向量配置开启时可得到 `effective_mode="hybrid"` 和 `matched_by="vector"` 来源；客户端仍只能消费有 document/chunk 指针的已审核正文，不能提交任意文本进入向量库。
+
 ## 7. 2F-2 Model Gateway 也不是 HTTP API
 
 `ModelGateway` 是 Agent 内部的模型调用边界，不新增客户端 endpoint。它读取服务端环境变量中的 provider、base URL、模型名、Key 和 timeout；业务请求与 API DTO 不能携带或覆盖模型 Key。

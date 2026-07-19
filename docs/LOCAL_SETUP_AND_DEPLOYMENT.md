@@ -492,3 +492,25 @@ python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest
 - [ ] `/health` 返回 200，Swagger 可打开。
 - [ ] pytest 和 compileall 通过。
 - [ ] 需要页面时再启动前端。
+
+## 13. 可选轻量向量 RAG
+
+默认 `.\scripts\start_demo.ps1` 不下载或加载 Embedding。需要学习/演示真实向量检索时，从仓库根目录运行：
+
+```powershell
+.\scripts\start_vector_rag.ps1
+```
+
+它会使用 `pgvector/pgvector:0.8.5-pg16`，执行 migration/seed、下载 `BAAI/bge-small-zh-v1.5`、为变化知识建立 512 维索引，并执行语义 smoke。模型在主工作区的明确路径是：
+
+```text
+E:\project_code\hospital\var\models\fastembed
+```
+
+该目录位于 E 盘且被 Git 忽略。首次运行需要访问 Hugging Face；后续复用缓存。只验证已启动容器：
+
+```powershell
+docker compose exec -T backend python -m scripts.check_vector_rag
+```
+
+关闭并恢复默认模式：先执行 `.\scripts\stop_demo.ps1`，再执行 `.\scripts\start_demo.ps1`。停止容器不会删除模型或 PostgreSQL 数据；不要为切换模式运行 `docker compose down -v`。

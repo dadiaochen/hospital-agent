@@ -29,6 +29,7 @@
 | [API_SPEC.md](API_SPEC.md) | 已实现 HTTP 接口、未来接口的契约边界。 |
 | [DB_SCHEMA.md](DB_SCHEMA.md) | ORM 表、字段用途、关系、索引与审计原则。 |
 | [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md) | Retriever 契约、关键词基线、向量来源回填与降级。 |
+| [vector_rag_report.4a.md](vector_rag_report.4a.md) | 4A 本地 pgvector/FastEmbed 语义 smoke、四场景回归和资源快照口径。 |
 | [MODEL_GATEWAY.md](MODEL_GATEWAY.md) | 模型 provider、结构化输出、安全门禁、降级和调用 Trace。 |
 | [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md) | 有界状态图、节点路由、工具调用、确认与运行产物。 |
 | [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md) | Agent 运行 API、run/tool-call 持久化、冻结回放、幂等与确认续跑。 |

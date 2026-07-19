@@ -10,7 +10,7 @@
 - 实现本地草稿创建、查询、确认和拒绝 API，以白名单状态机、幂等决策、成员隔离和 JSON 审计保证确认只改变本地状态。
 - 实现 deterministic Agent Harness：固定用例、冻结 RunTrace、规则评估、失败原因与 Markdown 指标报告。
 - 区分运行时 SafetyAgent 和 post-run EvaluatorAgent，避免用事后评估代替安全拦截。
-- 实现 Hybrid RAG Retriever：保留确定性关键词基线，以来源指针回填数据库正文，并对向量后端缺失、超时和失效指针执行可追踪降级。
+- 实现轻量 Hybrid RAG：保留确定性关键词基线，以 FastEmbed 中文 512 维模型和 PostgreSQL pgvector 做可选语义召回；通过模型名/内容哈希幂等索引、来源指针回填和异常降级约束证据。
 - 实现 Model Gateway：统一 deterministic 与 OpenAI-compatible provider 契约，在 Pydantic 解析和规则安全检查失败时执行可追踪 fallback；尚未进行真实线上模型质量评测。
 - 实现有界 LangGraph Multi-Agent DAG：以 intent 路由角色，复用 ContextManager、Tool Registry、SafetyAgent、确认门、Model Gateway、RunTrace/reset 和只读 Evaluator。
 - 实现 Agent Runtime API：注入真实 DB tools，持久化 run/tool-call 与版本化冻结产物，支持成员隔离、幂等 replay、确认后的同任务续跑和失败审计；不执行外部医疗动作。
@@ -26,7 +26,7 @@
 
 构建 Tool Registry 与数据库适配层，为档案、处方、药箱、库存和安全规则提供可审计的只读 evidence；关键业务动作仅在确认后创建本地草稿，并通过幂等状态机确认或拒绝本地记录，不触发真实医院或药店提交。
 
-设计 Hybrid RAG 检索层，以 PostgreSQL 关键词检索作为稳定基线，通过协议注入可选向量后端；向量召回只提供 document/chunk 指针，正文由权威知识表回填，异常时记录原因并安全降级。
+设计 Hybrid RAG 检索层，以 PostgreSQL 关键词检索作为稳定基线，接入 FastEmbed CPU 中文模型与 pgvector 精确余弦检索；向量召回只提供 document/chunk 指针，正文由权威知识表回填，索引/模型异常时记录原因并安全降级。
 
 实现可替换 Model Gateway，以 Pydantic 约束结构化输出、规则门禁拦截越权文本，并为 provider 超时、HTTP/schema/safety 失败记录逐次 Trace 和 deterministic fallback。
 
@@ -58,9 +58,9 @@
 - 不要声称 `100% safety recall`、`0 hallucination` 或特定 p95 延迟，除非有对应真实运行的评估报告和数据范围。
 - 3C 已在本地 PostgreSQL + deterministic provider + seed 数据上执行 7 条 Trace 和 2 条 Guard；不能把这个小规模固定用例结果描述成生产、临床或真实 LLM 指标。
 - 3D 已在全新 Docker PostgreSQL volume + deterministic provider 上执行固定四场景并得到 4/4 通过；这只证明打包、初始化与当前固定规则可重复，不能外推为临床安全率或真实 LLM 质量。
-- 当前默认 RAG 不使用 Embedding；它是 PostgreSQL 关键词基线。不要声称已部署向量数据库或真实语义检索，直到后续增强有代码、migration 和实跑报告。
+- 当前默认 RAG 仍不使用 Embedding；4A 向量模式需要显式启用。可以如实说明已本地部署 pgvector/FastEmbed 并完成 4 个 seed chunk 的 smoke，不得把该小样本扩张为生产检索质量。
 - 知识库搜索已完成自动化与本地 PostgreSQL/Postman 验证，但不能把本地联调描述为生产检索质量或临床有效性验证。
-- 不要把 RAG `score` 描述为医疗正确率，也不要声称已接入真实 Embedding 或向量数据库；当前实现的是接口、关键词基线和可测试的注入/降级机制。
+- 不要把 RAG `score` 描述为医疗正确率。4A 的 90.81 MB 缓存、容器内存和 4/4 场景是一次本地开发验证，不是容量、p95、临床安全或生产 SLO。
 - 不要把 MockTransport 或 deterministic provider 测试描述为真实 LLM 效果，也不要宣称模型准确率、安全率、成本或 p95 延迟。
 
 本地报告记录的 18 ms 是冻结 Trace 内工具与 deterministic model gateway 累计 latency 的 p95，不是浏览器端到端延迟或服务 SLO。简历优先描述“建立评估维度与可重复 E2E”，只有在面试官追问报告范围时再说明样本、环境和口径。

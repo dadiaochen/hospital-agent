@@ -24,7 +24,7 @@ Copy-Item .env.example .env
 
 `.env` 只放本地配置，不能提交密钥。服务依赖可单独启动：
 
-`RAG_VECTOR_ENABLED` 默认是 `false`，此时只使用数据库关键词检索。不要仅把它改为 `true` 就假设向量检索可用；2F-1 只定义向量后端协议，真实 Embedding provider 和向量数据库尚未接入。
+`RAG_VECTOR_ENABLED` 默认是 `false`，此时只使用数据库关键词检索且不加载模型。4A 已实现 FastEmbed + pgvector；开发者可运行 `.\scripts\start_vector_rag.ps1` 自动启动、索引和验证，模型缓存位于项目 `var\models`，不提交 Git。
 
 `MODEL_PROVIDER` 默认是 `deterministic`，不需要 Key，也不会联网。只有准备好兼容 `/chat/completions` 的服务后才配置 `openai_compatible`、`MODEL_API_BASE`、`MODEL_API_KEY`、`MODEL_NAME` 和 `MODEL_TIMEOUT_MS`。Key 只能保存在未提交的 `.env` 或部署密钥系统中。
 
@@ -77,6 +77,14 @@ Windows 某些环境会拒绝访问默认 pytest 临时目录。上面的 `--bas
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_hybrid_rag.py backend\tests\test_db_backed_tools.py -q --basetemp=.tmp\pytest-rag
+```
+
+只验证 4A 真实向量适配与索引规则：
+
+```powershell
+New-Item -ItemType Directory -Force var\pytest | Out-Null
+python -m pytest backend\tests\test_vector_rag.py backend\tests\test_hybrid_rag.py -q `
+  --basetemp=var\pytest\vector-rag
 ```
 
 只验证 2F-2 Model Gateway：

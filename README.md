@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已按 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 完成 `3D`，达到本仓库定义的本地演示级 **MVP Complete**。当前没有已定义的后续阶段；新增产品范围前必须先更新唯一总路线图。
+项目已按 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 完成 `4A`，保持本地演示级 **MVP Complete**，并增加可选的真实轻量向量 RAG。当前唯一下一阶段是 `4B` 真实 LLM 接入与验证。
 
 目前已经具备：
 
@@ -17,7 +17,7 @@
 - 数据库只读查询工具，以及只创建本地 draft 的确认门禁工具。
 - 家庭、药箱、处方/购药、药店库存、知识检索与 Agent 审计的只读 FastAPI 接口；知识检索已完成自动化与 PostgreSQL/Postman 验证。
 - 本地草稿创建、查询、确认和拒绝 API；状态机只改变本地记录，始终保留 `not_submitted` 外部状态。
-- Hybrid RAG：关键词检索始终可用，可选向量后端只返回来源指针，异常时留下原因并自动回退。
+- Hybrid RAG：关键词检索始终可用；可选 FastEmbed 中文 512 维模型与 PostgreSQL pgvector 做真实语义召回，向量结果只返回来源指针并从权威表回填，异常时留下原因并自动回退。
 - Model Gateway：默认 deterministic，可选真实 HTTP provider；所有输出先过 Pydantic 与安全检查，失败留下 attempt trace 并回退。
 - 有界 LangGraph DAG：按 intent 路由四类业务角色，统一经过 ContextManager、Tool Registry、SafetyAgent、确认草稿、RunTrace/reset 和只读 Evaluator。
 - Agent Runtime API：真实 DB tools、run/tool-call 持久化、冻结产物查询、幂等运行和确认后的同任务续跑；任何动作仍只创建本地草稿。
@@ -80,6 +80,14 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 默认 `RAG_VECTOR_ENABLED=false`，使用 PostgreSQL 关键词检索并保留 document/chunk/version/source 指针，没有调用 Embedding 模型。默认 `MODEL_PROVIDER=deterministic`，问答由规则/模板生成，不调用真实 LLM；项目已有可选 OpenAI-compatible provider、schema/safety 校验和 deterministic fallback，Key 只能配置在未提交的本机 `.env`。完整区别见 [MVP 演示手册](docs/DEMO_RUNBOOK.md#5-rag-与模型模式)。
 
+一键启用 4A 真实向量模式：
+
+```powershell
+.\scripts\start_vector_rag.ps1
+```
+
+首次运行把约 90 MB 模型缓存到 `E:\project_code\hospital\var\models\fastembed`，自动执行 migration、seed、幂等索引和语义 smoke test。2026-07-20 的本机验证使用 pgvector 0.8.5、`BAAI/bge-small-zh-v1.5` 和 4 个已审核 seed chunk，语义查询无 fallback 且向量模式四场景仍为 4/4；详见 [4A 验证报告](docs/vector_rag_report.4a.md)。
+
 运行后端测试：
 
 ```powershell
@@ -101,6 +109,15 @@ python -m pytest backend\tests\test_confirmation_draft_api.py backend\tests\test
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_hybrid_rag.py backend\tests\test_db_backed_tools.py -q --basetemp=.tmp\pytest-rag
+```
+
+只验证 4A 向量 RAG：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+New-Item -ItemType Directory -Force var\pytest | Out-Null
+python -m pytest backend\tests\test_vector_rag.py backend\tests\test_hybrid_rag.py -q `
+  --basetemp=var\pytest\vector-rag
 ```
 
 只验证 2F-2 Model Gateway：
@@ -157,7 +174,7 @@ python -m pytest backend\tests\test_mvp_demo_runner.py -q `
 
 - 当前是本地开发/集成演示环境，不是生产部署；没有 JWT/OAuth、真实患者流量、HTTPS、秘密管理、高可用、SLA 或生产监控。
 - 不接真实医院、医生、处方、药店、支付、物流或提醒推送；确认只写本地草稿。
-- 默认没有真实 LLM 和 Embedding/向量数据库；OpenAI-compatible provider 尚未形成真实质量报告，向量后端只有注入协议与降级规则。
+- 默认没有真实 LLM，向量模式也默认关闭；OpenAI-compatible provider 尚未形成真实质量报告。4A 的本地 Embedding/pgvector 只验证了 4 个已审核 seed chunk，不代表生产检索质量或医疗效果。
 - 固定 Harness 和 3D 的 4/4 只证明当前 seed + deterministic 规则的回归结果，不能外推为临床安全率、线上幻觉率或服务 SLO。
 - 2026-07-19 的 `npm audit --omit=dev` 对 Next 14 生产依赖仍报告 1 项 high 和 1 项 moderate；官方自动修复涉及 Next 16 major upgrade，应在生产化前独立升级并做完整回归。
 

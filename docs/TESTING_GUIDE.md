@@ -13,7 +13,7 @@
 | 草稿写入 | `test_confirmation_draft_tool.py` | 确认门禁、幂等、事务回滚、只写本地 draft。 |
 | 草稿 API 状态机 | `test_confirmation_draft_api.py` | 显式确认、四类草稿、成员隔离、幂等确认/拒绝、非法终态转换和 OpenAPI。 |
 | Harness | `test_deterministic_evaluator.py`、`test_harness_runner.py`、`test_harness_runtime.py` | 固定用例回放、评估规则和汇总报告。 |
-| RAG | `test_hybrid_rag.py` | 固定安全/SOP 召回、来源版本、向量回填、去重和失败降级。 |
+| RAG | `test_hybrid_rag.py`、`test_vector_rag.py` | 固定安全/SOP 召回、来源版本、lazy provider、幂等索引、真实向量字段、回填、去重和失败降级。 |
 | Model Gateway | `test_model_gateway.py` | deterministic 基线、HTTP adapter、schema、安全、超时和 fallback trace。 |
 | LangGraph 工作流 | `test_langgraph_workflow.py` | 四场景路由、确认不可绕过、安全拦截、成员隔离、来源保留、reset/eval 与模型失败。 |
 | Agent Runtime API | `test_agent_runtime_api.py` | 真实 DB tools、run/tool-call 持久化、冻结回放、幂等、续跑、隔离、安全与失败审计。 |
@@ -58,6 +58,8 @@ npm run build
 7. **测试与文档**：新增规则是否有一个正例、一个失败例和同步说明？
 
 Review RAG 时还要区分相关性与事实正确性：`score` 只能用于排序；正文必须来自可回溯的数据库 chunk，向量后端返回的未知或错配 ID 不能被 Agent 使用。
+
+Review 4A 时还要检查默认关闭是否真的不创建模型缓存；模型名、512 维 schema 和内容哈希是否一致；无索引/非 PostgreSQL/模型失败是否留下 fallback；索引是否只处理变化 chunk。Docker smoke 必须同时核验 pgvector extension、索引数量、语义命中和向量模式下四场景回归。
 
 Review Model Gateway 时，不只看成功响应。至少验证 provider timeout、HTTP error、非法 JSON、目标 schema 失败、不安全输出和 fallback 二次失败；Trace 不得包含 API Key，失败的原始模型文本不得进入 Agent output。
 

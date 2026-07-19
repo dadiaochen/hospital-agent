@@ -106,7 +106,13 @@ docker compose up -d --build backend frontend --wait
 
 ### 可选向量检索
 
-`RAG_VECTOR_ENABLED=true` 只是打开功能开关，不会自动下载 Embedding 模型。当前仓库只提供 `VectorSearchBackend` 注入协议、来源回填和失败降级；真实 Embedding provider 与向量库未接入。没有后端时必须保持 `false`。
+4A 已接入 FastEmbed 和 pgvector。最简单的启用方式不是手工改配置，而是：
+
+```powershell
+.\scripts\start_vector_rag.ps1
+```
+
+首次运行会把 `BAAI/bge-small-zh-v1.5` 缓存到项目 `var\models\fastembed`，migration 后对已审核 chunk 幂等建索引，并自动执行语义 smoke test。向量模式仍先跑关键词并从 PostgreSQL 回填正文；模型、索引或向量查询失败时记录原因并回退关键词。默认 `start_demo.ps1` 继续关闭向量，不下载模型。
 
 ## 6. 验收与排错
 

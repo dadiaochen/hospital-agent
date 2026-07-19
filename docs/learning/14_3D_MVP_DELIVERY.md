@@ -93,7 +93,7 @@ Migration 管“表长什么样”，seed 管“演示时表里有什么”。�
 
 ## 4. 我们的 RAG 到底有没有 Embedding
 
-默认没有。请把 RAG 拆成两个概念：
+3D 默认模式没有，4A 已新增可选真实 FastEmbed/pgvector；当前仍默认关闭。请把 RAG 拆成两个概念，当前实现细节继续阅读 [15 4A 轻量向量 RAG](15_4A_LIGHTWEIGHT_VECTOR_RAG.md)：
 
 ```text
 RAG = Retrieval + 把检索证据提供给生成流程
@@ -108,7 +108,7 @@ document_id + chunk_id + version + source + content
 
 这已经解决了“回答中的规则从哪里来”和“来源能不能回查”，所以是一个确定性的 RAG 基线。它的缺点是同义词和语义召回弱。
 
-项目还定义了 `VectorSearchBackend` 协议。未来真实向量检索应当：
+3D 当时只定义了 `VectorSearchBackend` 协议；4A 已按以下边界实现：
 
 1. 用 Embedding 模型把 query 转成向量；
 2. 从向量库返回 document/chunk ID 和相似度；
@@ -116,7 +116,7 @@ document_id + chunk_id + version + source + content
 4. 拒绝不存在或错配的指针；
 5. 向量服务失败时回退关键词结果。
 
-所以 `RAG_VECTOR_ENABLED=true` 不是“自动拥有 Embedding”。没有实现 backend 时必须保持 `false`。
+所以在 3D 快照里，`RAG_VECTOR_ENABLED=true` 还不等于拥有 Embedding；4A 之后应使用 `.\scripts\start_vector_rag.ps1` 完成 migration、模型缓存、索引和 smoke，而不是只改一个开关后凭配置猜测成功。
 
 ## 5. 我们的问答到底有没有调用大模型
 
@@ -197,4 +197,4 @@ Get-Content var\demo\mvp-demo.md
 
 > 我没有把“本机能启动”当成交付完成，而是把 migration、幂等 seed、服务 healthcheck 和固定四场景编入 Docker 启动链。演示 Runner 只走公开 API，复用 Runtime Trace 与 deterministic Evaluator，并输出脱敏报告。默认关键词 RAG 和 deterministic model 保证无 Key 可复现，真实 LLM 通过 OpenAI-compatible Gateway 可选接入并带 schema、安全检查和 fallback。
 
-不能说：已生产上线、已接真实医院、已做临床评测、使用了真实 Embedding、真实 LLM 达到 100% safety recall，或浏览器端 p95 等于固定 Trace latency。
+仅依据 3D 报告不能说：已生产上线、已接真实医院、已做临床评测、使用了真实 Embedding、真实 LLM 达到 100% safety recall，或浏览器端 p95 等于固定 Trace latency。4A 后可以说“本地实现并验证 FastEmbed/pgvector”，但仍不能扩张成生产或医疗效果结论。

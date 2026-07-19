@@ -2,4 +2,4 @@
 
 项目的阶段状态和唯一下一步以 [docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md) 为准。
 
-`3D` 已完成，项目达到总路线图定义的本地演示级 MVP Complete。当前没有已定义的下一阶段；若要继续生产化、接真实模型或扩展业务，必须先在 [docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md) 明确范围和验收，不能从本文件临时增加阶段编号。
+`4A` 已完成：真实 pgvector + FastEmbed 向量检索可选启用，默认关键词模式继续独立运行。唯一下一阶段是总路线图已定义的 `4B`：真实 LLM 接入配置、连通性检查和 deterministic fallback 验证；本文件不另行发明阶段编号。

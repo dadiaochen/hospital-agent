@@ -54,9 +54,9 @@
 | 表 | 核心字段 | 设计意图 |
 | --- | --- | --- |
 | `knowledge_documents` | `title`、`category`、`source`、`content`、`safety_level` | 可说明来源的知识文档。 |
-| `knowledge_chunks` | `document_id`、`chunk_index`、`content`、`keywords` | 文档分块和关键词检索单元。 |
+| `knowledge_chunks` | `document_id`、`chunk_index`、`content`、`keywords`、`embedding`、`embedding_model`、`embedding_content_hash`、`embedded_at` | 文档分块、关键词检索单元和可选 512 维向量索引。 |
 
-RAG 输出必须带来源指针；没有命中文档或工具 evidence 时不能编造医学事实。2F-1 不增加向量列或 migration：关键词基线直接读取上述两张表，document/chunk 的 `updated_at` 作为当前版本指针返回。可选向量后端只返回 ID 和相关性分数，Retriever 必须用 ID 重新加载数据库正文；不存在或 document/chunk 不匹配的指针会被拒绝并回退关键词结果。
+RAG 输出必须带来源指针；没有命中文档或工具 evidence 时不能编造医学事实。4A migration `0003_lightweight_vector_rag` 在 PostgreSQL 启用 pgvector，并增加可空 `VECTOR(512)`、模型名、内容哈希和索引时间。关键词基线不依赖这些字段；向量后端仍只返回 ID 和相关性分数，Retriever 必须用 ID 重新加载数据库正文。模型不一致、索引缺失、指针不存在或 document/chunk 不匹配时会拒绝向量结果并回退关键词。
 
 ## 7. Agent 审计
 
