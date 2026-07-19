@@ -20,12 +20,14 @@
 | API | `test_health.py`、`test_read_api.py`、`test_confirmation_draft_api.py` | 健康检查、只读资源和本地草稿状态机。 |
 | 3A 前端 | `frontend/lib/api/client.test.ts`、`app/medicine-box/page.test.tsx`、Next production build | URL 编码、成员响应隔离、切换时清理旧数据、loading/empty/error、TypeScript 契约和全部页面编译。 |
 | 3B Agent UI | `app/agent/page.test.tsx`、`components/RunTraceDetails.test.tsx`、API client 测试 | 首次未确认、显式续跑、高风险无按钮、成员切换清理、冻结产物隔离、错误/fallback 与评估字段。 |
+| 3C Runtime E2E | `test_runtime_e2e_harness.py`、`app/agent/page.test.tsx` | 真实 API artifacts、确认续跑、无来源、工具失败、成员隔离、Trace 脱敏、API Guard 和四个 UI preset。 |
 
 ## 运行命令
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest
+New-Item -ItemType Directory -Force var\pytest | Out-Null
+python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest\all
 python -m compileall backend\app backend\tests
 ```
 
@@ -66,10 +68,28 @@ Review 前端时先忽略样式，追踪 `page -> useMember -> api client -> end
 
 Review Agent UI 时再检查首次 POST 是否固定为 `false`，确认按钮是否同时依赖后端待确认状态和未阻断 SafetyTrace，续跑是否提交新的确认幂等键。Trace 页面只能展示冻结产物，不能在浏览器重写 FinalAnswer 或重算 EvaluationResult；mock 组件测试不能冒充 3C E2E。
 
+Review 3C Runner 时同时检查两个方向：运行时是否真的从 HTTP API 返回冻结产物；adapter 是否在评估前剔除敏感字段并拒绝 run/task/member 不一致。失败 ToolCall 可以是预期行为，但不得被计算为 evidence；Guard 请求只检查 HTTP 状态和错误码，不能伪造成功 RunTrace。
+
 ## 当前常见风险
 
 - 2G-2 Agent API/runtime 持久化已实现，但多模型线上质量验证、生产认证和外部医院/药店集成尚未实现，不能用 deterministic 成功结果替代真实验证。
-- 3A/3B 页面已具备契约与组件测试；3C 仍需补充真实 PostgreSQL/API/UI 四场景 E2E 与真实 Trace Harness。
+- 3A/3B 页面已具备契约与组件测试；3C 已增加真实 Runtime API Harness 和四场景 UI 请求契约测试。浏览器自动化仍未引入，3D 需保留人工 Docker smoke 演示脚本。
 - 2026-07-19 使用 npm 官方 registry 执行 `npm audit --omit=dev` 时，Next 14 生产依赖报告 1 项 high 和 1 项 moderate；官方自动修复建议升级到 Next 16，属于 major upgrade。当前本地演示不因此冒充生产安全版本，升级与回归应作为部署前独立任务处理。
 - `agent_eval_report.example.md` 是固定 mock fixture 的计算结果，不是生产质量、临床效果或安全率证明。
 - 本项目的配置示例只用于本地开发。生产环境必须从安全的环境变量或秘密管理系统注入连接信息和模型 Key。
+
+## 3C 专项命令
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+New-Item -ItemType Directory -Force var\pytest | Out-Null
+python -m pytest backend\tests\test_runtime_e2e_harness.py -q `
+  -p no:cacheprovider --basetemp=var\pytest\3c
+
+python -m app.agent.runtime_harness `
+  --base-url http://localhost:8000 `
+  --environment local_postgresql_deterministic `
+  --run-key-prefix "3c-$((Get-Date).ToString('yyyyMMddHHmmss'))"
+```
+
+第一条使用 pytest SQLite 隔离环境；第二条要求 Docker PostgreSQL/FastAPI 已启动并 seed。两者都应运行，因为它们发现的问题类型不同。

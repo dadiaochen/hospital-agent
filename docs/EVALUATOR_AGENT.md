@@ -47,3 +47,9 @@ HarnessRunner 批量加载 16 个固定 ExpectedCase 和对应 mock RunTrace，�
 当前已实现 Pydantic trace、确定性规则、fixture loader、报告渲染、mock Harness runtime，以及 LangGraph 运行后直接生成同一 RunTrace 的路径。工作流在 FinalAnswer、RunTrace 和 reset 之后调用 DeterministicEvaluator；FinalAnswerTrace 是冻结模型，评估器既不接收 state writer，也不调用任何业务工具。
 
 2G-2 继续调用同一个只读 DeterministicEvaluator，并把 EvaluationResult 与冻结 RunTrace 一起持久化和查询。Evaluator 没有数据库 Session、Tool Registry 或 state writer；持久化由 AgentRuntimeService 在评估返回后完成，因此评估器不能修改答案和业务状态。当前仍不是 LLM Evaluator，也不是临床质量评估。
+
+## 6. 3C Runtime Trace 输入适配
+
+`RuntimeTraceAdapter` 是 Runtime API 和既有 `DeterministicEvaluator` 之间的新信任边界。它不会实现第二套评分公式，只负责：递归脱敏敏感键、解析冻结 artifacts、验证 run/task/member 作用域，并把当前 `ExpectedCase.case_id` 投影到新的冻结 RunTrace。
+
+Evaluator 仍只读取 ExpectedCase 与 RunTrace，不接收数据库 Session、HTTP client 或业务写 service。API Guard 的 `404/422` 没有 FinalAnswer，不能伪造成 EvaluationResult；它们由 Runtime Harness 单独汇总。3C JSON 报告排除成员 ID、run ID 和答案正文。

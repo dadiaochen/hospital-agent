@@ -167,4 +167,12 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 4. 不存在、越权、schema 失败和状态冲突要有可预测的错误格式。
 5. 含有医疗敏感内容的写操作在 API 层之外还必须经过 safety 与 confirmation 规则。
 
-知识库搜索完成前，2E-1 仍不应在路线图中标记为完成。本节 2E-2 API、2F 内部能力与 2G 工作流/Runtime 只存在于隔离线性分支，必须在 2E-1 完成后整合并完整回归。
+## 11. 3C Harness 的 API 使用边界
+
+3C 没有新增 HTTP endpoint。`RuntimeE2EHarnessRunner` 作为外部客户端复用：
+
+- `GET /api/family-members`：按 relationship 发现当前 seed 的稳定 member ID。
+- `POST /api/agent-runs`：执行首轮固定用例，始终提交 `human_confirmation_granted=false`。
+- `POST /api/agent-runs/{run_id}/continue`：仅对需要确认的正常业务执行续跑。
+
+越权成员预期返回 `404 not_found`；首轮确认绕过预期返回 `422 validation_error`。高风险 `blocked` run 不调用 `/continue`。Harness 只读取 response，不调用数据库、不改写 artifacts，也不通过测试接口绕开生产路由。

@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已按 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 完成至 `3B`，并将 2E-1 学习成果与 2E-2 至 3B 的阶段提交整理为唯一线性历史。当前唯一下一阶段是 `3C`：真实 PostgreSQL/API/UI 场景的 E2E 与 Trace Harness。
+项目已按 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 完成至 `3C`。当前唯一下一阶段是 `3D`：一键演示、最终文档校准和项目收口。
 
 目前已经具备：
 
@@ -22,6 +22,7 @@
 - 有界 LangGraph DAG：按 intent 路由四类业务角色，统一经过 ContextManager、Tool Registry、SafetyAgent、确认草稿、RunTrace/reset 和只读 Evaluator。
 - Agent Runtime API：真实 DB tools、run/tool-call 持久化、冻结产物查询、幂等运行和确认后的同任务续跑；任何动作仍只创建本地草稿。
 - Next.js 数据页面与 Agent 演示入口：共享成员选择、四类场景、Tool/RAG 来源、安全提示、确认续跑和 Trace/Evaluation 详情。
+- Runtime E2E Harness：从 FastAPI 外部驱动 7 条 Trace 和 2 条 API Guard，将真实冻结产物经脱敏 adapter 交给独立 Evaluator，并生成 JSON/Markdown 报告。
 
 ## 四个演示场景
 
@@ -70,7 +71,8 @@ docker compose up --build
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest
+New-Item -ItemType Directory -Force var\pytest | Out-Null
+python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest\all
 python -m compileall backend\app backend\tests
 ```
 
@@ -118,6 +120,18 @@ npm run typecheck
 npm run build
 ```
 
+运行 3C Runtime Harness（先启动并 seed Docker 环境）：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m app.agent.runtime_harness `
+  --base-url http://localhost:8000 `
+  --environment local_postgresql_deterministic `
+  --run-key-prefix "3c-$((Get-Date).ToString('yyyyMMddHHmmss'))"
+```
+
+2026-07-19 的固定本地 PostgreSQL + deterministic provider 报告覆盖 7 条 Trace 和 2 条 Guard，记录的 p95 冻结 Trace latency 为 18 ms。该结果只属于本地 seed 与固定规则，不是生产、临床或真实 LLM 指标。
+
 ## 文档入口
 
 从 [docs 文档导航](docs/README.md) 开始。它区分了产品、开发、技术、接口、数据库、Agent 和学习材料。
@@ -135,6 +149,7 @@ npm run build
 - [Agent Runtime API](docs/AGENT_RUNTIME_API.md)：运行入口、持久化、冻结回放、幂等与确认续跑。
 - [前端架构](docs/FRONTEND_ARCHITECTURE.md)：成员切换、API 客户端、页面状态和跨成员防线。
 - [Agent UI 与 Trace](docs/AGENT_UI.md)：对话提交、本地确认、冻结产物和审计详情页面。
+- [Runtime E2E Harness](docs/RUNTIME_E2E_HARNESS.md)：真实 API Trace、脱敏 adapter、Guard、指标和报告运行方式。
 - [从零学习路线](docs/learning/README.md)：需求拆解、代码设计、review 和简历表达。
 
 ## 仓库结构

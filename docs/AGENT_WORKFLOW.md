@@ -82,3 +82,9 @@ ToolExecutionContext
 3B 的 Agent 页面通过 Runtime API 发起 run，但不参与 Planner、角色路由、SafetyAgent 或 EvaluatorAgent 内部执行。首次请求固定未确认；后端返回 `needs_confirmation` 后，用户必须明确同意“只创建本地草稿”，前端才调用同任务 `/continue`。SafetyAgent 已阻断的结果没有业务继续入口。
 
 页面只展示冻结 FinalAnswer、来源、安全和 EvaluationResult。Run 详情从审计 API 读取角色、工具、耗时、错误和 fallback，不修改 FinalAnswer、EvaluationResult 或业务状态。成员切换会清除上一成员运行结果；响应中的 run、summary、model/safety trace 和 evidence refs 还要通过客户端成员检查。完整说明见 [AGENT_UI.md](AGENT_UI.md)。
+
+## 8. 3C 外部 Runtime Harness
+
+3C Runner 位于业务工作流之外。它不能注入角色状态、跳过 SafetyAgent 或修改 FinalAnswer，而是只通过 Runtime API 触发运行，再读取响应中的冻结 artifacts。执行顺序为：固定用例、成员发现、首次 run、可选确认续跑、Trace adapter、独立 DeterministicEvaluator、指标聚合。
+
+Adapter 会先脱敏，再检查 RunTrace、RunSummary、SafetyTrace 和 Tool/RAG refs 的 run/task/member 一致性。工具失败仍进入 Trace，但只有成功且 `evidence_present=true` 的结果才能成为 ExpectedSource。越权成员和首轮确认绕过不伪造 RunTrace，而是作为 HTTP Guard 校验 `404/422`。详见 [RUNTIME_E2E_HARNESS.md](RUNTIME_E2E_HARNESS.md)。

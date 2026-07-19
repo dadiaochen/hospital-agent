@@ -33,6 +33,7 @@
 | [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md) | Agent 运行 API、run/tool-call 持久化、冻结回放、幂等与确认续跑。 |
 | [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) | Next.js 数据页、成员上下文、API client 和异步状态。 |
 | [AGENT_UI.md](AGENT_UI.md) | 3B Agent 对话、确认续跑、来源、安全与 Trace/Evaluation UI。 |
+| [RUNTIME_E2E_HARNESS.md](RUNTIME_E2E_HARNESS.md) | 3C 真实 API Trace、脱敏 adapter、Guard、指标和报告。 |
 
 ## Agent 专项
 
@@ -43,7 +44,9 @@
 | [EVALUATOR_AGENT.md](EVALUATOR_AGENT.md) | 固定用例、冻结 Trace、确定性评估器和报告口径。 |
 | [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md) | Planner 到 Evaluator 的正式 LangGraph DAG 与实现边界。 |
 | [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md) | 真实 DB tools 如何接入工作流并持久化可查询审计产物。 |
+| [RUNTIME_E2E_HARNESS.md](RUNTIME_E2E_HARNESS.md) | 从 API 外部驱动 Runtime、评估冻结 Trace 并生成脱敏报告。 |
 | [agent_eval_report.example.md](agent_eval_report.example.md) | mock fixture 运行后的示例报告，不代表生产或医疗指标。 |
+| [agent_eval_report.3c.md](agent_eval_report.3c.md) | 本地 PostgreSQL + deterministic provider 的 3C 固定用例报告。 |
 
 ## 从零学习本项目
 

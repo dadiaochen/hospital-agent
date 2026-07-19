@@ -18,6 +18,7 @@
 | [10 2G-2 Agent Runtime API](10_2G2_AGENT_RUNTIME_API.md) | 从 HTTP 请求一路读到 Service、LangGraph、真实 DB tools、审计持久化、确认续跑与冻结回放。 | `agent_audit.py`、`agent_runtime_service.py`、`runtime_schemas.py` |
 | [11 3A 前端数据页面](11_3A_FRONTEND_DATA_PAGES.md) | 从 React 状态、HTTP client 和成员上下文读懂 loading/empty/error 与跨成员防线。 | `MemberProvider.tsx`、`client.ts`、各 `page.tsx` |
 | [12 3B Agent UI 与 Trace](12_3B_AGENT_UI_AND_TRACE.md) | 从 POST 请求、幂等和人工确认，读懂来源、安全、冻结 Trace 与 Postman 验证。 | `app/agent/page.tsx`、`AgentRunResult.tsx`、`RunTraceDetails.tsx` |
+| [13 3C Runtime E2E 与 Dify](13_3C_RUNTIME_E2E_AND_DIFY.md) | 从 Dify 节点设计过渡到自研 Runtime Harness，理解环境、真实 Trace、脱敏、Guard 与面试表达。 | `runtime_harness.py`、`runtime_trace_adapter.py`、`test_runtime_e2e_harness.py` |
 
 ## 使用方法
 

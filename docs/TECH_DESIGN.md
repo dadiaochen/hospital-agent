@@ -2,7 +2,7 @@
 
 ## 1. 设计目标
 
-本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前线性基线已实现可重复契约、deterministic Harness、2E API、Hybrid RAG、Model Gateway、LangGraph 编排、Runtime 持久化/API 和 3A/3B 前端。
+本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前线性基线已实现可重复契约、deterministic Harness、2E API、Hybrid RAG、Model Gateway、LangGraph 编排、Runtime 持久化/API、3A/3B 前端和 3C Runtime E2E Harness。
 
 ## 2. 分层架构
 
@@ -99,6 +99,12 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 页面统一区分 loading、empty、error 和 data；搜索类页面另有“尚未查询”状态。3B 的 Agent 页面通过 typed POST client 发起首次未确认 run，并只在后端返回待确认且未阻断时允许同任务续跑。Agent 冻结产物还通过 `assertAgentArtifactsScoped` 检查成员，Run 详情保持 FinalAnswer 与 EvaluationResult 只读。前端检查是纵深防御，后端 demo-user/member scope 仍是权限真相来源。完整说明见 [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) 和 [AGENT_UI.md](AGENT_UI.md)。
 
+### 4.11 Runtime E2E 从 HTTP 边界评估真实冻结产物
+
+3C 的 `RuntimeE2EHarnessRunner` 不进入 Router、Service 或 LangGraph 内部调用方法，而是像外部客户端一样发现 seed 成员、执行 `POST /api/agent-runs` 和可选 `/continue`。`RuntimeTraceAdapter` 将 API artifacts 递归脱敏，并验证 RunTrace、RunSummary、SafetyTrace、Tool/RAG refs 的 run/task/member 作用域后，才把新的冻结 Trace 交给 DeterministicEvaluator。
+
+固定用例覆盖正常续方、复诊、提醒、高风险阻断、工具空数据失败、无来源拒答、同成员隔离和两类 API Guard。报告只保留用例级状态与指标，不保存成员/run ID 或答案正文。完整说明见 [RUNTIME_E2E_HARNESS.md](RUNTIME_E2E_HARNESS.md)。
+
 ## 5. 当前实现边界
 
 | 已实现 | 尚未实现 |
@@ -107,7 +113,8 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 | 家庭、药箱、处方/购药、库存、知识检索和 Agent 审计的只读 API | 真实医院、药店和推送 API。 |
 | ContextManager、Trace、fixture Harness、确定性评估、Model Gateway、LangGraph DAG 和 Agent Runtime API/持久化 | 线上模型质量验证、生产认证和外部系统集成。 |
 | 权限、成员隔离、确认门禁、失败 fallback 与关键词/混合 Retriever | 真实 Embedding provider、向量数据库和互联网知识抓取。 |
-| 3A/3B Next.js 数据页、Agent 对话、本地确认续跑、Trace/Evaluation 详情和客户端成员响应检查 | 3C 四场景 E2E 与真实 Trace Harness。 |
+| 3A/3B Next.js 数据页、Agent 对话、本地确认续跑、Trace/Evaluation 详情和客户端成员响应检查 | 生产浏览器监控、真实登录和外部系统集成。 |
+| 3C Runtime E2E、Trace 脱敏 adapter、API Guard 和本地 PostgreSQL 报告 | 生产流量回放、临床有效性或真实 LLM 质量评测。 |
 
 详细顺序、验收和非目标以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
 
@@ -134,3 +141,5 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 - 前端 API 客户端：[client.ts](../frontend/lib/api/client.ts)
 - 前端成员上下文：[MemberProvider.tsx](../frontend/components/providers/MemberProvider.tsx)
 - Agent Runtime HTTP DTO：[agent_runtime.py](../backend/app/schemas/agent_runtime.py)
+- Runtime E2E Runner：[runtime_harness.py](../backend/app/agent/runtime_harness.py)
+- Runtime Trace 脱敏适配：[runtime_trace_adapter.py](../backend/app/agent/runtime_trace_adapter.py)

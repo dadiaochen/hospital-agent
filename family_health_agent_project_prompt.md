@@ -85,6 +85,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `3B` 实现主要 Agent 演示入口。前端首次运行固定提交 `human_confirmation_granted=false`，展示冻结答案、Tool/RAG 来源和 SafetyTrace；只有待确认且未阻断的 run 才允许用户勾选本地草稿声明并调用 `/continue`。Run 详情只读展示角色、工具、耗时、错误、fallback、ModelCallTrace 和 EvaluationResult，成员切换清除旧结果并检查所有冻结产物作用域。本阶段不重算评估、不跑 3C 真实 E2E Harness、不提交外部医院/药店/推送动作。
 
+`3C` 实现 Runtime E2E Harness。Runner 通过 FastAPI 发现 seed 成员、执行首次 run 和可选确认续跑，再由独立 adapter 对冻结 artifacts 脱敏并校验 run/task/member 一致性，最后交给 DeterministicEvaluator。固定套件覆盖四个核心业务、真实空数据工具失败、无来源拒答、成员隔离，以及越权成员和首轮确认绕过两个 API Guard；JSON 报告不保存成员/run ID 或答案正文。3C 修复了无来源失败工具被错误加入 ExpectedSource 而导致 HTTP 500 的问题，不新增 ORM/migration，不调用外部系统，也不把本地 deterministic 报告描述为生产或临床指标。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

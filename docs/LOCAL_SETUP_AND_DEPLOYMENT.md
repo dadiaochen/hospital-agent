@@ -25,6 +25,17 @@
 
 `.gitignore` 已忽略 `.env`、`.venv`、`node_modules`、`.tmp` 和本地 `.db`。真实密码、Token、API Key 不得上传 GitHub。
 
+### 1.1 当前环境该怎么称呼
+
+| 名称 | 本项目对应内容 | 是否生产 |
+| --- | --- | --- |
+| 本地开发环境 | Windows/PowerShell、`.venv`、Swagger、Postman 和源代码调试。 | 否 |
+| 自动化测试环境 | pytest 内存 SQLite、Vitest/jsdom 和 mock fetch。 | 否 |
+| 本地集成/演示环境 | Docker PostgreSQL、Redis、FastAPI、Next.js 和 seed 数据。 | 否 |
+| 生产环境 | 真实认证、患者流量、秘密管理、监控、高可用和外部医院接口。 | 尚未建设 |
+
+因此“现在使用测试环境”不够精确。开发和 Postman 使用本地集成环境，pytest 使用隔离测试环境；两者都不能描述为生产上线。
+
 ## 2. 需要安装的软件
 
 完整路线需要 Git/GitHub Desktop、Python 3.11+、Docker Desktop、WSL 2 和硬件虚拟化。查看前端需要 Node.js 20+；测试 API 推荐 Postman。

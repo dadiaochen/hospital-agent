@@ -85,8 +85,8 @@
 | 2G-2 | `DONE` | Runtime 持久化与 Agent API | run/tool trace、reset、续跑可查询 |
 | 3A | `DONE` | 核心数据页面接入 API | 家庭、药箱、续方、提醒页面可用 |
 | 3B | `DONE` | Agent 对话、确认与 Trace UI | 四场景前端闭环可演示 |
-| 3C | `NEXT` | E2E 与真实 Trace Harness | API/UI 场景、隔离、安全回归通过 |
-| 3D | `PLANNED` | 一键演示与项目收口 | Docker、演示脚本、README、简历材料完成 |
+| 3C | `DONE` | E2E 与真实 Trace Harness | API/UI 场景、隔离、安全回归通过 |
+| 3D | `NEXT` | 一键演示与项目收口 | Docker、演示脚本、README、简历材料完成 |
 
 ## 7. 已完成阶段基线
 
@@ -106,9 +106,10 @@ main
   -> 2G-2 persisted Agent runtime API
   -> 3A member-scoped data pages
   -> 3B Agent conversation and Trace UI
+  -> 3C Runtime E2E and real Trace Harness
 ```
 
-2A 至 2B-3 已包含在初始项目基线中。2C-1 至 3B 已按阶段形成唯一线性历史；2E-1 学习工作区和后续隔离工作区已完成 rebase、冲突审查与统一回归。`3C` 是当前唯一 `NEXT`。
+2A 至 2B-3 已包含在初始项目基线中。2C-1 至 3C 已按阶段形成唯一线性历史；3C 从真实 Runtime API 读取 PostgreSQL 工具与 LangGraph 生成的冻结产物，并补充 UI 请求契约回归。`3D` 是当前唯一 `NEXT`。
 
 ## 8. 阶段详细定义
 

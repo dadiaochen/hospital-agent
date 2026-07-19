@@ -65,7 +65,8 @@ npm run dev
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest
+New-Item -ItemType Directory -Force var\pytest | Out-Null
+python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest\all
 python -m compileall backend\app backend\tests
 ```
 
@@ -112,7 +113,19 @@ npm run typecheck
 npm run build
 ```
 
-页面联调时要分别切换本人、父亲和母亲，观察浏览器 Network 面板中的 `member_id`。3B 还要核对首次 Agent POST 固定为 false、确认续跑为 true、高风险结果没有确认按钮，以及 Trace 三个 GET 属于同一 run/member。知识检索页依赖 2E-1 学习题的 `/api/knowledge/search`；该接口合入前出现可解释错误是当前分支的真实状态。
+页面联调时要分别切换本人、父亲和母亲，观察浏览器 Network 面板中的 `member_id`。3B 还要核对首次 Agent POST 固定为 false、确认续跑为 true、高风险结果没有确认按钮，以及 Trace 三个 GET 属于同一 run/member。知识检索页使用已完成的 `/api/knowledge/search` 契约，可通过 Swagger 或 Postman 与页面结果交叉核对。
+
+3C Runtime Harness 在 Docker PostgreSQL/FastAPI 启动并 seed 后运行：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m app.agent.runtime_harness `
+  --base-url http://localhost:8000 `
+  --environment local_postgresql_deterministic `
+  --run-key-prefix "3c-$((Get-Date).ToString('yyyyMMddHHmmss'))"
+```
+
+报告写入 `docs/agent_eval_report.3c.json` 和 `.md`。JSON 是 commit-safe 摘要，不含 member/run ID 或答案正文。每次新测量使用新的前缀；复用前缀会命中 Runtime 幂等 replay。
 
 确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。2E-1 分支中的读取 API 需要先运行迁移和 seed；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。知识库搜索接口是学习实战题，在完成前不要假设它已经上线。
 

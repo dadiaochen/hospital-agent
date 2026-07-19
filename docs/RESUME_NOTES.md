@@ -16,6 +16,7 @@
 - 实现 Agent Runtime API：注入真实 DB tools，持久化 run/tool-call 与版本化冻结产物，支持成员隔离、幂等 replay、确认后的同任务续跑和失败审计；不执行外部医疗动作。
 - 实现 Next.js 核心数据页面：统一 API client、loading/empty/error、成员切换、旧请求取消和 response `member_id` 二次检查。
 - 实现 Agent 对话与审计 UI：连接首次未确认 run、本地草稿确认续跑、冻结答案、Tool/RAG 来源、安全标记、工具错误/fallback 和单次 EvaluationResult；高风险拦截不提供业务继续入口。
+- 实现 Runtime E2E Harness：从 FastAPI 外部执行正常、风险、工具失败、无来源和成员隔离用例，经脱敏 Trace adapter 接入独立评估规则，并输出用例级 JSON/Markdown 报告。
 
 ## 简历表述示例
 
@@ -35,6 +36,8 @@
 使用 Next.js、React 与 TypeScript 构建家庭档案、药箱、续方复诊和提醒等数据页面，统一封装异步请求状态；通过共享成员上下文、请求取消和 response member_id 校验降低家庭成员切换时的数据串扰风险。
 
 实现 Agent 对话与 Trace UI，将 typed Runtime API、浏览器幂等键、显式人工确认、冻结来源与安全结果串成可审计交互；成员切换清除旧 run，高风险阻断不可通过前端确认绕过，所有动作只落本地草稿。
+
+构建面向 Runtime API 的 E2E Harness，通过固定 ExpectedCase 驱动首次 run、确认续跑和 HTTP Guard；在评估前执行敏感字段脱敏与 run/task/member 一致性校验，并将工具失败、无来源拒答和成员隔离纳入可重复回归。
 ```
 
 ## 面试时怎么讲
@@ -50,7 +53,9 @@
 - 不要说已上线生产、接入真实医院/药店、自动开方、诊断或修改处方。
 - 不要把 deterministic mock Harness 说成真实 LLM 或临床评测。
 - 不要声称 `100% safety recall`、`0 hallucination` 或特定 p95 延迟，除非有对应真实运行的评估报告和数据范围。
-- Agent HTTP API、运行持久化和 3A/3B 前端已实现，但尚未完成 3C 四场景 E2E/真实 Trace Harness。
+- 3C 已在本地 PostgreSQL + deterministic provider + seed 数据上执行 7 条 Trace 和 2 条 Guard；不能把这个小规模固定用例结果描述成生产、临床或真实 LLM 指标。
 - 知识库搜索已完成自动化与本地 PostgreSQL/Postman 验证，但不能把本地联调描述为生产检索质量或临床有效性验证。
 - 不要把 RAG `score` 描述为医疗正确率，也不要声称已接入真实 Embedding 或向量数据库；当前实现的是接口、关键词基线和可测试的注入/降级机制。
 - 不要把 MockTransport 或 deterministic provider 测试描述为真实 LLM 效果，也不要宣称模型准确率、安全率、成本或 p95 延迟。
+
+本地报告记录的 18 ms 是冻结 Trace 内工具与 deterministic model gateway 累计 latency 的 p95，不是浏览器端到端延迟或服务 SLO。简历优先描述“建立评估维度与可重复 E2E”，只有在面试官追问报告范围时再说明样本、环境和口径。
