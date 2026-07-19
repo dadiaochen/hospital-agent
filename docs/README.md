@@ -14,6 +14,7 @@
 | 文档 | 何时阅读 | 负责回答的问题 |
 | --- | --- | --- |
 | [LOCAL_SETUP_AND_DEPLOYMENT.md](LOCAL_SETUP_AND_DEPLOYMENT.md) | 第一次运行或环境故障时 | 如何配置 WSL 2、把 Docker 数据放到 E 盘、启动 PostgreSQL/Redis、停机和排错？ |
+| [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) | 演示或面试前 | 如何一键启动、跑固定四场景、解释 RAG/模型模式并核对报告？ |
 | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | 开始开发前 | 如何启动、测试、分支和提交？ |
 | [TESTING_GUIDE.md](TESTING_GUIDE.md) | 编码和 review 时 | 测什么、如何复现、如何审查？ |
 | [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) | 选择下一项工作前 | 现在到哪个阶段，下一步能做什么？ |
@@ -34,6 +35,7 @@
 | [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) | Next.js 数据页、成员上下文、API client 和异步状态。 |
 | [AGENT_UI.md](AGENT_UI.md) | 3B Agent 对话、确认续跑、来源、安全与 Trace/Evaluation UI。 |
 | [RUNTIME_E2E_HARNESS.md](RUNTIME_E2E_HARNESS.md) | 3C 真实 API Trace、脱敏 adapter、Guard、指标和报告。 |
+| [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) | 3D 一键 Docker、固定四场景、UI 演示和本地排错。 |
 
 ## Agent 专项
 
@@ -47,6 +49,7 @@
 | [RUNTIME_E2E_HARNESS.md](RUNTIME_E2E_HARNESS.md) | 从 API 外部驱动 Runtime、评估冻结 Trace 并生成脱敏报告。 |
 | [agent_eval_report.example.md](agent_eval_report.example.md) | mock fixture 运行后的示例报告，不代表生产或医疗指标。 |
 | [agent_eval_report.3c.md](agent_eval_report.3c.md) | 本地 PostgreSQL + deterministic provider 的 3C 固定用例报告。 |
+| [mvp_demo_report.3d.md](mvp_demo_report.3d.md) | 全新 Docker PostgreSQL + deterministic provider 的四场景 MVP 演示快照。 |
 
 ## 从零学习本项目
 

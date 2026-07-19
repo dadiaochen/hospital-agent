@@ -17,6 +17,7 @@
 - 实现 Next.js 核心数据页面：统一 API client、loading/empty/error、成员切换、旧请求取消和 response `member_id` 二次检查。
 - 实现 Agent 对话与审计 UI：连接首次未确认 run、本地草稿确认续跑、冻结答案、Tool/RAG 来源、安全标记、工具错误/fallback 和单次 EvaluationResult；高风险拦截不提供业务继续入口。
 - 实现 Runtime E2E Harness：从 FastAPI 外部执行正常、风险、工具失败、无来源和成员隔离用例，经脱敏 Trace adapter 接入独立评估规则，并输出用例级 JSON/Markdown 报告。
+- 完成本地 MVP 交付链：Docker Compose 自动执行 migration 与幂等 seed，以 healthcheck 编排 PostgreSQL、Redis、FastAPI 和 Next.js，并用公开 API 固定演示续方、复诊、提醒和高风险阻断。
 
 ## 简历表述示例
 
@@ -38,6 +39,8 @@
 实现 Agent 对话与 Trace UI，将 typed Runtime API、浏览器幂等键、显式人工确认、冻结来源与安全结果串成可审计交互；成员切换清除旧 run，高风险阻断不可通过前端确认绕过，所有动作只落本地草稿。
 
 构建面向 Runtime API 的 E2E Harness，通过固定 ExpectedCase 驱动首次 run、确认续跑和 HTTP Guard；在评估前执行敏感字段脱敏与 run/task/member 一致性校验，并将工具失败、无来源拒答和成员隔离纳入可重复回归。
+
+将本地 MVP 的 migration、幂等 seed、服务健康检查和固定四场景纳入一键 Docker 交付；演示 Runner 只走公开 API，三类关键动作经确认后仅创建 `not_submitted` 本地草稿，高风险请求保持阻断，并输出不含成员/run ID 与答案正文的报告。
 ```
 
 ## 面试时怎么讲
@@ -54,6 +57,8 @@
 - 不要把 deterministic mock Harness 说成真实 LLM 或临床评测。
 - 不要声称 `100% safety recall`、`0 hallucination` 或特定 p95 延迟，除非有对应真实运行的评估报告和数据范围。
 - 3C 已在本地 PostgreSQL + deterministic provider + seed 数据上执行 7 条 Trace 和 2 条 Guard；不能把这个小规模固定用例结果描述成生产、临床或真实 LLM 指标。
+- 3D 已在全新 Docker PostgreSQL volume + deterministic provider 上执行固定四场景并得到 4/4 通过；这只证明打包、初始化与当前固定规则可重复，不能外推为临床安全率或真实 LLM 质量。
+- 当前默认 RAG 不使用 Embedding；它是 PostgreSQL 关键词基线。不要声称已部署向量数据库或真实语义检索，直到后续增强有代码、migration 和实跑报告。
 - 知识库搜索已完成自动化与本地 PostgreSQL/Postman 验证，但不能把本地联调描述为生产检索质量或临床有效性验证。
 - 不要把 RAG `score` 描述为医疗正确率，也不要声称已接入真实 Embedding 或向量数据库；当前实现的是接口、关键词基线和可测试的注入/降级机制。
 - 不要把 MockTransport 或 deterministic provider 测试描述为真实 LLM 效果，也不要宣称模型准确率、安全率、成本或 p95 延迟。

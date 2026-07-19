@@ -86,7 +86,7 @@
 | 3A | `DONE` | 核心数据页面接入 API | 家庭、药箱、续方、提醒页面可用 |
 | 3B | `DONE` | Agent 对话、确认与 Trace UI | 四场景前端闭环可演示 |
 | 3C | `DONE` | E2E 与真实 Trace Harness | API/UI 场景、隔离、安全回归通过 |
-| 3D | `NEXT` | 一键演示与项目收口 | Docker、演示脚本、README、简历材料完成 |
+| 3D | `DONE` | 一键演示与项目收口 | Docker、演示脚本、README、简历材料完成 |
 
 ## 7. 已完成阶段基线
 
@@ -107,9 +107,10 @@ main
   -> 3A member-scoped data pages
   -> 3B Agent conversation and Trace UI
   -> 3C Runtime E2E and real Trace Harness
+  -> 3D one-command demo and MVP closure
 ```
 
-2A 至 2B-3 已包含在初始项目基线中。2C-1 至 3C 已按阶段形成唯一线性历史；3C 从真实 Runtime API 读取 PostgreSQL 工具与 LangGraph 生成的冻结产物，并补充 UI 请求契约回归。`3D` 是当前唯一 `NEXT`。
+2A 至 2B-3 已包含在初始项目基线中。2C-1 至 3D 已按阶段形成唯一线性历史。3D 在全新 Docker PostgreSQL volume 上验证 migration、幂等 seed、四项 healthcheck 与固定四场景，形成可重复的本地 MVP 交付。当前没有已定义的 `NEXT`；项目状态为本路线图口径下的 MVP Complete。
 
 ## 8. 阶段详细定义
 
@@ -304,7 +305,7 @@ User Input
 3. 每个阶段必须声明目标、前置依赖、允许修改范围、禁止范围和验收测试。
 4. 每个阶段必须包含最小测试、自审、文档同步和独立 commit。
 5. 后续阶段不得整文件覆盖前一阶段契约；只能做兼容的增量演进。
-6. 阶段完成后先将本文档状态改为 `DONE`，再把唯一 `NEXT` 移到下一阶段。
+6. 阶段完成后先将本文档状态改为 `DONE`；只有已在本文档定义后续阶段时，才移动唯一 `NEXT`。
 7. 任何“下一阶段建议”必须引用本文档中的已定义阶段。
 8. 未经本文档更新，不允许出现新的阶段编号。
 

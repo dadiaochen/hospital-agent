@@ -53,3 +53,7 @@ HarnessRunner 批量加载 16 个固定 ExpectedCase 和对应 mock RunTrace，�
 `RuntimeTraceAdapter` 是 Runtime API 和既有 `DeterministicEvaluator` 之间的新信任边界。它不会实现第二套评分公式，只负责：递归脱敏敏感键、解析冻结 artifacts、验证 run/task/member 作用域，并把当前 `ExpectedCase.case_id` 投影到新的冻结 RunTrace。
 
 Evaluator 仍只读取 ExpectedCase 与 RunTrace，不接收数据库 Session、HTTP client 或业务写 service。API Guard 的 `404/422` 没有 FinalAnswer，不能伪造成 EvaluationResult；它们由 Runtime Harness 单独汇总。3C JSON 报告排除成员 ID、run ID 和答案正文。
+
+## 7. 3D 演示报告
+
+3D 从 3C Runner 中选择四个面试场景形成固定套件，但不改变评估公式。`MvpDemoRunner` 只把既有 EvaluationResult 和 runtime contract 投影为脱敏的场景摘要；如果任一任务失败、外部状态不是 `not_submitted` 或套件顺序被改变，脚本以非零状态退出。4/4 结果只适用于本地 PostgreSQL seed 与 deterministic provider。

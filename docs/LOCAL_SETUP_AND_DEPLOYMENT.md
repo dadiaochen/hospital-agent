@@ -335,23 +335,29 @@ DATABASE_URL=sqlite:///:memory:
 
 ## 7. Docker Compose 全栈演示
 
-当前也能让后端和前端进入容器，但第一次仍要先初始化数据库：现有 backend 镜像只复制 `backend/app`，没有复制根目录 migration 和 seed。
+3D 后 backend 镜像包含应用、Alembic migration、配置和 seed。容器入口会先执行 migration 与幂等 seed，成功后才启动 Uvicorn；任一步失败都会让 backend 退出，healthcheck 不会把未初始化服务标成可用。
 
 前后端目录各自提供 `.dockerignore`。Docker build context 只应包含镜像真正需要的源码和依赖清单；如果把本机 `frontend/node_modules`、`.next` 或 Python `__pycache__` 一起发送给 Docker，首次构建可能无谓传输数百 MB，并把 Windows 生成物混入 Linux 构建上下文。
 
+一键构建、初始化、启动并跑固定四场景：
+
 ```powershell
-# 1. 启动数据库
-docker compose up -d postgres redis
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\start_demo.ps1
+```
 
-# 2. 从 Windows 主机执行 migration 和 seed
-.\.venv\Scripts\Activate.ps1
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m alembic upgrade head
-python scripts\seed.py
+只启动完整服务：
 
-# 3. 构建并启动后端、前端容器
-docker compose up -d --build backend frontend
+```powershell
+docker compose up -d --build --wait --wait-timeout 300
 docker compose ps
+```
+
+Compose 没有 `.env` 时使用安全的 deterministic 本地默认值；有 `.env` 时自动读取覆盖项。固定四场景可单独重跑：
+
+```powershell
+.\scripts\run_demo.ps1
+Get-Content var\demo\mvp-demo.md
 ```
 
 查看服务日志：
@@ -361,9 +367,11 @@ docker compose logs backend
 docker compose logs frontend
 ```
 
-不要同时运行主机 uvicorn 和 backend 容器，因为二者都会占用 8000 端口。当前容器仍是开发演示：后端用 Uvicorn 单进程，前端运行 `npm run dev`，不是生产部署。
+不要同时运行主机 uvicorn 和 backend 容器，因为二者都会占用 8000 端口。当前容器仍是本地演示：后端用 Uvicorn 单进程，前端虽使用 `next build` / `next start`，但系统没有生产认证、HTTPS、秘密管理、高可用和外部医疗集成，不能称为生产部署。
 
 Compose 为四个服务都配置了 healthcheck：PostgreSQL 使用 `pg_isready`，Redis 使用 `redis-cli ping`，后端请求 `/health`，前端请求首页。前端还会等待后端健康后再启动。`docker compose ps` 中四项都显示 `healthy`，才表示完整本地栈可用。
+
+完整演示顺序、RAG/模型模式和故障处理见 [MVP 演示手册](DEMO_RUNBOOK.md)。
 
 ## 8. 停止、重启和清空
 

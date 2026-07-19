@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-项目已按 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 完成至 `3C`。当前唯一下一阶段是 `3D`：一键演示、最终文档校准和项目收口。
+项目已按 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 完成 `3D`，达到本仓库定义的本地演示级 **MVP Complete**。当前没有已定义的后续阶段；新增产品范围前必须先更新唯一总路线图。
 
 目前已经具备：
 
@@ -23,6 +23,7 @@
 - Agent Runtime API：真实 DB tools、run/tool-call 持久化、冻结产物查询、幂等运行和确认后的同任务续跑；任何动作仍只创建本地草稿。
 - Next.js 数据页面与 Agent 演示入口：共享成员选择、四类场景、Tool/RAG 来源、安全提示、确认续跑和 Trace/Evaluation 详情。
 - Runtime E2E Harness：从 FastAPI 外部驱动 7 条 Trace 和 2 条 API Guard，将真实冻结产物经脱敏 adapter 交给独立 Evaluator，并生成 JSON/Markdown 报告。
+- 一键演示交付：Compose 自动执行 migration 与幂等 seed，production-mode Next.js 和 FastAPI 通过 healthcheck 后运行固定四场景，并生成不含成员/run ID 或答案正文的脱敏报告。
 
 ## 四个演示场景
 
@@ -54,18 +55,30 @@ SafetyAgent -> confirmation gate -> Model Gateway -> FinalAnswer
 
 ## 快速开始
 
-第一次运行请先阅读 [本地环境、启动与部署指南](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)，日常开发流程见 [开发者指南](docs/DEVELOPER_GUIDE.md)。最短的 Docker 启动方式如下：
+第一次运行请先阅读 [MVP 演示手册](docs/DEMO_RUNBOOK.md) 和 [本地环境、启动与部署指南](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)。Windows 下一键构建、初始化、启动并跑四场景：
 
 ```powershell
-Copy-Item .env.example .env
-docker compose up --build
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\start_demo.ps1
 ```
+
+只启动服务也可直接执行 `docker compose up --build`；Compose 没有 `.env` 时使用 deterministic 本地默认值。
 
 启动后可访问：
 
 - 前端：`http://localhost:3000`
 - API 文档：`http://localhost:8000/docs`
 - 服务健康检查：`http://localhost:8000/health`
+
+只重新运行固定四场景：
+
+```powershell
+.\scripts\run_demo.ps1
+```
+
+报告写到本地 `var\demo\`。2026-07-19 在全新 Docker PostgreSQL volume、seed 数据和 deterministic provider 上实跑为 4/4 场景通过：三条正常业务均先等待确认再完成本地草稿，高风险加量请求保持阻断，所有结果的外部动作状态均为 `not_submitted`。可提交的脱敏快照见 [3D MVP 演示报告](docs/mvp_demo_report.3d.md)。
+
+默认 `RAG_VECTOR_ENABLED=false`，使用 PostgreSQL 关键词检索并保留 document/chunk/version/source 指针，没有调用 Embedding 模型。默认 `MODEL_PROVIDER=deterministic`，问答由规则/模板生成，不调用真实 LLM；项目已有可选 OpenAI-compatible provider、schema/safety 校验和 deterministic fallback，Key 只能配置在未提交的本机 `.env`。完整区别见 [MVP 演示手册](docs/DEMO_RUNBOOK.md#5-rag-与模型模式)。
 
 运行后端测试：
 
@@ -132,6 +145,22 @@ python -m app.agent.runtime_harness `
 
 2026-07-19 的固定本地 PostgreSQL + deterministic provider 报告覆盖 7 条 Trace 和 2 条 Guard，记录的 p95 冻结 Trace latency 为 18 ms。该结果只属于本地 seed 与固定规则，不是生产、临床或真实 LLM 指标。
 
+只验证 3D 固定演示契约：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_mvp_demo_runner.py -q `
+  -p no:cacheprovider --basetemp=var\pytest\3d
+```
+
+## 实现边界与已知限制
+
+- 当前是本地开发/集成演示环境，不是生产部署；没有 JWT/OAuth、真实患者流量、HTTPS、秘密管理、高可用、SLA 或生产监控。
+- 不接真实医院、医生、处方、药店、支付、物流或提醒推送；确认只写本地草稿。
+- 默认没有真实 LLM 和 Embedding/向量数据库；OpenAI-compatible provider 尚未形成真实质量报告，向量后端只有注入协议与降级规则。
+- 固定 Harness 和 3D 的 4/4 只证明当前 seed + deterministic 规则的回归结果，不能外推为临床安全率、线上幻觉率或服务 SLO。
+- 2026-07-19 的 `npm audit --omit=dev` 对 Next 14 生产依赖仍报告 1 项 high 和 1 项 moderate；官方自动修复涉及 Next 16 major upgrade，应在生产化前独立升级并做完整回归。
+
 ## 文档入口
 
 从 [docs 文档导航](docs/README.md) 开始。它区分了产品、开发、技术、接口、数据库、Agent 和学习材料。
@@ -140,6 +169,7 @@ python -m app.agent.runtime_harness `
 
 - [总开发路线图](docs/DEVELOPMENT_ROADMAP.md)：阶段状态、顺序和 MVP 验收的唯一权威来源。
 - [开发者指南](docs/DEVELOPER_GUIDE.md)：环境、命令、分支、测试与提交流程。
+- [MVP 演示手册](docs/DEMO_RUNBOOK.md)：一键启动、固定四场景、UI 顺序、RAG/模型模式和排错。
 - [技术设计](docs/TECH_DESIGN.md)：分层边界、数据流与当前实现边界。
 - [接口文档](docs/API_SPEC.md)：已实现接口与后续接口契约边界。
 - [Agent 工作流](docs/AGENT_WORKFLOW.md)：角色、工具、确认与安全流程。
@@ -150,6 +180,7 @@ python -m app.agent.runtime_harness `
 - [前端架构](docs/FRONTEND_ARCHITECTURE.md)：成员切换、API 客户端、页面状态和跨成员防线。
 - [Agent UI 与 Trace](docs/AGENT_UI.md)：对话提交、本地确认、冻结产物和审计详情页面。
 - [Runtime E2E Harness](docs/RUNTIME_E2E_HARNESS.md)：真实 API Trace、脱敏 adapter、Guard、指标和报告运行方式。
+- [3D 交付学习章](docs/learning/14_3D_MVP_DELIVERY.md)：从零理解 Docker 初始化链、固定 Demo Runner、关键词 RAG 与真实 LLM 接入边界。
 - [从零学习路线](docs/learning/README.md)：需求拆解、代码设计、review 和简历表达。
 
 ## 仓库结构
@@ -159,12 +190,12 @@ backend/       FastAPI、SQLAlchemy、services、tools、agent 与测试
 frontend/      Next.js 页面与组件
 docs/          面向协作者的项目文档和学习材料
 backend/alembic/ 数据库迁移
-scripts/       可重复 seed 等辅助脚本
+scripts/       可重复 seed、一键启动/停止与固定演示脚本
 AGENTS.md      AI Coding Harness 规则
 ```
 
 ## 贡献方式
 
-从最新 `main` 创建一个只对应单一阶段目标的 `codex/...` 分支。完成最小实现、测试和文档同步后再 review、合并与推送。不要在 README 中新建阶段编号；阶段状态只在 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 中维护。
+从最新 `main` 创建一个只对应单一目标的 `codex/...` 分支。完成最小实现、测试和文档同步后再 review、合并与推送。当前路线图没有后续阶段；若要扩展范围，先在 [总路线图](docs/DEVELOPMENT_ROADMAP.md) 中定义，而不是在 README 临时编号。
 
 项目亮点和简历表达边界见 [RESUME_NOTES.md](docs/RESUME_NOTES.md)。

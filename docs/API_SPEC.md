@@ -176,3 +176,7 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 - `POST /api/agent-runs/{run_id}/continue`：仅对需要确认的正常业务执行续跑。
 
 越权成员预期返回 `404 not_found`；首轮确认绕过预期返回 `422 validation_error`。高风险 `blocked` run 不调用 `/continue`。Harness 只读取 response，不调用数据库、不改写 artifacts，也不通过测试接口绕开生产路由。
+
+## 12. 3D 固定演示不新增 HTTP API
+
+`MvpDemoRunner` 复用 `GET /api/family-members`、`POST /api/agent-runs` 和 `POST /api/agent-runs/{run_id}/continue`。它不会增加测试专用 endpoint、绕开 demo-user/member scope 或直接访问数据库。三条正常场景按 API 契约先等待确认，高风险场景不调用 continuation；报告只保存脱敏的状态和来源数量。

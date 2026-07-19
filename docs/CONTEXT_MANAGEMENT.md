@@ -73,3 +73,5 @@ RoleSpecificContextView 的 schema 本身没有 `raw_conversation` 字段，`ext
 ## 6. 长期记忆门槛
 
 只有用户明确确认的提醒偏好、草稿状态或常用视图可以进入长期 memory。模型猜测、未确认偏好和医疗事实即使看起来合理，也不能成为 MemoryRef。这个规则同时由文档、Pydantic validator 和 ContextManager reset 行为约束。
+
+3D 固定演示不改变 Context 生命周期。每个场景仍通过 Runtime API 创建独立 task/member 上下文；确认续跑只恢复 RunSummary 和 source IDs，高风险场景不进入 continuation。演示报告只保存聚合状态和来源数量，不保存 ContextEnvelope、raw conversation 或成员标识。

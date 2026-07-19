@@ -2,7 +2,7 @@
 
 ## 1. 设计目标
 
-本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前线性基线已实现可重复契约、deterministic Harness、2E API、Hybrid RAG、Model Gateway、LangGraph 编排、Runtime 持久化/API、3A/3B 前端和 3C Runtime E2E Harness。
+本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前线性基线已实现可重复契约、deterministic Harness、2E API、Hybrid RAG、Model Gateway、LangGraph 编排、Runtime 持久化/API、3A/3B 前端、3C Runtime E2E Harness 和 3D 一键演示交付。
 
 ## 2. 分层架构
 
@@ -105,6 +105,12 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 固定用例覆盖正常续方、复诊、提醒、高风险阻断、工具空数据失败、无来源拒答、同成员隔离和两类 API Guard。报告只保留用例级状态与指标，不保存成员/run ID 或答案正文。完整说明见 [RUNTIME_E2E_HARNESS.md](RUNTIME_E2E_HARNESS.md)。
 
+### 4.12 一键交付显式化初始化依赖
+
+3D 将本地交付链固定为 PostgreSQL/Redis healthcheck、backend migration、幂等 seed、Uvicorn healthcheck、Next.js production build/start 和外部四场景 Runner。backend 只在 migration 与 seed 都成功后启动；固定 Runner 只走公开 API，继续复用 RuntimeTraceAdapter 和 DeterministicEvaluator，不创建第二套业务逻辑。
+
+默认关键词 RAG 与 deterministic provider 保证无 Embedding、无模型 Key也能复现。OpenAI-compatible provider 仍是可选模式；向量检索仍只有可注入协议。完整运行与模式说明见 [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md)。
+
 ## 5. 当前实现边界
 
 | 已实现 | 尚未实现 |
@@ -115,6 +121,7 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 | 权限、成员隔离、确认门禁、失败 fallback 与关键词/混合 Retriever | 真实 Embedding provider、向量数据库和互联网知识抓取。 |
 | 3A/3B Next.js 数据页、Agent 对话、本地确认续跑、Trace/Evaluation 详情和客户端成员响应检查 | 生产浏览器监控、真实登录和外部系统集成。 |
 | 3C Runtime E2E、Trace 脱敏 adapter、API Guard 和本地 PostgreSQL 报告 | 生产流量回放、临床有效性或真实 LLM 质量评测。 |
+| 3D Compose 自动 migration/seed、四项 healthcheck、固定四场景和脱敏演示报告 | 生产编排、真实登录、秘密管理、HTTPS、浏览器自动化和高可用。 |
 
 详细顺序、验收和非目标以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
 
@@ -143,3 +150,5 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 - Agent Runtime HTTP DTO：[agent_runtime.py](../backend/app/schemas/agent_runtime.py)
 - Runtime E2E Runner：[runtime_harness.py](../backend/app/agent/runtime_harness.py)
 - Runtime Trace 脱敏适配：[runtime_trace_adapter.py](../backend/app/agent/runtime_trace_adapter.py)
+- 固定 MVP Demo Runner：[demo_runner.py](../backend/app/agent/demo_runner.py)
+- 一键启动脚本：[start_demo.ps1](../scripts/start_demo.ps1)

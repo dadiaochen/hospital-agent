@@ -57,7 +57,7 @@ npm run dev
 
 前端通过 `NEXT_PUBLIC_API_BASE_URL` 访问后端，默认是 `http://localhost:8000`。这是公开的浏览器配置，不能放数据库密码、模型 Key 或其他秘密。
 
-也可以直接用 `docker compose up --build` 启动完整演示环境。
+也可以直接用 `docker compose up --build` 启动完整演示环境。3D 的 backend 容器会自动执行 migration 与幂等 seed；需要同时验证固定四场景时运行 `.\scripts\start_demo.ps1`，详见 [MVP 演示手册](DEMO_RUNBOOK.md)。
 
 ## 3. 日常验证
 
@@ -127,7 +127,17 @@ python -m app.agent.runtime_harness `
 
 报告写入 `docs/agent_eval_report.3c.json` 和 `.md`。JSON 是 commit-safe 摘要，不含 member/run ID 或答案正文。每次新测量使用新的前缀；复用前缀会命中 Runtime 幂等 replay。
 
-确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。2E-1 分支中的读取 API 需要先运行迁移和 seed；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。知识库搜索接口是学习实战题，在完成前不要假设它已经上线。
+3D 固定 MVP 演示：
+
+```powershell
+.\scripts\start_demo.ps1
+# 服务已健康时只重跑四场景
+.\scripts\run_demo.ps1
+```
+
+自动化契约位于 `test_mvp_demo_runner.py`；本地报告位于被忽略的 `var/demo/`，提交用脱敏快照位于 `docs/mvp_demo_report.3d.*`。四场景通过只属于本地 PostgreSQL seed + deterministic provider。
+
+确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。读取 API 与知识检索已集成；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。
 
 ## 4. 分层与改动位置
 

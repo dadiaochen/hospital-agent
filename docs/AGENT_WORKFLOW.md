@@ -88,3 +88,7 @@ ToolExecutionContext
 3C Runner 位于业务工作流之外。它不能注入角色状态、跳过 SafetyAgent 或修改 FinalAnswer，而是只通过 Runtime API 触发运行，再读取响应中的冻结 artifacts。执行顺序为：固定用例、成员发现、首次 run、可选确认续跑、Trace adapter、独立 DeterministicEvaluator、指标聚合。
 
 Adapter 会先脱敏，再检查 RunTrace、RunSummary、SafetyTrace 和 Tool/RAG refs 的 run/task/member 一致性。工具失败仍进入 Trace，但只有成功且 `evidence_present=true` 的结果才能成为 ExpectedSource。越权成员和首轮确认绕过不伪造 RunTrace，而是作为 HTTP Guard 校验 `404/422`。详见 [RUNTIME_E2E_HARNESS.md](RUNTIME_E2E_HARNESS.md)。
+
+## 9. 3D 固定演示的位置
+
+3D 没有新增 Agent 角色或图节点。`MvpDemoRunner` 位于工作流外部，按固定顺序调用 Runtime API，复用 3C adapter 与同一个只读 Evaluator。它不能修改 FinalAnswer、RoleSpecificContextView、SafetyTrace 或业务状态；普通场景通过 `/continue` 只创建本地草稿，高风险 `blocked` 场景永不续跑。

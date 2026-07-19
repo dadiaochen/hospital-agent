@@ -87,6 +87,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `3C` 实现 Runtime E2E Harness。Runner 通过 FastAPI 发现 seed 成员、执行首次 run 和可选确认续跑，再由独立 adapter 对冻结 artifacts 脱敏并校验 run/task/member 一致性，最后交给 DeterministicEvaluator。固定套件覆盖四个核心业务、真实空数据工具失败、无来源拒答、成员隔离，以及越权成员和首轮确认绕过两个 API Guard；JSON 报告不保存成员/run ID 或答案正文。3C 修复了无来源失败工具被错误加入 ExpectedSource 而导致 HTTP 500 的问题，不新增 ORM/migration，不调用外部系统，也不把本地 deterministic 报告描述为生产或临床指标。
 
+`3D` 完成本地 MVP 收口。Compose backend 镜像包含现有 Alembic 和 seed，并在 Uvicorn 前自动执行 migration 与幂等初始化；PostgreSQL、Redis、FastAPI 和 production-mode Next.js 通过 healthcheck 有序启动。固定 Demo Runner 只调用公开 Runtime API，按父亲续方、母亲复诊、母亲提醒和高风险加量阻断四场景生成脱敏报告。默认仍是关键词 RAG 与 deterministic provider，不使用 Embedding 或真实模型 Key；可选 OpenAI-compatible provider 失败时保持 schema/safety 检查与 deterministic fallback。3D 不新增 ORM/migration，不接外部医院、药店、支付或推送。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。
