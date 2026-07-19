@@ -559,7 +559,7 @@ def test_tool_result_maps_to_tool_call_trace(registry: ToolRegistry) -> None:
     assert trace.source_name == "medicine_box_items"
 
 
-def test_no_migration_model_or_seed_changes_for_db_read_tools() -> None:
+def test_no_model_or_seed_changes_for_db_read_tools() -> None:
     project_root = Path(__file__).resolve().parents[2]
     completed = subprocess.run(
         [
@@ -568,7 +568,6 @@ def test_no_migration_model_or_seed_changes_for_db_read_tools() -> None:
             "--name-only",
             "--",
             "backend/app/models",
-            "backend/alembic",
             "scripts/seed.py",
         ],
         cwd=project_root,

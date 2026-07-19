@@ -162,3 +162,19 @@ def test_agent_harness_migration_file_is_present() -> None:
     assert 'down_revision: Union[str, None] = "0001_initial_schema"' in migration_text
     assert "def upgrade()" in migration_text
     assert "def downgrade()" in migration_text
+
+
+def test_agent_harness_migration_expands_postgresql_revision_capacity() -> None:
+    project_root = Path(__file__).resolve().parents[2]
+    migration_file = (
+        project_root
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "0002_add_agent_harness_trace_fields.py"
+    )
+    migration_text = migration_file.read_text(encoding="utf-8")
+
+    assert 'op.get_bind().dialect.name == "postgresql"' in migration_text
+    assert '"alembic_version"' in migration_text
+    assert "type_=sa.String(length=64)" in migration_text
