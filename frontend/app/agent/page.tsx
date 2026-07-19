@@ -110,7 +110,7 @@ export default function AgentPage() {
     <div className="grid gap-5">
       <PageHeader
         description="输入慢病续方、复诊材料、用药提醒或高风险医疗问题。系统只整理信息、生成本地草稿并展示可审计来源，不替代医生诊断和处方。"
-        eyebrow="Phase 3B"
+        eyebrow="MVP Demo"
         title="Agent 对话与安全确认"
       >
         {selectedMember ? <span className="text-sm font-semibold text-[#31534f]">当前成员：{selectedMember.name}</span> : null}

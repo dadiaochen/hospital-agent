@@ -274,7 +274,11 @@ def seed_medication_context(session: Session, father: FamilyMember, mother: Fami
 
     refill_plan = one_or_create(
         session,
-        select(RefillPlan).where(RefillPlan.member_id == father.id, RefillPlan.medicine_name == "苯磺酸氨氯地平片"),
+        select(RefillPlan).where(
+            RefillPlan.member_id == father.id,
+            RefillPlan.medicine_name == "苯磺酸氨氯地平片",
+            RefillPlan.suggestion == "可准备复诊续方材料，不自动开方。",
+        ),
         RefillPlan,
         {
             "member_id": father.id,
@@ -293,7 +297,12 @@ def seed_medication_context(session: Session, father: FamilyMember, mother: Fami
     )
     consultation_draft = one_or_create(
         session,
-        select(ConsultationDraft).where(ConsultationDraft.member_id == mother.id, ConsultationDraft.prescription_id == mother_prescription.id),
+        select(ConsultationDraft).where(
+            ConsultationDraft.member_id == mother.id,
+            ConsultationDraft.prescription_id == mother_prescription.id,
+            ConsultationDraft.draft_content
+            == "母亲中药颗粒即将服完，需整理上次处方、购药记录和近期睡眠情况给医生复诊参考。",
+        ),
         ConsultationDraft,
         {
             "member_id": mother.id,
@@ -429,7 +438,12 @@ def seed_agent_audit_example(session: Session, user: User, father: FamilyMember)
     run_ended = run_started + timedelta(milliseconds=180)
     run = one_or_create(
         session,
-        select(AgentRun).where(AgentRun.user_id == user.id, AgentRun.user_goal == "我爸的降压药快吃完了，帮我看看能不能续方。"),
+        select(AgentRun).where(
+            AgentRun.user_id == user.id,
+            AgentRun.user_goal == "我爸的降压药快吃完了，帮我看看能不能续方。",
+            AgentRun.intent == "chronic_refill",
+            AgentRun.status == "draft",
+        ),
         AgentRun,
         {
             "user_id": user.id,

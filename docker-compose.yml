@@ -1,7 +1,8 @@
+name: family-health-agent
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: family-health-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-hospital}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hospital}
@@ -18,7 +19,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: family-health-redis
     ports:
       - "6379:6379"
     volumes:
@@ -31,16 +31,26 @@ services:
 
   backend:
     build:
-      context: ./backend
-    container_name: family-health-backend
-    env_file:
-      - .env
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
-      DATABASE_URL: postgresql+psycopg://hospital:hospital@postgres:5432/family_health
+      APP_NAME: ${APP_NAME:-Family Health Agent API}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-hospital}:${POSTGRES_PASSWORD:-hospital}@postgres:5432/${POSTGRES_DB:-family_health}
       REDIS_URL: redis://redis:6379/0
-      CORS_ORIGINS: http://localhost:3000
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      DEMO_USER_PHONE: ${DEMO_USER_PHONE:-13800000001}
+      RAG_VECTOR_ENABLED: ${RAG_VECTOR_ENABLED:-false}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-deterministic}
+      MODEL_API_BASE: ${MODEL_API_BASE:-}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      MODEL_NAME: ${MODEL_NAME:-deterministic-local}
+      MODEL_TIMEOUT_MS: ${MODEL_TIMEOUT_MS:-10000}
     ports:
       - "8000:8000"
+    volumes:
+      - ./var/demo:/app/var/demo
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,7 +66,8 @@ services:
   frontend:
     build:
       context: ./frontend
-    container_name: family-health-frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
     ports:
