@@ -184,6 +184,7 @@ class AgentRuntimeService:
         )
 
         started = perf_counter()
+        workflow: LangGraphAgentWorkflow | None = None
         try:
             workflow = LangGraphAgentWorkflow(
                 tool_registry=create_db_tool_registry(
@@ -232,6 +233,9 @@ class AgentRuntimeService:
                 code="agent_run_failed",
                 message="agent workflow execution failed",
             ) from exc
+        finally:
+            if workflow is not None:
+                workflow.close()
 
     def _persist_success(
         self,

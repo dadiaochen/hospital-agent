@@ -15,7 +15,7 @@ from app.agent.model_gateway_schemas import (
     ModelProviderAttemptTrace,
     ProviderRawResponse,
 )
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.safety.model_output import (
     ModelOutputSafetyChecker,
     RuleBasedModelOutputSafetyChecker,
@@ -269,30 +269,49 @@ class ModelGateway:
             latency_ms=_elapsed_ms(started),
         )
 
+    def close(self) -> None:
+        closed: set[int] = set()
+        for provider in (self._primary_provider, self._fallback_provider):
+            if provider is None or id(provider) in closed:
+                continue
+            closed.add(id(provider))
+            close = getattr(provider, "close", None)
+            if callable(close):
+                close()
+
 
 def create_model_gateway(
     deterministic_provider: DeterministicModelProvider,
     *,
     safety_checker: ModelOutputSafetyChecker | None = None,
     http_client: httpx.Client | None = None,
+    configuration: Settings | None = None,
 ) -> ModelGateway:
-    if settings.model_provider == "deterministic":
+    configured = configuration or settings
+    if configured.model_provider == "deterministic":
         return ModelGateway(
             deterministic_provider,
             safety_checker=safety_checker,
         )
-    if settings.model_provider != "openai_compatible":
-        raise ValueError(f"unsupported MODEL_PROVIDER: {settings.model_provider}")
-    if not settings.model_api_base or not settings.model_api_key:
+    if configured.model_provider != "openai_compatible":
+        raise ValueError(f"unsupported MODEL_PROVIDER: {configured.model_provider}")
+    if (
+        not configured.model_api_base
+        or not configured.model_api_key
+        or not configured.model_api_key.get_secret_value().strip()
+        or not configured.model_name.strip()
+        or configured.model_name == "deterministic-local"
+    ):
         raise ValueError(
-            "MODEL_API_BASE and MODEL_API_KEY are required for openai_compatible"
+            "MODEL_API_BASE, MODEL_API_KEY and a real MODEL_NAME are required "
+            "for openai_compatible"
         )
 
     primary = OpenAICompatibleModelProvider(
-        api_base=settings.model_api_base,
-        api_key=settings.model_api_key.get_secret_value(),
-        model_name=settings.model_name,
-        timeout_ms=settings.model_timeout_ms,
+        api_base=configured.model_api_base,
+        api_key=configured.model_api_key.get_secret_value(),
+        model_name=configured.model_name,
+        timeout_ms=configured.model_timeout_ms,
         client=http_client,
     )
     return ModelGateway(

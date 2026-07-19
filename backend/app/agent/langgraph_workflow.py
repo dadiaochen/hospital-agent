@@ -16,7 +16,11 @@ from app.agent.context_schemas import (
 )
 from app.agent.eval_schemas import EvaluationResult, ExpectedCase, ExpectedSource
 from app.agent.evaluator import DeterministicEvaluator
-from app.agent.model_gateway import DeterministicModelProvider, ModelGateway
+from app.agent.model_gateway import (
+    DeterministicModelProvider,
+    ModelGateway,
+    create_model_gateway,
+)
 from app.agent.model_gateway_schemas import (
     ModelCallRequest,
     ModelCallResult,
@@ -92,11 +96,16 @@ class LangGraphAgentWorkflow:
     ) -> None:
         self.context_manager = context_manager or ContextManager()
         self.tool_registry = tool_registry or build_mock_tool_registry()
+        self._owns_model_gateway = model_gateway is None
         self.model_gateway = model_gateway or _default_workflow_model_gateway()
         self.evaluator = evaluator or DeterministicEvaluator()
         self.planner = planner or DeterministicWorkflowPlanner()
         self.tool_input_builder = tool_input_builder or WorkflowToolInputBuilder()
         self.graph = self._build_graph()
+
+    def close(self) -> None:
+        if self._owns_model_gateway:
+            self.model_gateway.close()
 
     def run(
         self,
@@ -740,7 +749,9 @@ class LangGraphAgentWorkflow:
 
 
 def _default_workflow_model_gateway() -> ModelGateway:
-    return ModelGateway(DeterministicModelProvider(_deterministic_final_payload))
+    return create_model_gateway(
+        DeterministicModelProvider(_deterministic_final_payload)
+    )
 
 
 def _deterministic_final_payload(request: ModelCallRequest) -> dict[str, Any]:
