@@ -72,6 +72,10 @@
 
 准备时可以用“背景、目标、行动、结果”检查有没有讲完整，但面试现场直接按上面三段自然说。只有面试官继续追问实现时，再展开 LangGraph、Pydantic、MCP 或数据库表等技术细节。
 
+## 4B 本地开发环境验证补充
+
+本次已在 Docker Desktop 的 PostgreSQL/Redis/backend 开发环境中真实执行 migration、幂等 seed、health 和知识搜索 smoke。简历可以准确表达为“验证了 Docker Compose 本地开发链路和 PostgreSQL migration/seed 启动流程”；不能表达为生产部署、临床验收、真实医院/药店接入或模型质量指标。
+
 ## 不能夸大的内容
 
 - 不要说已上线生产、接入真实医院/药店、自动开方、诊断或修改处方。

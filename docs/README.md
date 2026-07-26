@@ -18,6 +18,7 @@
 | [LOCAL_SETUP_AND_DEPLOYMENT.md](LOCAL_SETUP_AND_DEPLOYMENT.md) | 如何安装、迁移、启动和部署 |
 | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | 如何按分层规则开发 |
 | [TESTING_GUIDE.md](TESTING_GUIDE.md) | 如何运行测试和验收 |
+| [migration_validation_report.4b.md](migration_validation_report.4b.md) | 4B 当前 PostgreSQL、Alembic、seed 和 backend 真实开发环境验证记录 |
 | [RESUME_NOTES.md](RESUME_NOTES.md) | 哪些亮点可以进入简历，哪些指标还不能写 |
 
 ## 产品与架构

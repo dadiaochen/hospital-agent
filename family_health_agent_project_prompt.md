@@ -97,6 +97,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 当前数据库 schema 维护记录：Alembic 已整理为唯一线性迁移链 `0001_initial_schema -> 0002_add_agent_harness_trace_fields -> 0003_lightweight_vector_rag -> 0004_business_task_runtime -> 0005_knowledge_metadata`。`0003` 统一负责知识块向量字段，`0005` 只负责文档/分块版本字段；不得再创建平行 `0003` 或重复添加 `embedding`、`embedding_model`。提交前必须用 `python -m alembic heads` 检查唯一 head，并在临时 SQLite 与 Docker PostgreSQL 环境分别验证升级链。
 
+任务三已在本机 Docker PostgreSQL/Redis/backend 环境完成一次真实开发联调：migration、pgvector、幂等 seed、backend health 和知识搜索 API 均通过。详细命令与边界见 `docs/migration_validation_report.4b.md`；该记录不能被解释为生产或临床验收。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。
