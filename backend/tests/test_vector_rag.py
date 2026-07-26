@@ -14,9 +14,11 @@ from app.models import KnowledgeChunk, KnowledgeDocument
 from app.rag import RetrievalRequest, create_knowledge_retriever
 from app.rag.embedding_provider import (
     EMBEDDING_DIMENSION,
+    EMBEDDING_SCHEMA_VERSION,
+    DeterministicHashEmbeddingProvider,
     FastEmbedEmbeddingProvider,
 )
-from app.rag.vector_store import KnowledgeEmbeddingIndexer
+from app.rag.vector_store import KnowledgeEmbeddingIndexer, embedding_content_hash
 
 
 class StaticEmbeddingProvider:
@@ -75,6 +77,18 @@ def test_fastembed_provider_is_lazy_and_does_not_create_cache_on_init(
     assert cache_dir.exists() is False
 
 
+def test_deterministic_provider_uses_the_same_query_and_passage_contract() -> None:
+    provider = DeterministicHashEmbeddingProvider(dimension=EMBEDDING_DIMENSION)
+
+    query = provider.embed_query("confirmation")
+    passages = provider.embed_passages(["confirmation", "refill"])
+
+    assert len(query) == EMBEDDING_DIMENSION
+    assert len(passages) == 2
+    assert all(len(vector) == EMBEDDING_DIMENSION for vector in passages)
+    assert provider.embed("confirmation") == query
+
+
 def test_indexer_writes_embedding_metadata_and_skips_unchanged_content(
     vector_session: Session,
 ) -> None:
@@ -119,6 +133,21 @@ def test_indexer_rebuilds_embedding_when_authoritative_content_changes(
     assert result.indexed == 1
     assert chunk.embedding_content_hash != old_hash
     assert provider.passage_calls == 2
+
+
+def test_embedding_hash_includes_model_dimension_and_schema_version() -> None:
+    first = embedding_content_hash("same content", "model-a", dimension=512)
+    different_dimension = embedding_content_hash(
+        "same content",
+        "model-a",
+        dimension=384,
+    )
+    different_model = embedding_content_hash("same content", "model-b", dimension=512)
+
+    assert EMBEDDING_SCHEMA_VERSION == "rag-embedding-v1"
+    assert len(first) == 64
+    assert first != different_dimension
+    assert first != different_model
 
 
 def test_configured_vector_mode_falls_back_before_loading_model_on_sqlite(
@@ -168,3 +197,14 @@ def test_vector_migration_creates_pgvector_extension_and_512_dimension() -> None
     assert 'down_revision: Union[str, None] = "0002_add_agent_harness_trace_fields"' in migration_text
     assert 'op.execute("CREATE EXTENSION IF NOT EXISTS vector")' in migration_text
     assert "Vector(512)" in migration_text
+
+    index_migration = (
+        project_root
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "0006_vector_search_index.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision: str = "0006_vector_search_index"' in index_migration
+    assert "USING hnsw" in index_migration
+    assert "vector_cosine_ops" in index_migration

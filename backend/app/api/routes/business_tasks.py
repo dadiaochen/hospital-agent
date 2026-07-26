@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query, status
 from app.api.dependencies import DbSession, DemoUser
 from app.agent.context_schemas import RunSummary
 from app.agent.eval_schemas import EvaluationResult
+from app.agent.model_gateway_schemas import ModelCallTrace
 from app.agent.run_trace_schemas import RunTrace
 from app.schemas.business import BusinessDomain, SourceRef
 from app.schemas.business_task import (
@@ -51,6 +52,12 @@ def _execution_response(
         provider_calls=[
             item for item in state.get("provider_calls", []) if isinstance(item, dict)
         ],
+        model_call_trace=(
+            ModelCallTrace.model_validate(state["model_call_trace"])
+            if isinstance(state.get("model_call_trace"), dict)
+            and state.get("model_call_trace")
+            else None
+        ),
         degraded=bool(state.get("degraded", execution.task.degraded)),
         run_trace=(
             RunTrace.model_validate(state["run_trace"])

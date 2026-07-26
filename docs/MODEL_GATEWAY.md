@@ -101,3 +101,21 @@ python -m pytest `
 ```
 
 测试覆盖 provider HTTP 契约、schema/safety、fallback、诊断退出码、运行时工厂接线、资源所有权和密钥不泄露。MockTransport 测试不能证明任何真实模型的答案质量、成本、安全率或延迟。
+
+## 9. 新业务子图接入
+
+`FamilyHealthProductWorkflow` 的预问诊、慢病用药和报告解读三条业务分支，在 SafetyAgent、工具调用和确认状态已经确定后，统一调用 Gateway：
+
+```text
+business subgraph
+  -> safety / tools / confirmation state
+  -> compact evidence summary
+  -> ModelGateway
+  -> WorkflowFinalAnswerDraft
+  -> business contract check
+  -> final_answer + ModelCallTrace
+```
+
+模型只能改写最终答案草稿，不能决定业务路由、工具权限、成员、SafetyAgent 结果或确认门。Gateway 输入只包含任务摘要、状态、安全标记、来源数量和模板边界，不传完整 raw conversation 或完整工具输出。
+
+无 Key 时 `MODEL_PROVIDER=deterministic`，三条业务线仍可运行；配置 `openai_compatible` 后，真实 provider 只尝试最终答案，超时、HTTP、JSON、schema 或输出安全失败都会回退 deterministic。业务 API 的 `model_call_trace` 只保存 provider、schema、安全、fallback 和耗时，不保存 Key、完整 prompt 或 provider 原文。

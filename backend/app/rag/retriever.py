@@ -171,22 +171,26 @@ class HybridRetriever:
 
         if request.mode == "vector":
             sources = vector_sources[: request.limit]
+            metadata = _vector_metadata(self._vector_backend, hybrid=False)
             return RetrievalResult(
                 query=request.query,
                 purpose=request.purpose,
                 requested_mode=request.mode,
                 effective_mode="vector",
+                **metadata,
                 evidence_present=bool(sources),
                 sources=sources,
             )
 
         merged = _merge_sources(keyword_result.sources, vector_sources)
         sources = merged[: request.limit]
+        metadata = _vector_metadata(self._vector_backend, hybrid=True)
         return RetrievalResult(
             query=request.query,
             purpose=request.purpose,
             requested_mode=request.mode,
             effective_mode="hybrid",
+            **metadata,
             evidence_present=bool(sources),
             sources=sources,
         )
@@ -231,24 +235,9 @@ def create_knowledge_retriever(
         settings.rag_vector_enabled if vector_enabled is None else vector_enabled
     )
     if resolved_vector_enabled and vector_backend is None and vector_enabled is None:
-        if settings.rag_embedding_provider == "fastembed":
-            from app.rag.vector_store import create_configured_vector_backend
+        from app.rag.vector_store import create_configured_vector_backend
 
-            vector_backend = create_configured_vector_backend(db)
-        else:
-            from app.rag.embedding import create_embedding_provider
-            from app.rag.vector_backend import SQLAlchemyVectorBackend
-
-            embedding_provider = create_embedding_provider(
-                settings.rag_embedding_provider,
-                model_name=settings.rag_embedding_model,
-                dimensions=settings.rag_embedding_dimensions,
-                cache_dir=settings.rag_embedding_cache_dir,
-            )
-            vector_backend = SQLAlchemyVectorBackend(
-                db,
-                embedding_provider=embedding_provider,
-            )
+        vector_backend = create_configured_vector_backend(db)
     return HybridRetriever(
         KeywordRetriever(store),
         store,
@@ -341,6 +330,23 @@ def _with_fallback(result: RetrievalResult, reason: str) -> RetrievalResult:
             "fallback_reason": reason,
         }
     )
+
+
+def _vector_metadata(
+    backend: VectorSearchBackend | None,
+    *,
+    hybrid: bool,
+) -> dict[str, object]:
+    provider = str(getattr(backend, "provider_name", "vector"))
+    model_name = getattr(backend, "model_name", None)
+    dimension = getattr(backend, "dimension", None)
+    schema_version = getattr(backend, "schema_version", None)
+    return {
+        "retrieval_provider": f"keyword+{provider}" if hybrid else provider,
+        "embedding_model": model_name,
+        "embedding_dimension": dimension,
+        "embedding_schema_version": schema_version,
+    }
 
 
 def _merge_sources(

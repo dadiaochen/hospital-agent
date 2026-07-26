@@ -132,3 +132,9 @@ RAG 是共享基础能力，不是某个业务角色的私有工具。知识来�
 - Agent 评测结果与失败原因。
 
 以上记录共同支持问题定位、回放、审计和离线评测。
+
+## 10. 4B 新业务最终答案链
+
+预问诊、慢病用药和报告解读三条新业务子图共享同一个最终答案边界：`SafetyAgent -> Tool/RAG evidence -> confirmation state -> ModelGateway -> WorkflowFinalAnswerDraft -> RunTrace`。ModelGateway 只负责结构化答案表达，不参与 Planner 路由、工具权限、成员选择、安全阻断或确认执行。
+
+默认 deterministic provider 保证无 Key 离线运行；真实 provider 仅作为 primary，失败时回退 deterministic。每次业务请求的 `model_call_trace` 记录 provider、schema、safety、fallback 和耗时，供 API artifacts 和后续评测读取。

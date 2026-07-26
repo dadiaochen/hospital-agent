@@ -17,13 +17,14 @@ RAG 是三条业务线共用的知识与证据层，不是独立问答功能，�
 
 - PostgreSQL 中的 `knowledge_documents`、`knowledge_chunks` 是知识正文的权威存储。
 - 关键词检索始终可用。
-- 向量检索由功能开关控制；默认 provider 是不联网的确定性 hash 向量，保证 CI 和无模型环境可回放。
-- 可选 `FastEmbedEmbedding` 使用 FastEmbed/ONNX Runtime 生成真实语义向量，模型按需加载，缓存目录由 `FASTEMBED_CACHE_PATH` 控制。
+- 向量检索由功能开关控制；deterministic hash provider 和 FastEmbed 都实现同一个 canonical `EmbeddingProvider` 契约，保证 CI 和无模型环境可回放。
+- `FastEmbedEmbeddingProvider` 使用 FastEmbed/ONNX Runtime 生成真实语义向量，模型按需加载，缓存目录由配置控制。
+- PostgreSQL 使用 `pgvector` 的 HNSW cosine index；索引器按模型、维度、schema version 和内容 hash 跳过未变化 chunk，查询只接受具有完整索引元数据的向量。
 - 向量后端只返回 document/chunk 指针，正文必须回到 PostgreSQL 校验并加载。
 - 关键词和向量结果按 `chunk_id` 去重，保留实际 `matched_by`。
 - 检索模式、降级原因和来源指针可以进入 Tool 输出与 RunTrace。
 
-当前的关键词优先只是过渡实现。最终目标架构是：
+当前运行时已经按向量优先目标接入；关键词仍是精确匹配和故障兜底。架构约束是：
 
 - 使用 Embedding 模型生成向量，以语义向量检索承担主要召回。
 - 关键词检索用于药品名、检查指标、标准编号、明确安全词和短查询等精确匹配场景。
@@ -32,7 +33,6 @@ RAG 是三条业务线共用的知识与证据层，不是独立问答功能，�
 
 当前仍未实现：
 
-- pgvector 原生近邻索引；当前 `SQLAlchemyVectorBackend` 为可移植的数据库候选扫描，适合本地小规模知识库。
 - 文档摄取、审核、自动切块和版本发布流水线。
 - 六项新增 RAG 指标的批量评测报告。
 - 互联网医疗知识自动抓取或模型生成内容写回。
@@ -56,6 +56,8 @@ RAG 是三条业务线共用的知识与证据层，不是独立问答功能，�
 - `effective_mode`：本次实际成功使用的模式。
 - `fallback_used`、`fallback_reason`：是否降级及原因。
 - `evidence_present`：是否找到可回溯来源。
+- `retrieval_provider`：`keyword`、`pgvector` 或 `keyword+pgvector`。
+- `embedding_model`、`embedding_dimension`、`embedding_schema_version`：向量索引契约，关键词降级时可以为空。
 
 ## 4. SourceRef
 
@@ -152,7 +154,7 @@ FASTEMBED_CACHE_PATH=E:\\project_code\\hospital\\var\\fastembed
 
 ## 8. Embedding 索引操作
 
-知识正文仍由 `knowledge_documents` 和 `knowledge_chunks` 保存。索引器把 `title + category + chunk.content` 交给当前 embedding provider，并将 `embedding_model` 与向量写回 chunk；检索时如果版本或模型不匹配，会重新计算而不会把旧向量当成新事实。
+知识正文仍由 `knowledge_documents` 和 `knowledge_chunks` 保存。索引器把 `title + category + chunk.content + keywords` 交给当前 embedding provider，并将 `embedding_model`、`embedding_content_hash` 和 `embedded_at` 写回 chunk；hash 同时包含模型名、维度和 `rag-embedding-v1`，契约不匹配时会重新计算而不会把旧向量当成新事实。PostgreSQL 的 `0006_vector_search_index` 迁移创建 HNSW cosine index，SQLite 只用于离线降级测试。
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path

@@ -7,6 +7,7 @@ from pydantic import Field
 
 from app.agent.context_schemas import RunSummary
 from app.agent.eval_schemas import EvaluationResult
+from app.agent.model_gateway_schemas import ModelCallTrace
 from app.agent.run_trace_schemas import RunTrace
 from app.schemas.business import BusinessDomain, ProviderMode, SourceRef
 from app.schemas.common import ApiSchema
@@ -58,6 +59,7 @@ class BusinessTaskExecutionResponse(ApiSchema):
     source_refs: list[SourceRef]
     tool_calls: list[dict[str, Any]]
     provider_calls: list[dict[str, Any]]
+    model_call_trace: ModelCallTrace | None = None
     degraded: bool
     run_trace: RunTrace | None = None
     run_summary: RunSummary | None = None

@@ -174,7 +174,8 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 
 - `confirmation_request`：将要写入的本地草稿类型和摘要；
 - `source_refs`：带 `member_id`、文档版本或 Provider 模拟标记的来源；
-- `run_trace`、`run_summary`、`evaluation_result`：只读冻结产物。
+- `run_trace`、`run_summary`、`evaluation_result`：只读冻结产物；
+- `model_call_trace`：最终答案 Gateway 调用的 provider、schema、安全、fallback 和耗时信息，不包含 Key、完整 prompt 或 provider 原始文本。
 
 确认请求必须使用原任务幂等键：
 

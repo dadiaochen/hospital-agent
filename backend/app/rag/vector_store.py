@@ -12,7 +12,10 @@ from app.core.config import settings
 from app.models import KnowledgeChunk, KnowledgeDocument
 from app.rag.embedding_provider import (
     EMBEDDING_DIMENSION,
+    EMBEDDING_SCHEMA_VERSION,
+    DeterministicHashEmbeddingProvider,
     EmbeddingProvider,
+    EmbeddingDimensionError,
     FastEmbedEmbeddingProvider,
 )
 from app.rag.retrieval_schemas import RetrievalRequest, VectorMatch
@@ -29,6 +32,7 @@ class KnowledgeIndexResult:
     skipped: int
     model_name: str
     dimension: int
+    schema_version: str = EMBEDDING_SCHEMA_VERSION
 
 
 def embedding_text(document: KnowledgeDocument, chunk: KnowledgeChunk) -> str:
@@ -45,8 +49,16 @@ def embedding_text(document: KnowledgeDocument, chunk: KnowledgeChunk) -> str:
     )
 
 
-def embedding_content_hash(text: str, model_name: str) -> str:
-    return sha256(f"{model_name}\n{text}".encode("utf-8")).hexdigest()
+def embedding_content_hash(
+    text: str,
+    model_name: str,
+    *,
+    dimension: int = EMBEDDING_DIMENSION,
+) -> str:
+    """Hash the exact indexing contract, not only the visible text."""
+
+    payload = f"{EMBEDDING_SCHEMA_VERSION}\n{model_name}\n{dimension}\n{text}"
+    return sha256(payload.encode("utf-8")).hexdigest()
 
 
 class KnowledgeEmbeddingIndexer:
@@ -59,6 +71,10 @@ class KnowledgeEmbeddingIndexer:
     ) -> None:
         self._db = db
         self._provider = provider
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        if not isinstance(provider.dimension, int) or provider.dimension < 8:
+            raise EmbeddingDimensionError("provider dimension must be an integer >= 8")
         self._batch_size = batch_size
 
     def index(self, *, force: bool = False) -> KnowledgeIndexResult:
@@ -75,7 +91,11 @@ class KnowledgeEmbeddingIndexer:
         pending: list[tuple[KnowledgeChunk, str, str]] = []
         for chunk, document in rows:
             text = embedding_text(document, chunk)
-            content_hash = embedding_content_hash(text, self._provider.model_name)
+            content_hash = embedding_content_hash(
+                text,
+                self._provider.model_name,
+                dimension=self._provider.dimension,
+            )
             if (
                 not force
                 and chunk.embedding is not None
@@ -103,6 +123,7 @@ class KnowledgeEmbeddingIndexer:
             skipped=len(rows) - len(pending),
             model_name=self._provider.model_name,
             dimension=self._provider.dimension,
+            schema_version=EMBEDDING_SCHEMA_VERSION,
         )
 
 
@@ -118,15 +139,37 @@ class PgVectorSearchBackend:
         self._provider = provider
         self._min_score = min_score
 
+    @property
+    def provider_name(self) -> str:
+        return "pgvector"
+
+    @property
+    def model_name(self) -> str:
+        return self._provider.model_name
+
+    @property
+    def dimension(self) -> int:
+        return self._provider.dimension
+
+    @property
+    def schema_version(self) -> str:
+        return EMBEDDING_SCHEMA_VERSION
+
     def search(self, request: RetrievalRequest) -> Sequence[VectorMatch]:
         if self._db.bind is None or self._db.bind.dialect.name != "postgresql":
             raise VectorIndexUnavailableError("pgvector requires PostgreSQL")
+        if self._provider.dimension != EMBEDDING_DIMENSION:
+            raise VectorIndexUnavailableError(
+                "embedding dimension does not match pgvector schema"
+            )
 
         indexed_chunk_id = self._db.scalar(
             select(KnowledgeChunk.id)
             .where(
                 KnowledgeChunk.embedding.is_not(None),
                 KnowledgeChunk.embedding_model == self._provider.model_name,
+                KnowledgeChunk.embedding_content_hash.is_not(None),
+                KnowledgeChunk.embedded_at.is_not(None),
             )
             .limit(1)
         )
@@ -134,8 +177,10 @@ class PgVectorSearchBackend:
             raise VectorIndexUnavailableError("no compatible knowledge embeddings")
 
         query_vector = self._provider.embed_query(request.query)
-        if len(query_vector) != EMBEDDING_DIMENSION:
-            raise ValueError("query embedding dimension does not match pgvector schema")
+        if len(query_vector) != self._provider.dimension:
+            raise EmbeddingDimensionError(
+                "query embedding dimension does not match provider contract"
+            )
 
         distance = KnowledgeChunk.embedding.cosine_distance(query_vector)
         score = (1.0 - distance).label("score")
@@ -148,6 +193,8 @@ class PgVectorSearchBackend:
             .where(
                 KnowledgeChunk.embedding.is_not(None),
                 KnowledgeChunk.embedding_model == self._provider.model_name,
+                KnowledgeChunk.embedding_content_hash.is_not(None),
+                KnowledgeChunk.embedded_at.is_not(None),
                 distance <= 1.0 - self._min_score,
             )
             .order_by(distance, KnowledgeChunk.id)
@@ -163,14 +210,20 @@ class PgVectorSearchBackend:
         ]
 
 
-def create_configured_embedding_provider() -> FastEmbedEmbeddingProvider:
-    if settings.rag_embedding_provider != "fastembed":
-        raise ValueError(
-            f"unsupported RAG_EMBEDDING_PROVIDER: {settings.rag_embedding_provider}"
+def create_configured_embedding_provider() -> EmbeddingProvider:
+    if settings.rag_embedding_provider == "fastembed":
+        return FastEmbedEmbeddingProvider(
+            model_name=settings.rag_embedding_model,
+            cache_dir=settings.rag_embedding_cache_dir,
+            dimension=settings.rag_embedding_dimensions,
         )
-    return FastEmbedEmbeddingProvider(
-        model_name=settings.rag_embedding_model,
-        cache_dir=settings.rag_embedding_cache_dir,
+    if settings.rag_embedding_provider == "deterministic":
+        return DeterministicHashEmbeddingProvider(
+            model_name=settings.rag_embedding_model,
+            dimension=settings.rag_embedding_dimensions,
+        )
+    raise ValueError(
+        f"unsupported RAG_EMBEDDING_PROVIDER: {settings.rag_embedding_provider}"
     )
 
 

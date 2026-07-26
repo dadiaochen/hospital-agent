@@ -70,3 +70,5 @@ HarnessRunner 批量加载 16 个固定 ExpectedCase 和对应 mock RunTrace，�
 现有运行时已经把 EvaluationResult 与冻结 RunTrace 一起持久化和查询。Evaluator 没有数据库 Session、Tool Registry 或 state writer；持久化由 AgentRuntimeService 在评估返回后完成，因此评估器不能修改答案和业务状态。
 
 最终阶段 4C 将扩展 `ExpectedCase`、`RAGTrace` 和报告聚合并真实计算六项新增指标。当前仍不是临床质量评估；LLM-as-a-Judge 即使加入，也只能作为辅助评审，不能替代引用、成员隔离、Agent 安全和人工确认的确定性校验。
+
+4B 新业务运行还会保存脱敏的 `ModelCallTrace`，其中的 provider、schema、safety、fallback 和耗时可作为评测输入；Evaluator 仍只读冻结的最终答案和运行产物，不读取 Key、完整 prompt 或 provider 原始文本，也不负责判断真实模型的临床质量。

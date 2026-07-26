@@ -7,7 +7,14 @@ from uuid import uuid4
 from langgraph.graph import END, StateGraph
 from sqlalchemy.orm import Session
 
+from app.agent.model_gateway import (
+    DeterministicModelProvider,
+    ModelGateway,
+    create_model_gateway,
+)
+from app.agent.model_gateway_schemas import ModelCallRequest, ModelCallTrace, ModelMessage
 from app.agent.safety import evaluate_safety
+from app.agent.workflow_schemas import WorkflowFinalAnswerDraft
 from app.providers import build_mock_provider_registry
 from app.rag.retriever import create_knowledge_retriever
 from app.schemas.business import BusinessDomain, ProviderMode
@@ -23,6 +30,38 @@ ConfirmationAction = Literal[
     "reminder_create",
     "health_record",
 ]
+
+
+def _deterministic_product_answer(request: ModelCallRequest) -> dict[str, Any]:
+    """Create a safe offline answer from the frozen workflow summary."""
+
+    payload: dict[str, Any] = {}
+    if request.messages:
+        try:
+            decoded = json.loads(request.messages[-1].content)
+            if isinstance(decoded, dict):
+                payload = decoded
+        except json.JSONDecodeError:
+            payload = {}
+
+    waiting = bool(payload.get("waiting_for_user_confirmation", False))
+    confirmed = bool(payload.get("human_confirmation_present", False))
+    return {
+        "content": str(
+            payload.get("template")
+            or "已完成信息整理；当前没有执行任何外部医疗或交易动作。"
+        ),
+        "contains_factual_claims": bool(payload.get("contains_factual_claims", False)),
+        "waiting_for_user_confirmation": waiting,
+        "human_confirmation_present": confirmed,
+        "action_status": (
+            "awaiting_confirmation"
+            if waiting
+            else "draft"
+            if confirmed
+            else "none"
+        ),
+    }
 
 
 class ProductWorkflowState(TypedDict, total=False):
@@ -45,6 +84,7 @@ class ProductWorkflowState(TypedDict, total=False):
     source_refs: list[dict[str, Any]]
     tool_calls: list[dict[str, Any]]
     provider_calls: list[dict[str, Any]]
+    model_call_trace: dict[str, Any]
     degraded: bool
     errors: list[str]
     confirmation_request: dict[str, Any]
@@ -58,8 +98,15 @@ class FamilyHealthProductWorkflow:
     a consultation, purchase, reminder, or medical record to an external system.
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, *, model_gateway: ModelGateway | None = None):
         self.db = db
+        deterministic_provider = DeterministicModelProvider(
+            _deterministic_product_answer,
+            model_name="deterministic-product-answer-v1",
+        )
+        self.model_gateway = model_gateway or create_model_gateway(
+            deterministic_provider
+        )
         self.retriever = create_knowledge_retriever(db)
         self.registry = create_db_tool_registry(db, include_confirmation_tools=True)
         register_business_tools(
@@ -69,6 +116,11 @@ class FamilyHealthProductWorkflow:
             knowledge_retriever=self.retriever,
         )
         self.graph = self._build_graph()
+
+    def close(self) -> None:
+        """Release an HTTP client when a live provider was configured."""
+
+        self.model_gateway.close()
 
     def _build_graph(self):
         graph = StateGraph(ProductWorkflowState)
@@ -575,11 +627,99 @@ class FamilyHealthProductWorkflow:
         state["need_human_confirmation"] = False
         return state
 
+    def _generate_final_answer(self, state: ProductWorkflowState) -> None:
+        """Generate only the user-facing answer after execution is bounded.
+
+        Routing, safety, tool permissions, and confirmation decisions are
+        already fixed in state. The gateway receives a compact summary rather
+        than raw conversation or complete tool output.
+        """
+
+        waiting = state.get("status") == "needs_confirmation"
+        confirmed = bool(
+            state.get("human_confirmation_granted")
+            or state.get("confirmation_result")
+        )
+        payload = {
+            "business_domain": state.get("business_domain"),
+            "status": state.get("status"),
+            "template": state.get("final_answer", ""),
+            "waiting_for_user_confirmation": waiting,
+            "human_confirmation_present": confirmed,
+            "contains_factual_claims": bool(state.get("source_refs")),
+            "source_count": len(state.get("source_refs", [])),
+            "safety_flags": list(state.get("safety_flags", [])),
+        }
+        result = self.model_gateway.invoke(
+            ModelCallRequest(
+                run_id=state["run_id"],
+                task_id=state["task_id"],
+                member_id=state["member_id"],
+                purpose=f"business_{state['business_domain']}_final_answer",
+                messages=(
+                    ModelMessage(
+                        role="system",
+                        content=(
+                            "Return only WorkflowFinalAnswerDraft JSON. "
+                            "Do not invent medical facts, bypass confirmation, "
+                            "or claim external actions were completed."
+                        ),
+                    ),
+                    ModelMessage(
+                        role="user",
+                        content=json.dumps(payload, ensure_ascii=False),
+                    ),
+                ),
+            ),
+            WorkflowFinalAnswerDraft,
+        )
+        state["model_call_trace"] = result.trace.model_dump(mode="json")
+        if result.trace.fallback_used:
+            state["degraded"] = True
+            state.setdefault("errors", []).append(
+                f"model_gateway_fallback:{result.trace.fallback_reason}"
+            )
+        if result.output is None:
+            state["degraded"] = True
+            state.setdefault("errors", []).append("model_gateway_failed")
+            return
+
+        answer = result.output
+        if not self._answer_matches_workflow_state(
+            answer,
+            waiting=waiting,
+            confirmed=confirmed,
+            has_sources=bool(state.get("source_refs")),
+        ):
+            state["degraded"] = True
+            state.setdefault("errors", []).append("model_output_contract_mismatch")
+            return
+        state["final_answer"] = answer.content
+
+    @staticmethod
+    def _answer_matches_workflow_state(
+        answer: WorkflowFinalAnswerDraft,
+        *,
+        waiting: bool,
+        confirmed: bool,
+        has_sources: bool,
+    ) -> bool:
+        if answer.waiting_for_user_confirmation != waiting:
+            return False
+        if answer.human_confirmation_present != confirmed:
+            return False
+        if answer.contains_factual_claims and not has_sources:
+            return False
+        if waiting and answer.action_status != "awaiting_confirmation":
+            return False
+        return True
+
     def _finalize(self, state: ProductWorkflowState) -> ProductWorkflowState:
         if state.get("status") == "needs_confirmation":
             state["need_human_confirmation"] = True
             if not state.get("final_answer"):
                 state["final_answer"] = "已生成待确认草稿，确认后才会保存或提交。"
+            self._generate_final_answer(state)
             return state
         if state.get("status") in {"blocked", "failed", "needs_clarification"}:
             return state
@@ -589,6 +729,7 @@ class FamilyHealthProductWorkflow:
             )
         state["status"] = "completed"
         state["need_human_confirmation"] = False
+        self._generate_final_answer(state)
         return state
 
     def invoke(
@@ -625,6 +766,7 @@ class FamilyHealthProductWorkflow:
             "source_refs": [],
             "tool_calls": [],
             "provider_calls": [],
+            "model_call_trace": {},
             "degraded": False,
             "errors": [],
             "confirmation_request": {},
@@ -647,6 +789,7 @@ class FamilyHealthProductWorkflow:
         resumed["errors"] = []
         resumed["tool_calls"] = []
         resumed["provider_calls"] = []
+        resumed["model_call_trace"] = {}
         resumed["confirmation_result"] = {}
         reviewed = self._safety_review(resumed)
         if reviewed.get("status") not in {"blocked", "failed", "needs_clarification"}:

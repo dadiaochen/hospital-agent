@@ -82,6 +82,9 @@ def test_chronic_care_task_waits_then_resumes_after_confirmation(
     assert first["run_trace"]["run_id"] == first["run_id"]
     assert first["run_summary"]["task_id"] == first["task"]["id"]
     assert first["evaluation_result"]["context_isolation_passed"] is True
+    assert first["model_call_trace"]["requested_provider"] == "deterministic"
+    assert first["model_call_trace"]["effective_provider"] == "deterministic"
+    assert first["model_call_trace"]["success"] is True
 
     confirmed = client.post(
         f"/api/business-tasks/{first['task']['id']}/confirm",
@@ -97,6 +100,9 @@ def test_chronic_care_task_waits_then_resumes_after_confirmation(
     assert second["need_human_confirmation"] is False
     assert second["confirmation_result"]["external_action_status"] == "not_submitted"
     assert second["task"]["confirmed_at"] is not None
+    assert second["model_call_trace"]["purpose"] == (
+        "business_chronic_care_final_answer"
+    )
     assert session.scalar(select(User).where(User.id == USER_ID)) is not None
 
     artifacts = client.get(f"/api/business-tasks/{first['task']['id']}/artifacts")
@@ -125,6 +131,10 @@ def test_preconsultation_uses_mock_provider_without_claiming_real_data(
     payload = response.json()
     assert payload["status"] == "needs_confirmation"
     assert payload["provider_calls"]
+    assert payload["model_call_trace"]["success"] is True
+    assert payload["model_call_trace"]["purpose"] == (
+        "business_preconsultation_final_answer"
+    )
     assert all(call["provider_mode"] == "mock" for call in payload["provider_calls"])
     provider_refs = [
         ref
@@ -161,6 +171,10 @@ def test_health_record_task_requires_confirmation_and_preserves_member_sources(
     assert first["status"] == "needs_confirmation"
     assert first["confirmation_request"]["tool_name"] == "create_health_record_draft"
     assert all(ref["member_id"] == MOTHER_ID for ref in first["source_refs"])
+    assert first["model_call_trace"]["purpose"] == (
+        "business_health_record_final_answer"
+    )
+    assert first["model_call_trace"]["effective_provider"] == "deterministic"
 
     confirmed = client.post(
         f"/api/business-tasks/{first['task']['id']}/confirm",

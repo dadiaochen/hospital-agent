@@ -103,6 +103,7 @@ Alembic 默认将内部 `alembic_version.version_num` 建为 `VARCHAR(32)`，但
   -> 0003_lightweight_vector_rag
   -> 0004_business_task_runtime
   -> 0005_knowledge_metadata
+  -> 0006_vector_search_index
 ```
 
 每个 revision 的职责边界如下：
@@ -112,9 +113,10 @@ Alembic 默认将内部 `alembic_version.version_num` 建为 `VARCHAR(32)`，但
 - `0003_lightweight_vector_rag`：在 `knowledge_chunks` 增加可空 `VECTOR(512)`（SQLite 使用 JSON 兼容类型）、embedding 模型名、内容哈希和索引时间。
 - `0004_business_task_runtime`：增加业务任务、provider 调用、来源引用、医疗文档和健康事件等 runtime 表。
 - `0005_knowledge_metadata`：增加知识文档 `version` 与知识分块 `chunk_version`。它只负责版本元数据，不重复创建 0003 已拥有的向量字段。
+- `0006_vector_search_index`：在 PostgreSQL 为可用向量创建 HNSW cosine index；SQLite 环境跳过原生索引创建，仍可执行迁移链并测试关键词降级。
 
-禁止再次创建平行的 `0003` revision；新增 schema 变更必须从 `0005_knowledge_metadata` 继续串联，并同步 ORM、seed、测试和本节说明。验收命令是 `python -m alembic heads`，预期只输出 `0005_knowledge_metadata`。
+禁止再次创建平行的 `0003` revision；新增 schema 变更必须从 `0006_vector_search_index` 继续串联，并同步 ORM、seed、测试和本节说明。验收命令是 `python -m alembic heads`，预期只输出 `0006_vector_search_index`。
 
 ## 11. 4B 模型接入说明
 
-4B 的模型 provider 配置只来自 backend 环境变量，不新增 provider-specific ORM 字段；当前仓库完整 schema 仍以本节的 `0001` 到 `0005` 迁移链为准。Key、完整 prompt 和 provider 原始文本不写入数据库。既有 `agent_runs.raw_state` 只保存版本化、脱敏的 `ModelCallTrace`。
+4B 的模型 provider 配置只来自 backend 环境变量，不新增 provider-specific ORM 字段；当前仓库完整 schema 仍以本节的 `0001` 到 `0006` 迁移链为准。Key、完整 prompt 和 provider 原始文本不写入数据库。既有 `agent_runs.raw_state` 只保存版本化、脱敏的 `ModelCallTrace`。

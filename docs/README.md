@@ -21,6 +21,8 @@
 | [migration_validation_report.4b.md](migration_validation_report.4b.md) | 4B 当前 PostgreSQL、Alembic、seed 和 backend 真实开发环境验证记录 |
 | [RESUME_NOTES.md](RESUME_NOTES.md) | 哪些亮点可以进入简历，哪些指标还不能写 |
 
+4B 的八项剩余任务、完成证据和未完成边界只看 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 的“4B 剩余任务拆分与审计”章节；本阶段当前已推进到任务四，任务五至八仍未开始。
+
 ## 产品与架构
 
 | 文档 | 内容 |

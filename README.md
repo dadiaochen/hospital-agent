@@ -11,7 +11,7 @@
 - `4B`：一次性完成三条业务线所需的后端 Agent、Provider Adapter、向量优先 RAG、API、持久化、安全与评测。
 - `4C`：完成成熟患者端、前后端全链路、E2E、Docker 部署、可观测性和交付收口。`4C` 完成即代表当前产品范围全部完成，不再把必要能力留作后续展望。
 
-当前正在推进 `4B` 后端闭环：三条业务任务 API、Provider mock/降级契约、冻结运行产物和可选 CPU embedding 已接入；`4B` 尚未宣称完成。
+当前正在推进 `4B` 后端闭环：任务一、二已完成；任务三的统一向量 RAG 和任务四的新业务 Model Gateway 已完成代码与离线回归，任务五至八仍未完成，因此 `4B` 尚未宣称完成。
 
 目前已经具备：
 
@@ -23,9 +23,9 @@
 - 家庭、药箱、处方/购药、药店库存、知识检索与 Agent 审计的只读 FastAPI 接口；知识检索已完成自动化与 PostgreSQL/Postman 验证。
 - 本地草稿创建、查询、确认和拒绝 API；状态机只改变本地记录，始终保留 `not_submitted` 外部状态。
 - `4B` 业务任务闭环：预问诊/导诊、慢病履约和健康档案三类有界 LangGraph 入口；首次请求等待确认，确认后只写本地 draft；可通过 artifacts 接口回放 `RunTrace`、`RunSummary` 和 `EvaluationResult`。
-- RAG：关键词检索始终可用，当前默认使用离线确定性向量 provider 做契约和回退测试；配置 `RAG_EMBEDDING_PROVIDER=fastembed` 后可使用 CPU/ONNX 语义 embedding，向量索引异常显式降级到关键词检索。
+- RAG：运行时统一使用 canonical embedding provider、PostgreSQL pgvector HNSW 索引和关键词降级；`FastEmbed` 负责真实 CPU/ONNX 语义向量，deterministic provider 负责无模型环境，模型、维度、hash/schema 和来源信息都会进入索引/检索校验。
 - Provider Adapter：所有 mock provider 都标记 `provider_mode=mock` 和 `simulation=true`；未配置的 `sandbox/real` 返回结构化 degraded 结果，不伪造医院、药店或通知服务数据。
-- Model Gateway：默认 deterministic，可选真实 HTTP provider；所有输出先过 Pydantic 与安全检查，失败留下 attempt trace 并回退。
+- Model Gateway：默认 deterministic，可选真实 HTTP provider；旧 Agent 和新的三条业务子图都通过统一 Gateway 生成结构化 FinalAnswer，所有输出先过 Pydantic 与安全检查，失败留下 attempt trace 并回退。
 - 有界 LangGraph DAG：按 intent 路由四类业务角色，统一经过 ContextManager、Tool Registry、SafetyAgent、确认草稿、RunTrace/reset 和只读 Evaluator。
 - Agent Runtime API：真实 DB tools、run/tool-call 持久化、冻结产物查询、幂等运行和确认后的同任务续跑；任何动作仍只创建本地草稿。
 - Next.js 数据页面与 Agent 演示入口：共享成员选择、四类场景、Tool/RAG 来源、安全提示、确认续跑和 Trace/Evaluation 详情。
@@ -103,6 +103,26 @@ python -m pytest backend\tests\test_hybrid_rag.py backend\tests\test_db_backed_t
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_business_task_api.py backend\tests\test_provider_and_embedding.py -q -p no:cacheprovider --basetemp=$env:TEMP\hospital-pytest-4b
 ```
+
+只验证 4B 任务三/四：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest `
+  backend\tests\test_vector_rag.py `
+  backend\tests\test_hybrid_rag.py `
+  backend\tests\test_model_gateway.py `
+  backend\tests\test_business_task_api.py -q -p no:cacheprovider --basetemp=.tmp\pytest-4b-rag-model
+```
+
+生成知识向量索引前，先确认 `.env` 中的 provider 和维度；无模型环境可使用 deterministic provider，真实语义检索使用 FastEmbed：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m app.rag.indexer
+```
+
+索引命令只写入 `knowledge_chunks` 的向量及版本元数据，不生成医疗结论；模型下载失败或向量检索不可用时，业务检索会保留 `fallback_reason` 并降级到关键词。
 
 只验证 Provider Adapter 契约和七个离线 mock provider：
 

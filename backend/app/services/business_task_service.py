@@ -118,9 +118,11 @@ class BusinessTaskService:
         )
         self.db.add(task)
         self.db.add(run)
+        workflow: FamilyHealthProductWorkflow | None = None
         try:
+            workflow = FamilyHealthProductWorkflow(self.db)
             self.db.flush()
-            state = FamilyHealthProductWorkflow(self.db).invoke(
+            state = workflow.invoke(
                 run_id=run_id,
                 task_id=task_id,
                 user_id=self.user_id,
@@ -160,6 +162,9 @@ class BusinessTaskService:
                 run=run,
                 state=self._failure_state(task, run),
             )
+        finally:
+            if workflow is not None:
+                workflow.close()
 
     def confirm_task(
         self,
@@ -209,9 +214,11 @@ class BusinessTaskService:
         task.status = "running"
         task.need_human_confirmation = False
         self.db.add(run)
+        workflow: FamilyHealthProductWorkflow | None = None
         try:
+            workflow = FamilyHealthProductWorkflow(self.db)
             self.db.flush()
-            state = FamilyHealthProductWorkflow(self.db).resume_confirmation(
+            state = workflow.resume_confirmation(
                 previous_run.raw_state,
                 run_id=run_id,
                 human_confirmation_granted=True,
@@ -243,6 +250,9 @@ class BusinessTaskService:
                 run=run,
                 state=self._failure_state(task, run),
             )
+        finally:
+            if workflow is not None:
+                workflow.close()
 
     def get_task(self, task_id: str) -> BusinessTask:
         return self._get_task(task_id)
@@ -505,6 +515,7 @@ class BusinessTaskService:
             "source_refs": [],
             "tool_calls": [],
             "provider_calls": [],
+            "model_call_trace": {},
             "degraded": False,
             "errors": [error_type or "execution_failed"],
         }
@@ -535,6 +546,7 @@ class BusinessTaskService:
             "source_refs": payload.get("source_refs", []),
             "tool_calls": [],
             "provider_calls": [],
+            "model_call_trace": payload.get("model_call_trace", {}),
             "degraded": task.degraded,
             "errors": payload.get("errors", []),
         }
@@ -548,6 +560,7 @@ class BusinessTaskService:
             "safety_flags": state.get("safety_flags", []),
             "source_refs": state.get("source_refs", []),
             "errors": state.get("errors", []),
+            "model_call_trace": state.get("model_call_trace", {}),
         }
 
     @staticmethod

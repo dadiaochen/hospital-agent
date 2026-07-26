@@ -63,6 +63,8 @@ Agent 允许完成：
 
 用户确认不能覆盖阻断型安全规则。
 
+ModelGateway 只在业务安全状态确定后生成结构化最终答案草稿；它不能解除 `SafetyAgent` 阻断，也不能修改人工确认要求。Gateway 的输出安全检查和 primary/fallback trace 是输出门禁，不替代运行时 Agent 安全。
+
 ## 6. 成员与隐私
 
 - 所有健康事实都必须带 `member_id`。

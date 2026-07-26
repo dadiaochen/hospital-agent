@@ -7,19 +7,18 @@ the Retriever still hydrates final content from those rows.
 
 from __future__ import annotations
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.models import KnowledgeChunk, KnowledgeDocument
-from app.rag.embedding import EmbeddingProvider, create_embedding_provider
+from app.rag.embedding import create_embedding_provider
+from app.rag.vector_store import KnowledgeEmbeddingIndexer
 
 
 def index_knowledge(
     db: Session,
     *,
-    embedding_provider: EmbeddingProvider | None = None,
+    embedding_provider: object | None = None,
 ) -> int:
     provider = embedding_provider or create_embedding_provider(
         settings.rag_embedding_provider,
@@ -27,19 +26,12 @@ def index_knowledge(
         dimensions=settings.rag_embedding_dimensions,
         cache_dir=settings.rag_embedding_cache_dir,
     )
-    rows = db.execute(
-        select(KnowledgeChunk, KnowledgeDocument).join(
-            KnowledgeDocument,
-            KnowledgeChunk.document_id == KnowledgeDocument.id,
-        )
-    )
-    indexed = 0
-    for chunk, document in rows:
-        text = f"{document.title} {document.category} {chunk.content}"
-        chunk.embedding_model = provider.model_name
-        chunk.embedding = provider.embed(text)
-        indexed += 1
-    return indexed
+    result = KnowledgeEmbeddingIndexer(
+        db,
+        provider,  # type: ignore[arg-type]
+        batch_size=settings.rag_embedding_batch_size,
+    ).index()
+    return result.indexed
 
 
 def main() -> None:

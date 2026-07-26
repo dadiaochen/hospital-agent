@@ -308,9 +308,17 @@ def _knowledge_handler(retriever: Retriever):
                 document_version=source.document_version,
                 chunk_id=source.chunk_id,
                 retrieval_mode=result.effective_mode,
-                provider="knowledge_retriever",
+                provider=result.retrieval_provider,
                 member_id=context.member_id,
                 verified=True,
+                source_metadata={
+                    "matched_by": list(source.matched_by),
+                    "fallback_used": result.fallback_used,
+                    "fallback_reason": result.fallback_reason,
+                    "embedding_model": result.embedding_model,
+                    "embedding_dimension": result.embedding_dimension,
+                    "embedding_schema_version": result.embedding_schema_version,
+                },
             )
             for source in result.sources
         ]

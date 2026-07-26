@@ -246,7 +246,7 @@ python -m alembic heads
 
 正常情况下，current 与 heads 指向同一最新 revision。
 
-当前唯一 head 是 `0005_knowledge_metadata`。如果 `python -m alembic heads` 输出两个或更多 revision，说明迁移链发生分叉，应先停止 seed 和服务启动，修复 migration graph 后再继续。
+当前唯一 head 是 `0006_vector_search_index`。如果 `python -m alembic heads` 输出两个或更多 revision，说明迁移链发生分叉，应先停止 seed 和服务启动，修复 migration graph 后再继续。
 
 ### 4B.4 写入 demo seed
 

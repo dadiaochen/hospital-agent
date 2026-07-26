@@ -46,6 +46,8 @@
 
 `evidence_refs` 使用通用 `SourceRef`。调用失败必须返回结构化错误，不得把 Provider 原始异常文本直接交给模型生成用户答案。
 
+知识检索工具的 `SourceRef.source_metadata` 还记录 `matched_by`、`retrieval_provider`、`fallback_used`、`fallback_reason`、embedding model/dimension/schema version。这样关键词降级仍然可审计，模型不能把降级结果伪装成真实语义召回。
+
 ## 4. 当前六类工具
 
 - `query_health_profile`

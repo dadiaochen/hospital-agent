@@ -71,15 +71,17 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 ### 4.6 RAG 采用向量优先目标和可降级实现
 
-2F-1 把原先位于 service 内的知识库扫描整理为 `Retriever` 协议。`KeywordRetriever` 从 PostgreSQL 的 `knowledge_documents` / `knowledge_chunks` 加载已审核内容并确定性排序；`HybridRetriever` 可以接收可选的 `VectorSearchBackend`，但向量后端只返回 `document_id`、`chunk_id` 和相关性分数，正文必须重新从数据库回填。
+2F-1 把原先位于 service 内的知识库扫描整理为 `Retriever` 协议。`KeywordRetriever` 从 PostgreSQL 的 `knowledge_documents` / `knowledge_chunks` 加载已审核内容并确定性排序；4B 统一入口使用 canonical `EmbeddingProvider`、`KnowledgeEmbeddingIndexer` 和 PostgreSQL `PgVectorSearchBackend`，向量后端只返回 `document_id`、`chunk_id` 和相关性分数，正文必须重新从数据库回填。
 
-`RAG_VECTOR_ENABLED` 默认开启，确定性 hash provider 负责离线契约测试；配置 `FastEmbedEmbedding` 后才使用 CPU/ONNX 语义模型。向量后端只返回 document/chunk 指针，正文必须回到知识表校验和回填。如果 provider、模型或向量后端异常，保留关键词结果并记录 `fallback_used` / `fallback_reason`。结果中的 `score` 仅表示检索相关性，不是医疗正确率、诊断概率或执行授权。完整设计见 [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md)。
+`RAG_VECTOR_ENABLED` 控制向量路径，deterministic hash provider 和 FastEmbed 共享模型、维度、内容 hash/schema 校验；PostgreSQL 通过 `0006_vector_search_index` 创建 HNSW cosine index。向量后端只返回 document/chunk 指针，正文必须回到知识表校验和回填。如果 provider、模型、版本或向量后端异常，保留关键词结果并记录 `fallback_used` / `fallback_reason`。结果中的 `score` 仅表示检索相关性，不是医疗正确率、诊断概率或执行授权。完整设计见 [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md)。
 
 ### 4.7 Model Gateway 先解析再使用
 
 2F-2 定义 `ModelProvider` 与 `ModelGateway`。自动测试和无 Key 环境使用 `DeterministicModelProvider`；配置完整时可以使用 OpenAI-compatible HTTP adapter。Provider 只返回文本，Gateway 必须依次执行 JSON 解析、目标 Pydantic schema 校验和独立输出安全检查，全部通过后才返回结构化对象。
 
 超时、HTTP 错误、provider response 错误、schema 失败和 safety 失败都产生 `ModelProviderAttemptTrace`。配置了 fallback 时，Gateway 再调用 deterministic provider；fallback 也失败则返回 `output=None` 和失败 Trace，不把原始文本交给 Agent。规则型输出检查是 Gateway 的最后一道文本门禁，不替代 LangGraph 中的 SafetyAgent。完整设计见 [MODEL_GATEWAY.md](MODEL_GATEWAY.md)。
+
+4B 的三条新业务子图在 SafetyAgent、工具证据和确认状态确定后，通过同一个 Gateway 生成 `WorkflowFinalAnswerDraft`。Gateway 只接收压缩后的任务摘要和来源指针，不控制业务路由、成员权限或确认门；业务响应额外暴露脱敏的 `model_call_trace`，用于审计 primary、fallback、schema 和 safety 结果。
 
 ### 4.8 LangGraph 使用有界 DAG
 
@@ -109,9 +111,10 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
   -> 0003_lightweight_vector_rag
   -> 0004_business_task_runtime
   -> 0005_knowledge_metadata
+  -> 0006_vector_search_index
 ```
 
-向量字段只能由 `0003_lightweight_vector_rag` 创建，知识文档/分块版本字段只能由 `0005_knowledge_metadata` 创建；后续 migration 不得重复添加同名列。修改 ORM 时必须同时检查 migration、seed、SQLite 测试和 PostgreSQL 迁移结果，提交前执行 `python -m alembic heads` 并确认只有 `0005_knowledge_metadata`。
+向量字段只能由 `0003_lightweight_vector_rag` 创建，知识文档/分块版本字段只能由 `0005_knowledge_metadata` 创建，PostgreSQL HNSW cosine index 只能由 `0006_vector_search_index` 创建；后续 migration 不得重复添加同名列。修改 ORM 时必须同时检查 migration、seed、SQLite 测试和 PostgreSQL 迁移结果，提交前执行 `python -m alembic heads` 并确认只有 `0006_vector_search_index`。
 
 ## 5. 当前实现边界
 

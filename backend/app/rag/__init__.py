@@ -13,6 +13,8 @@ from app.rag.retriever import (
     create_knowledge_retriever,
 )
 from app.rag.embedding_provider import (
+    EMBEDDING_SCHEMA_VERSION,
+    DeterministicHashEmbeddingProvider,
     EmbeddingProvider,
     FastEmbedEmbeddingProvider,
 )
@@ -29,6 +31,8 @@ from app.rag.indexer import index_knowledge
 
 __all__ = [
     "HybridRetriever",
+    "EMBEDDING_SCHEMA_VERSION",
+    "DeterministicHashEmbeddingProvider",
     "EmbeddingProvider",
     "FastEmbedEmbeddingProvider",
     "KnowledgeEmbeddingIndexer",

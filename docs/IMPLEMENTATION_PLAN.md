@@ -9,7 +9,7 @@
 | 路线图阶段 | 内容 | 当前状态 |
 | --- | --- | --- |
 | 4A | 产品重基线、共享业务契约、Provider Mode、SourceRef 和文档统一 | 已完成 |
-| 4B | 完整后端 Agent：Provider、工具、向量优先 RAG、三条业务子图、API、持久化、安全与评测 | 下一阶段 |
+| 4B | 完整后端 Agent：Provider、工具、向量优先 RAG、三条业务子图、API、持久化、安全与评测 | 进行中；任务一、二已完成，任务三、四已完成代码与离线回归，任务五至八待完成 |
 | 4C | 完整产品交付：成熟患者端、前后端闭环、E2E、评测、Docker、可观测性和材料收口 | 最终阶段 |
 
 ## 3. 下一阶段交付重点
@@ -25,6 +25,8 @@
 - 业务 API、任务续跑、草稿确认、来源查询、运行记录和所需持久化。
 - Agent 安全、人工确认、成员隔离、RunTrace、EvaluatorAgent 和 RAG 评测数据采集。
 - 不依赖外部网络的完整后端回归测试。
+
+4B 当前按路线图拆为八项子任务：Git 线性历史、迁移冲突、统一向量 RAG、新业务 Model Gateway、Provider/API 验收、新业务 Harness、PostgreSQL/Docker 全链路和文档/Git 收口。具体状态、证据和唯一实施顺序只维护在 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 的“4B 剩余任务拆分与审计”章节。
 
 4C 只做完整产品交付，不再拆出新的后续阶段：
 

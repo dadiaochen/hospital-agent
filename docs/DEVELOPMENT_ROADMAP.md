@@ -167,7 +167,37 @@ RAG 解决四类核心问题：
 - Docker Compose 能启动成熟前后端及依赖，演示流程与文档一致。
 - 本阶段完成即代表当前产品范围全部完成，不再保留待实现的后续产品阶段。
 
-## 9. 当前唯一下一步
+## 9. 4B 剩余任务拆分与审计
+
+本节是 4B 后端收口的唯一子任务清单。任务状态与阶段状态分开管理：
+
+| 子任务状态 | 含义 |
+| --- | --- |
+| `DONE` | 代码、测试、文档和必要的运行验证已经完成 |
+| `IN_PROGRESS` | 已开始实现，仍有明确验收项未完成 |
+| `TODO` | 已定义但尚未开始，不能在简历或 README 中写成已完成 |
+
+| 任务 | 目标 | 当前审计状态 | 已核对的事实或剩余验收 |
+| --- | --- | --- | --- |
+| 任务一：整理 Git 线性历史 | 保护未提交工作，建立备份点，以 `2571f91` 为旧开发线基线，把 4B 工作线性放在其后 | `DONE` | 当前分支历史从 `2571f91` 线性延伸；已建立 `codex/backup-before-rag-model-gateway`；已有 `refs/stash` 保留早期工作树。当前审计未发现已修改的跟踪文件，`output/` 未跟踪产物保持原样。 |
+| 任务二：解决 Alembic 迁移冲突 | 统一旧 pgvector 与新业务运行表的迁移链，解决向量维度冲突 | `DONE` | 当前链为 `0001 -> 0002 -> 0003 -> 0004 -> 0005 -> 0006`；`0003` 唯一负责向量字段，PostgreSQL 使用 `Vector(512)`，配置与 FastEmbed 契约统一为 512 维，`0006` 增加可回滚的 HNSW 索引。 |
+| 任务三：统一向量 RAG 实现 | 形成 FastEmbed + PostgreSQL pgvector + 关键词降级双模式，补齐真实索引、版本校验、来源引用和降级测试 | `DONE` | 已统一 canonical embedding provider、indexer 和 pgvector backend；FastEmbed 为可选向量模式，关键词检索为安全降级；内容 hash 同时绑定 schema/model/dimension，检索结果保留 provider、模型、维度、schema 和来源 metadata；`0006` 提供 PostgreSQL HNSW 索引，离线回归覆盖降级和契约。真实 PostgreSQL 索引质量仍属于任务七验收。 |
+| 任务四：接通新业务 Model Gateway | 将统一 Model Gateway 接入预问诊、慢病用药、报告解读三条新业务子图，并保留无 Key deterministic fallback | `DONE` | `FamilyHealthProductWorkflow` 三条业务子图均通过统一 Gateway 生成结构化 `WorkflowFinalAnswerDraft`；无 Key 默认 deterministic，支持 primary/fallback trace 和失败降级；SafetyAgent 阻断路径不绕过安全门，业务响应暴露脱敏 `model_call_trace`。真实外部模型质量不在本任务的验收范围内。 |
+| 任务五：完成 Provider 和业务 API 验收 | 补齐超时、重试、权限、输出 schema、成员隔离、错误映射和幂等确认验收 | `TODO` | Provider mock/degraded 契约已有基础测试；任务三、四已稳定，完整 API 回归、异常组合和幂等确认验收是当前下一项工作。 |
+| 任务六：扩展新业务 Harness 评测 | 为三条新业务线增加 fixture，将真实业务 RunTrace 接入 deterministic evaluator | `TODO` | 现有 Harness 主要覆盖旧基线和 mock trace；三条新业务线的来源、确认、安全和成员隔离指标尚未形成固定评测集。 |
+| 任务七：PostgreSQL 与 Docker 全链路验证 | 执行迁移、seed、三条业务 API、RAG 索引和 Docker 启动回归 | `TODO` | 已做过基础 PostgreSQL/Docker smoke，但不能代替任务三、四完成后的全链路验收。 |
+| 任务八：文档和 Git 收口 | 同步开发、API、数据库、RAG、Agent、安全、部署和学习文档，测试通过后打 tag 并合并 main | `TODO` | 任务一至四已有代码、离线测试或历史证据；任务五至七完成并完成文档复核后，才能将 4B 标为 `DONE`。 |
+
+### 4B 当前实施顺序
+
+1. 执行任务五，补齐 Provider 和业务 API 的异常、权限、schema、隔离和幂等验收。
+2. 执行任务六，把三条新业务子图的真实业务 RunTrace 接入固定 Harness 评测。
+3. 执行任务七，使用 Docker PostgreSQL 完成迁移、seed、RAG 索引和 API 全链路回归。
+4. 执行任务八，更新文档、生成报告、建立回滚 tag，再合并 `main`。
+
+在任务五至任务八完成前，不得把 4B 标记为 `DONE`，也不得进入 4C 的前端最终交付工作。
+
+## 10. 当前唯一下一步
 
 `4B 完整后端 Agent 能力` 是唯一 `NEXT`。
 
@@ -178,7 +208,7 @@ RAG 解决四类核心问题：
 3. 知识样例只使用可公开、可版本化、可标注权威等级的内容。
 4. 4B 必须交付完整后端闭环，不能只完成接口定义或单个子系统。
 
-## 10. 完成定义
+## 11. 完成定义
 
 产品升级完成必须同时满足：
 
@@ -193,7 +223,7 @@ RAG 解决四类核心问题：
 - 前后端、数据库、缓存和运行依赖可通过 Docker Compose 一键启动。
 - 仓库不存在为当前产品范围预留但尚未实现的后续阶段；剩余内容只能是明确排除的非目标。
 
-## 11. 明确非目标
+## 12. 明确非目标
 
 - 疾病诊断、自动开方、修改处方或剂量调整建议。
 - 未经用户确认的复诊提交、购药、提醒或健康档案写入。
@@ -202,7 +232,7 @@ RAG 解决四类核心问题：
 - 完整认证、多租户、支付、物流或生产级合规认证。
 - 模型训练、微调和通用多模型调度平台。
 
-## 12. 阶段治理
+## 13. 阶段治理
 
 1. 同一时间只能有一个 `NEXT`。
 2. 新阶段开始前必须声明目标、允许范围、禁止范围和验收测试。

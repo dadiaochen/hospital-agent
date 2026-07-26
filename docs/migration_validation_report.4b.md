@@ -32,6 +32,8 @@ docker compose ps
 
 ## 边界与清理
 
+> 历史记录说明：本报告记录的是 `0006_vector_search_index` 引入前的 `0005_knowledge_metadata` 验证时点。当前迁移 head 已继续串联到 `0006_vector_search_index`；当前版本的完整 PostgreSQL/Docker 回归仍属于 4B 任务七，不能用本报告替代。
+
 本次没有启动 frontend，也没有调用真实医院、药店、通知服务、LLM 或真实 Embedding 下载；使用的是 deterministic provider 和已存在的本地 PostgreSQL seed。停止服务使用：
 
 ```powershell

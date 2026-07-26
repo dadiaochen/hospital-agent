@@ -95,11 +95,11 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `4C` 建立持续维护的项目面经问题库。每个主题保留用户或面试官原题原句，并提供 30 秒短答、项目展开回答、技术解释、代码证据、记忆方法和可能追问。相似题追加到已有主题，不复制冲突答案；新考点才新增条目。项目未使用的技术必须标记为仅学习、候选或明确不做，并先讨论必要性再决定是否进入路线图，不能包装成已实现经历。
 
-当前数据库 schema 维护记录：Alembic 已整理为唯一线性迁移链 `0001_initial_schema -> 0002_add_agent_harness_trace_fields -> 0003_lightweight_vector_rag -> 0004_business_task_runtime -> 0005_knowledge_metadata`。`0003` 统一负责知识块向量字段，`0005` 只负责文档/分块版本字段；不得再创建平行 `0003` 或重复添加 `embedding`、`embedding_model`。提交前必须用 `python -m alembic heads` 检查唯一 head，并在临时 SQLite 与 Docker PostgreSQL 环境分别验证升级链。
+当前数据库 schema 维护记录：Alembic 已整理为唯一线性迁移链 `0001_initial_schema -> 0002_add_agent_harness_trace_fields -> 0003_lightweight_vector_rag -> 0004_business_task_runtime -> 0005_knowledge_metadata -> 0006_vector_search_index`。`0003` 统一负责知识块向量字段，`0005` 只负责文档/分块版本字段，`0006` 只负责 PostgreSQL HNSW 向量索引；不得再创建平行 `0003` 或重复添加 `embedding`、`embedding_model`。提交前必须用 `python -m alembic heads` 检查唯一 head，并在临时 SQLite 与 Docker PostgreSQL 环境分别验证升级链。
 
 任务三已在本机 Docker PostgreSQL/Redis/backend 环境完成一次真实开发联调：migration、pgvector、幂等 seed、backend health 和知识搜索 API 均通过。详细命令与边界见 `docs/migration_validation_report.4b.md`；该记录不能被解释为生产或临床验收。
 
-任务四补齐 Provider Adapter 契约回归：七个 provider 均有离线 mock 实现，`sandbox/real` 未配置时返回显式 degraded 结果；`ProviderResponse` 禁止缺少 `fallback_reason` 的降级状态进入工具链。该阶段不接入真实医院、药店、通知或模型服务。
+4B 当前任务审计：任务一 Git 线性历史和任务二迁移链已完成；任务三已统一 canonical embedding provider、FastEmbed/pgvector/HNSW、关键词降级、索引版本校验和来源 metadata；任务四已把 Model Gateway 接入预问诊、慢病用药和报告解读三条新业务子图，默认 deterministic、可选真实 provider，并保留 fallback。任务五至八仍未完成，不能把 4B 写成最终交付，也不能把离线 deterministic/mock 结果写成真实模型或生产指标。
 
 ## 7. 阅读顺序
 

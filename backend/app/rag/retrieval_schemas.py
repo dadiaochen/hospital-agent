@@ -49,6 +49,10 @@ class RetrievalResult(RetrievalContract):
     purpose: NonEmptyStr
     requested_mode: RetrievalMode
     effective_mode: EffectiveRetrievalMode
+    retrieval_provider: NonEmptyStr = "keyword"
+    embedding_model: NonEmptyStr | None = None
+    embedding_dimension: int | None = Field(default=None, ge=8)
+    embedding_schema_version: NonEmptyStr | None = None
     fallback_used: bool = False
     fallback_reason: NonEmptyStr | None = None
     evidence_present: bool

@@ -83,3 +83,17 @@ Review Agent UI 时再检查首次 POST 是否固定为 `false`，确认按钮�
 - 2026-07-19 使用 npm 官方 registry 执行 `npm audit --omit=dev` 时，Next 14 生产依赖报告 1 项 high 和 1 项 moderate；官方自动修复建议升级到 Next 16，属于 major upgrade。当前本地演示不因此冒充生产安全版本，升级与回归应作为部署前独立任务处理。
 - `agent_eval_report.example.md` 是固定 mock fixture 的计算结果，不是生产质量、临床效果或安全率证明。
 - 本项目的配置示例只用于本地开发。生产环境必须从安全的环境变量或秘密管理系统注入连接信息和模型 Key。
+
+## 4B 任务三/四回归
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest `
+  backend\tests\test_vector_rag.py `
+  backend\tests\test_hybrid_rag.py `
+  backend\tests\test_migration_chain.py `
+  backend\tests\test_model_gateway.py `
+  backend\tests\test_business_task_api.py -q -p no:cacheprovider --basetemp=.tmp\pytest-4b
+```
+
+任务三必须验证 canonical provider、hash/schema 变化重建、pgvector migration/HNSW 定义、来源 metadata 和关键词降级。任务四必须验证三条业务域都有成功的 `model_call_trace`，无 Key 默认 deterministic，primary provider 失败时 fallback，SafetyAgent 阻断路径不被模型绕过。

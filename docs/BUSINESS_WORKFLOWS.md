@@ -121,3 +121,9 @@
 - RAG 无命中：不输出确定性医疗结论，转为补充信息或人工处理。
 - 成员切换：创建新的任务上下文，禁止复用上一成员事实。
 - 高风险请求：在任何草稿或用户可见结论生成前执行 Agent 安全拦截。
+
+## 8. 4B FinalAnswer Gateway
+
+The three new business subgraphs call the shared `ModelGateway` only after safety, tool evidence, and confirmation state are fixed. The gateway receives a compact task summary and source metadata, then returns `WorkflowFinalAnswerDraft`; it cannot change routing, member scope, tools, `SafetyAgent` decisions, or confirmation requirements.
+
+With `MODEL_PROVIDER=deterministic`, the three branches run without an API key. With `openai_compatible`, only the final-answer step may call the external model; timeout, HTTP, schema, or output-safety failures fall back to deterministic and are recorded in `model_call_trace`. Keys, full prompts, and provider raw text are not persisted.
