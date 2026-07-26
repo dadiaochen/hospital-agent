@@ -45,6 +45,7 @@
 | [CONTEXT_MANAGEMENT.md](CONTEXT_MANAGEMENT.md) | ContextEnvelope、成员隔离、压缩与重置 |
 | [EVALUATOR_AGENT.md](EVALUATOR_AGENT.md) | Agent 评测、RAG 指标和只读评估边界 |
 | [AGENT_EVAL_REPORT.md](AGENT_EVAL_REPORT.md) | 当前 16 条固定用例的真实回放结果、指标口径和简历使用边界 |
+| [provider_adapter_validation_report.4b.md](provider_adapter_validation_report.4b.md) | Provider mock、成员来源和确认门的 Docker smoke 记录 |
 | [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md) | Agent 运行时 API 与流式事件 |
 | [agent_eval_report.example.md](agent_eval_report.example.md) | 评测报告格式示例 |
 
