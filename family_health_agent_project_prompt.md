@@ -99,6 +99,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 任务三已在本机 Docker PostgreSQL/Redis/backend 环境完成一次真实开发联调：migration、pgvector、幂等 seed、backend health 和知识搜索 API 均通过。详细命令与边界见 `docs/migration_validation_report.4b.md`；该记录不能被解释为生产或临床验收。
 
+任务四补齐 Provider Adapter 契约回归：七个 provider 均有离线 mock 实现，`sandbox/real` 未配置时返回显式 degraded 结果；`ProviderResponse` 禁止缺少 `fallback_reason` 的降级状态进入工具链。该阶段不接入真实医院、药店、通知或模型服务。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

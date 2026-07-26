@@ -76,6 +76,8 @@
 
 本次已在 Docker Desktop 的 PostgreSQL/Redis/backend 开发环境中真实执行 migration、幂等 seed、health 和知识搜索 smoke。简历可以准确表达为“验证了 Docker Compose 本地开发链路和 PostgreSQL migration/seed 启动流程”；不能表达为生产部署、临床验收、真实医院/药店接入或模型质量指标。
 
+Provider 相关亮点可以表述为“设计统一 Provider Adapter 契约和 mock/degraded 运行模式，所有外部结果保留成员与来源指针，并通过 Registry 做身份一致性校验”。不能表述为已经接入真实医院、药店或通知 Provider。
+
 ## 不能夸大的内容
 
 - 不要说已上线生产、接入真实医院/药店、自动开方、诊断或修改处方。

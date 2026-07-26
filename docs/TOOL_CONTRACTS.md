@@ -55,7 +55,7 @@
 - `search_safety_knowledge`
 - `create_confirmation_draft`
 
-这些工具继续支撑当前四个 MVP 场景。4B 将在不破坏现有调用方的前提下，为外部 Provider 和新业务线补充工具。
+这些工具继续支撑当前四个 MVP 场景。当前 4B 基线另外通过 `backend/app/tools/business_tools.py` 注册 Provider、知识检索和健康档案草稿工具；旧工具和新工具都必须经过同一个 Registry 门禁。
 
 ## 5. Provider 契约
 
@@ -76,6 +76,8 @@
 - NotificationProvider
 - MedicalDocumentParser
 - MedicalVisionProvider
+
+当前可运行实现位于 `backend/app/providers/`：`ProviderRequest` 和 `ProviderResponse` 是统一 Pydantic 契约，`ProviderRegistry` 校验 provider 名称与运行模式，`build_mock_provider_registry()` 提供七个离线 mock adapter。`sandbox` 和 `real` 尚未配置时必须返回 `success=false`、`degraded=true` 以及明确的 `fallback_reason`，不能伪造外部系统成功。
 
 ## 6. 调用顺序
 

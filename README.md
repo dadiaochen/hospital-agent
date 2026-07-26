@@ -104,6 +104,13 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_business_task_api.py backend\tests\test_provider_and_embedding.py -q -p no:cacheprovider --basetemp=$env:TEMP\hospital-pytest-4b
 ```
 
+只验证 Provider Adapter 契约和七个离线 mock provider：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_provider_adapters.py -q -p no:cacheprovider --basetemp=.tmp\pytest-provider
+```
+
 启用可选语义 embedding 前先安装 `backend\requirements.txt` 中的 `fastembed`，然后把 `.env` 改为：
 
 ```text

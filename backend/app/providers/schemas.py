@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.business import BusinessDomain, ProviderMode, SourceRef
 
@@ -28,3 +28,15 @@ class ProviderResponse(BaseModel):
     retryable: bool = False
     degraded: bool = False
     fallback_reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_degraded_response(self) -> "ProviderResponse":
+        if self.degraded and not self.fallback_reason:
+            raise ValueError(
+                "degraded provider responses require fallback_reason"
+            )
+        if self.fallback_reason and not self.degraded:
+            raise ValueError(
+                "fallback_reason requires degraded provider response"
+            )
+        return self
