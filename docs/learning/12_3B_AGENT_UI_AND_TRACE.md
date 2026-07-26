@@ -167,4 +167,4 @@ npm run dev
 
 > 使用 Next.js/React/TypeScript 实现 Agent 对话与审计 UI，将首次未确认运行、确认续跑、冻结答案、来源引用、安全标记和 EvaluationResult 连接到真实 FastAPI Runtime；通过成员切换清理、response scope 校验和高风险无确认入口降低串扰与越权风险。
 
-不要说 UI 已接入真实医院、完成生产鉴权或达到某个 safety recall。当前展示的是 deterministic 运行的单次评估结果，3C 真实 Trace Harness 和完整 E2E 尚未完成。
+不要把历史 3B 演示页描述成已经接入真实医院、完成生产鉴权或达到某个 Agent 安全指标。3B 当时展示的是 deterministic 运行的单次评估结果；真实 RunTrace Harness、完整浏览器 E2E 和成熟患者端现在统一由最终 4C 验收。

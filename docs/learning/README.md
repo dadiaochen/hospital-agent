@@ -6,11 +6,13 @@
 
 | 模块 | 你会学什么 | 先读什么代码 |
 | --- | --- | --- |
+| [00 从 0 到 1 主线](00_AGENT_PROJECT_FROM_ZERO_TO_ONE.md) | 把需求、ContextEnvelope、Tool Registry、LangGraph、Agent 安全、RunTrace、Agent 评测和简历指标串成一条完整工程链路；每一步都有当前仓库的关键函数。 | `docs/PRD.md`、`backend/app/agent/`、`backend/app/tools/` |
 | [01 需求与范围](01_REQUIREMENTS_AND_SCOPE.md) | 用户故事、非目标、验收与阶段拆分。 | `docs/PRD.md`、`docs/DEVELOPMENT_ROADMAP.md` |
 | [02 后端与数据](02_BACKEND_AND_DATA.md) | 分层、ORM、字段、Pydantic、service 和事务。 | `backend/app/models/`、`services/` |
 | [03 Agent Harness](03_AGENT_HARNESS_AND_SAFETY.md) | Context、工具、Trace、安全、确认和评估。 | `backend/app/agent/`、`tools/` |
-| [04 测试、Review 与交付](04_TESTING_REVIEW_AND_DELIVERY.md) | fixture、失败路径、Git 分支、review 和文档。 | `backend/tests/`、`AGENTS.md` |
-| [05 简历与面试](05_RESUME_AND_INTERVIEW.md) | 技术亮点、故事线、追问与表达边界。 | `docs/RESUME_NOTES.md` |
+| [04 测试、Review 与交付](04_TESTING_REVIEW_AND_DELIVERY.md) | fixture、失败路径、指标口径、Git 分支、review 和文档。 | `backend/tests/`、`docs/AGENT_EVAL_REPORT.md`、`AGENTS.md` |
+| [05 简历与面试](05_RESUME_AND_INTERVIEW.md) | 技术亮点、项目故事线、Agent/RAG 追问与表达边界。 | `docs/RESUME_NOTES.md`、`docs/INTERVIEW_QA.md`、`docs/INTERVIEW_QA_TEST_ENGINEERING.md` |
+| 通用计算机基础八股 | Java、网络、操作系统、Redis、MySQL、消息队列、手撕/LeetCode、Vibe Coding 和 Transformer。 | `docs/GENERAL_INTERVIEW_KNOWLEDGE.md` |
 | [06 2E-1 实战题](06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md) | 在 Docker PostgreSQL 上从零完成 DTO、service、路由、测试、Swagger 与 Postman 验收，并逐层理解客户端、依赖注入和四个核心文件。 | `backend/app/api/routes/knowledge.py`、`backend/app/schemas/knowledge.py`、`backend/app/services/knowledge_read_service.py`、`backend/app/models/knowledge.py` |
 | [07 2F-1 Hybrid RAG](07_2F1_HYBRID_RAG.md) | 理解 Retriever、关键词评分、来源回填、功能开关和降级测试。 | `backend/app/rag/`、`test_hybrid_rag.py` |
 | [08 2F-2 Model Gateway](08_2F2_MODEL_GATEWAY.md) | 理解 provider 抽象、结构化输出、安全门禁、fallback 和调用 Trace。 | `backend/app/agent/model_gateway.py` |
@@ -18,20 +20,16 @@
 | [10 2G-2 Agent Runtime API](10_2G2_AGENT_RUNTIME_API.md) | 从 HTTP 请求一路读到 Service、LangGraph、真实 DB tools、审计持久化、确认续跑与冻结回放。 | `agent_audit.py`、`agent_runtime_service.py`、`runtime_schemas.py` |
 | [11 3A 前端数据页面](11_3A_FRONTEND_DATA_PAGES.md) | 从 React 状态、HTTP client 和成员上下文读懂 loading/empty/error 与跨成员防线。 | `MemberProvider.tsx`、`client.ts`、各 `page.tsx` |
 | [12 3B Agent UI 与 Trace](12_3B_AGENT_UI_AND_TRACE.md) | 从 POST 请求、幂等和人工确认，读懂来源、安全、冻结 Trace 与 Postman 验证。 | `app/agent/page.tsx`、`AgentRunResult.tsx`、`RunTraceDetails.tsx` |
-| [13 3C Runtime E2E 与 Dify](13_3C_RUNTIME_E2E_AND_DIFY.md) | 从 Dify 节点设计过渡到自研 Runtime Harness，理解环境、真实 Trace、脱敏、Guard 与面试表达。 | `runtime_harness.py`、`runtime_trace_adapter.py`、`test_runtime_e2e_harness.py` |
-| [14 3D MVP 交付](14_3D_MVP_DELIVERY.md) | 从零理解 Docker 初始化链、healthcheck、固定演示、关键词/向量 RAG 和 deterministic/真实 LLM 的边界。 | `docker-compose.yml`、`docker-entrypoint.sh`、`demo_runner.py`、`start_demo.ps1` |
-| [15 4A 轻量向量 RAG](15_4A_LIGHTWEIGHT_VECTOR_RAG.md) | 从零理解 Embedding、pgvector、索引字段、query/passage 编码、来源回填、降级、部署和 review。 | `embedding_provider.py`、`vector_store.py`、`0003_lightweight_vector_rag.py`、`test_vector_rag.py` |
-| [16 4B LLM 双模式](16_4B_LLM_DUAL_MODE.md) | 理解无 Key deterministic 与真实 OpenAI-compatible provider 如何共用 Gateway，以及配置、诊断、资源释放和失败 review。 | `model_gateway.py`、`model_provider_diagnostic.py`、`langgraph_workflow.py`、`agent_runtime_service.py` |
-| [项目面经问题库](INTERVIEW_QUESTION_BANK.md) | 保留真实原题并按考点归并，练习 30 秒/2 分钟回答、代码证据、记忆方法和未使用技术取舍。 | 本仓库实现与各阶段学习章 |
+| [13 Dify 患者端医疗服务智能体](13_DIFY_PATIENT_HEALTH_AGENT_INTERNSHIP.md) | 还原互联网医院实习业务，设计诊前问诊、慢病复诊、诊后用药和智能舌诊四条工作流，并准备简历与面试表达。 | Dify Chatflow / Workflow、公司已有问诊/处方/购药/舌诊服务 |
 
 ## 使用方法
 
-每一章都按同一顺序展开：先解释问题，再给出本项目的取舍，接着指向代码与字段，最后给出你可以自己完成的练习。不要只读文档：环境与真实 API 联调使用 Docker PostgreSQL，自动化测试使用内存 SQLite；每读完一章，都运行一次对应测试或在 GitHub Desktop 观察一次变更。
+建议先完整阅读 00 主线，再按 01 至 05 逐章深入。每一章都按同一顺序展开：先解释问题，再给出本项目的取舍，接着指向代码与字段，最后给出你可以自己完成的练习。不要只读文档：环境与真实 API 联调使用 Docker PostgreSQL，自动化测试使用内存 SQLite；每读完一章，都运行一次对应测试或在 GitHub Desktop 观察一次变更。
+
+指标学习要同时阅读 [AGENT_EVAL_REPORT.md](../AGENT_EVAL_REPORT.md)。特别注意：当前的 groundedness、工具覆盖率和确认提示率都是固定用例的流程指标，不能直接当成答案正确率、工具参数准确率或人工采纳率。
 
 ## 最小学习节奏
 
 第一周完成模块 01 和 02：理解范围、数据模型和后端分层。第二周完成模块 03：理解为什么 Agent 需要 Context、工具和安全门禁。第三周完成模块 04 和 05：学会写测试、review PR，并把项目讲成一个可信的实习作品。
 
 学习资料讲解的是当前代码与设计，不会替代 [DEVELOPMENT_ROADMAP.md](../DEVELOPMENT_ROADMAP.md) 的实施顺序。
-
-以后收到新面经时，优先更新 [项目面经问题库](INTERVIEW_QUESTION_BANK.md)：相似题只追加原句和必要差异，新考点才新增主题。若题目涉及项目未使用技术，先讨论“略过、仅学习或进入路线图”，再决定是否改代码。

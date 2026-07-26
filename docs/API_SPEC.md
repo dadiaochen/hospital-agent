@@ -116,8 +116,6 @@ draft -> rejected
 
 内部请求和结果由 `RetrievalRequest`、`RetrievedChunk` 与 `RetrievalResult` 描述。每个命中项带 `source_id`、document/chunk ID 与版本、相关性 `score`、本次检索 `purpose` 和 `matched_by`；结果还声明 requested/effective mode 与 fallback 原因。HTTP API 后续可以调用 Retriever，但仍应定义自己的 API DTO 和错误语义，不能直接暴露内部模型。
 
-4A 为这个内部 Retriever 接入 FastEmbed + pgvector，不新增 HTTP endpoint，也不改变 `GET /api/knowledge/search` 的既有响应 DTO。Agent Tool 在向量配置开启时可得到 `effective_mode="hybrid"` 和 `matched_by="vector"` 来源；客户端仍只能消费有 document/chunk 指针的已审核正文，不能提交任意文本进入向量库。
-
 ## 7. 2F-2 Model Gateway 也不是 HTTP API
 
 `ModelGateway` 是 Agent 内部的模型调用边界，不新增客户端 endpoint。它读取服务端环境变量中的 provider、base URL、模型名、Key 和 timeout；业务请求与 API DTO 不能携带或覆盖模型 Key。
@@ -140,7 +138,56 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 
 完整字段、状态和持久化说明见 [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md)。
 
-## 9. 3A/3B 前端 API 消费约定
+## 9. 4B 业务任务 API
+
+4B 把三条业务线统一为一个任务入口，业务域由请求字段区分；上层 API 不直接调用 LangGraph、Provider 或数据库。
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `POST` | `/api/business-tasks` | 创建一次预问诊/导诊、慢病履约或健康档案任务；首次请求不能直接确认。 |
+| `GET` | `/api/business-tasks` | 按 `member_id`、`status`、`business_domain` 查询当前用户任务。 |
+| `GET` | `/api/business-tasks/{task_id}` | 查询任务摘要。 |
+| `GET` | `/api/business-tasks/{task_id}/sources` | 查询该任务保留的 Provider/RAG/工具来源引用。 |
+| `GET` | `/api/business-tasks/{task_id}/artifacts` | 查询最新冻结的 `RunTrace`、`RunSummary`、`EvaluationResult` 和工具/Provider 产物。 |
+| `POST` | `/api/business-tasks/{task_id}/confirm` | 对 `needs_confirmation` 任务显式确认并续跑；只创建本地 draft。 |
+
+首次创建示例：
+
+```json
+{
+  "business_domain": "chronic_care",
+  "member_id": "member-father",
+  "user_input": "请整理父亲的降压药续方材料。",
+  "input_payload": {
+    "action_type": "refill_request",
+    "medicine_name": "amlodipine"
+  },
+  "idempotency_key": "demo-refill-001",
+  "provider_mode": "mock",
+  "human_confirmation_granted": false
+}
+```
+
+`business_domain` 当前支持 `preconsultation`、`chronic_care`、`health_record`；Provider 模式支持 `mock`、`sandbox`、`real`。当前仓库只实现 mock adapter，未配置的 sandbox/real 会返回 `degraded=true` 和明确 fallback reason，不会返回伪造的实时医院、药店或通知结果。
+
+首次成功的关键返回状态是 `needs_confirmation`，响应同时携带：
+
+- `confirmation_request`：将要写入的本地草稿类型和摘要；
+- `source_refs`：带 `member_id`、文档版本或 Provider 模拟标记的来源；
+- `run_trace`、`run_summary`、`evaluation_result`：只读冻结产物。
+
+确认请求必须使用原任务幂等键：
+
+```json
+{
+  "human_confirmation_granted": true,
+  "idempotency_key": "demo-refill-001"
+}
+```
+
+`GET /artifacts` 适合详情页、审计和回放；前端不得修改返回的 Trace 或 Evaluation。高风险请求在业务工具前由 Agent 安全阻断，不能通过确认接口绕过。
+
+## 10. 当前前端 API 消费约定
 
 3A 页面通过 `frontend/lib/api/client.ts` 统一访问上述接口。浏览器 base URL 来自 `NEXT_PUBLIC_API_BASE_URL`，默认 `http://localhost:8000`；页面不得直接写数据库地址或模型配置。
 
@@ -159,9 +206,9 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 
 所有成员类 response 在后端作用域校验后，还会被浏览器检查 `member_id`。不匹配时前端抛出 `context_isolation_failed` 并停止展示；这不是认证替代品，而是防止异常 response 造成可见串扰的第二道防线。
 
-3B 首次请求固定发送 `human_confirmation_granted=false`。只有后端返回 `needs_confirmation` 且没有 SafetyAgent 阻断时，页面才允许用户勾选本地草稿声明并调用 `/continue`。详情页只读消费冻结 FinalAnswer、Tool/RAG refs、SafetyTrace、ModelCallTrace 和 EvaluationResult，不在浏览器重算或修改它们。完整交互见 [AGENT_UI.md](AGENT_UI.md)。
+当前前端首次请求固定发送 `human_confirmation_granted=false`。只有后端返回 `needs_confirmation` 且没有 Agent 安全阻断时，页面才允许用户勾选本地草稿声明并调用 `/continue`。详情页只读消费冻结的 FinalAnswer、Tool/RAG refs、SafetyTrace、ModelCallTrace 和 EvaluationResult，不在浏览器重算或修改它们。完整交互见 [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md)。
 
-## 10. API 设计规则
+## 11. API 设计规则
 
 1. Router 只做协议转换；查询、写入和权限判断放到 service。
 2. API DTO 与 ORM 分离，不能直接把 SQLAlchemy 模型序列化给客户端。
@@ -169,20 +216,4 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 4. 不存在、越权、schema 失败和状态冲突要有可预测的错误格式。
 5. 含有医疗敏感内容的写操作在 API 层之外还必须经过 safety 与 confirmation 规则。
 
-## 11. 3C Harness 的 API 使用边界
-
-3C 没有新增 HTTP endpoint。`RuntimeE2EHarnessRunner` 作为外部客户端复用：
-
-- `GET /api/family-members`：按 relationship 发现当前 seed 的稳定 member ID。
-- `POST /api/agent-runs`：执行首轮固定用例，始终提交 `human_confirmation_granted=false`。
-- `POST /api/agent-runs/{run_id}/continue`：仅对需要确认的正常业务执行续跑。
-
-越权成员预期返回 `404 not_found`；首轮确认绕过预期返回 `422 validation_error`。高风险 `blocked` run 不调用 `/continue`。Harness 只读取 response，不调用数据库、不改写 artifacts，也不通过测试接口绕开生产路由。
-
-## 12. 3D 固定演示不新增 HTTP API
-
-`MvpDemoRunner` 复用 `GET /api/family-members`、`POST /api/agent-runs` 和 `POST /api/agent-runs/{run_id}/continue`。它不会增加测试专用 endpoint、绕开 demo-user/member scope 或直接访问数据库。三条正常场景按 API 契约先等待确认，高风险场景不调用 continuation；报告只保存脱敏的状态和来源数量。
-
-## 13. 4B 模型诊断不暴露 HTTP API
-
-4B 没有新增模型配置或诊断 endpoint。模型 Key 只由 backend 环境变量读取，不能从浏览器或业务 API 提交。`python -m scripts.check_model_provider` 是运维/开发 CLI；Runtime 的既有 artifacts API 继续只返回脱敏 `ModelCallTrace`，不返回 Key、完整 prompt 或 provider 原始文本。
+2E-1、2E-2、2F、2G 和 3B 已进入当前线性工作区；4B 的业务任务 API 与 artifacts 契约正在本分支继续完善。阶段状态只以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。

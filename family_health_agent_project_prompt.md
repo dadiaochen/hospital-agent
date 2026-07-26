@@ -4,15 +4,13 @@
 
 ## 1. 项目目标
 
-构建一个可本地演示的家庭健康事务管理 Agent MVP，围绕：
+构建一个可完整运行、可本地一键部署的患者端家庭健康服务 Agent 产品，最终覆盖三条业务线：
 
-- 慢病续方材料整理。
-- 中医复诊材料整理。
-- 家庭药箱和药店库存查询。
-- 用药提醒草稿。
-- 高风险用药请求的安全拦截。
+- 智能预问诊与分级导诊：结构化采集信息、识别红旗症状、整理就诊材料并生成导诊草稿。
+- 家庭医生、慢病与用药履约：覆盖复诊材料、处方和药箱查询、购药候选、用药提醒与用药安全确认。
+- 报告解读与长期健康档案：解析检查、体检、中医或舌诊报告，基于可追溯知识解释指标并形成待确认档案事件。
 
-系统的价值在于把信息、工具证据、人工确认和审计 trace 组织成可靠流程，而不是让 AI 代替医生下医疗结论。
+原有慢病续方、中医复诊材料、用药提醒和高风险用药拦截四个场景是当前已实现基线，不是最终产品范围。系统的价值在于把患者任务、工具证据、RAG 来源、人工确认和运行记录组织成可靠闭环，而不是让 AI 代替医生下医疗结论。
 
 ## 2. 不可突破的医疗边界
 
@@ -83,7 +81,9 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `3A` 实现 Next.js 核心数据页。`MemberProvider` 提供唯一当前 `member_id`，页面通过统一 typed API client 读取真实 FastAPI 契约，并在渲染前检查成员类 response 的 `member_id`。所有数据页必须区分 loading、empty、error 和 data；知识页只消费 2E-1 已实现契约，不复制后端逻辑。3A 不实现登录或外部医疗系统操作。
 
-`3B` 实现主要 Agent 演示入口。前端首次运行固定提交 `human_confirmation_granted=false`，展示冻结答案、Tool/RAG 来源和 SafetyTrace；只有待确认且未阻断的 run 才允许用户勾选本地草稿声明并调用 `/continue`。Run 详情只读展示角色、工具、耗时、错误、fallback、ModelCallTrace 和 EvaluationResult，成员切换清除旧结果并检查所有冻结产物作用域。本阶段不重算评估、不跑 3C 真实 E2E Harness、不提交外部医院/药店/推送动作。
+`3B` 实现主要 Agent 演示入口。前端首次运行固定提交 `human_confirmation_granted=false`，展示冻结答案、Tool/RAG 来源和 SafetyTrace；只有待确认且未阻断的 run 才允许用户勾选本地草稿声明并调用 `/continue`。Run 详情只读展示角色、工具、耗时、错误、fallback、ModelCallTrace 和 EvaluationResult，成员切换清除旧结果并检查所有冻结产物作用域。该历史阶段只完成单次演示链路，尚未包含现在由最终 4C 统一验收的浏览器 E2E、完整 Harness 和成熟产品闭环。
+
+`4A` 完成产品重基线：产品范围统一为三条业务线；新增业务域、Provider 运行模式与通用 `SourceRef`；现有工具契约兼容补充版本、来源、运行模式和可重试信息；RAG 最终目标明确为向量检索优先，关键词检索负责精确匹配和降级兜底。后续只保留 4B 完整后端与 4C 成熟产品交付两个阶段。
 
 `3C` 实现 Runtime E2E Harness。Runner 通过 FastAPI 发现 seed 成员、执行首次 run 和可选确认续跑，再由独立 adapter 对冻结 artifacts 脱敏并校验 run/task/member 一致性，最后交给 DeterministicEvaluator。固定套件覆盖四个核心业务、真实空数据工具失败、无来源拒答、成员隔离，以及越权成员和首轮确认绕过两个 API Guard；JSON 报告不保存成员/run ID 或答案正文。3C 修复了无来源失败工具被错误加入 ExpectedSource 而导致 HTTP 500 的问题，不新增 ORM/migration，不调用外部系统，也不把本地 deterministic 报告描述为生产或临床指标。
 
@@ -98,5 +98,5 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。
-- Agent 开发者：继续阅读 [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)、[docs/LANGGRAPH_WORKFLOW.md](docs/LANGGRAPH_WORKFLOW.md)、[docs/CONTEXT_MANAGEMENT.md](docs/CONTEXT_MANAGEMENT.md) 和 [docs/EVALUATOR_AGENT.md](docs/EVALUATOR_AGENT.md)。
+- Agent 开发者：继续阅读 [docs/AGENT_ARCHITECTURE.md](docs/AGENT_ARCHITECTURE.md)、[docs/BUSINESS_WORKFLOWS.md](docs/BUSINESS_WORKFLOWS.md)、[docs/CONTEXT_MANAGEMENT.md](docs/CONTEXT_MANAGEMENT.md) 和 [docs/EVALUATOR_AGENT.md](docs/EVALUATOR_AGENT.md)。
 - 从零学习者：阅读 [docs/learning/README.md](docs/learning/README.md)。

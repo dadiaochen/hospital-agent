@@ -91,6 +91,34 @@ main -> 新建 codex/<stage>-<name> 分支
 
 GitHub Desktop 足以完成这个流程。关键不是用命令行还是 UI，而是每次提交的范围明确、可测试、可回退、可解释。
 
-## 7. 练习
+## 8. 从固定 Trace 计算指标
+
+本项目的 Harness 不是只输出“通过/失败”。它先用 ExpectedCase 声明期望的 intent、member、tools、sources、安全标记和确认要求，再用 DeterministicEvaluator 对冻结 RunTrace 做规则比较，最后由 HarnessRunner 聚合结果。
+
+当前 16 条 deterministic + mock 固定用例回放得到：
+
+| 指标 | 结果 | 正确理解 |
+| --- | ---: | --- |
+| 必需工具覆盖率 | 98.75% | 期望工具被调用的比例，不含参数生成 |
+| 关键事实来源覆盖率 | 93.75% | 期望工具证据/RAG 来源是否出现在 trace |
+| 高风险规则召回率 | 93.75% | 期望安全标记是否命中 |
+| 成员隔离通过率 | 93.75% | run、工具、RAG、安全记录的成员是否一致 |
+| schema 通过率 | 100% | 固定产物的结构校验通过，不是答案正确 |
+
+完整结果和计算限制见 [AGENT_EVAL_REPORT.md](../AGENT_EVAL_REPORT.md)。学习指标时先写清楚分子和分母：
+
+- “答案正确率”需要答案金标准和人工或确定性 rubric；groundedness 只能说明来源覆盖。
+- “人工采纳率”需要用户接受/拒绝事件；确认提示出现率不是采纳率。
+- “工具参数准确率”需要记录工具输入并有参数金标准；只保存工具名时只能测工具覆盖。
+- “响应延迟”需要实际执行 benchmark；fixture 中的 latency 字段不能替代 wall-clock 测量。
+
+运行 Harness 测试：
+
+~~~powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_harness_runner.py backend\tests\test_deterministic_evaluator.py -q -p no:cacheprovider --basetemp=var\pytest
+~~~
+
+## 9. 练习
 
 打开 `test_context_manager.py`，挑一个成员隔离测试。先不看实现，写下你认为系统应如何失败；再读 ContextManager，确认它是在哪一层拒绝了不合法数据。最后在 GitHub Desktop 的 History 中观察一次相应提交的代码与测试是否同一批出现。

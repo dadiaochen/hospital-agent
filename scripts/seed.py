@@ -16,17 +16,21 @@ from app.core.database import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     AgentRun,
     AgentToolCall,
+    BusinessTask,
     ConsultationDraft,
     FamilyMember,
+    HealthRecordEvent,
     HealthProfile,
     KnowledgeChunk,
     KnowledgeDocument,
+    MedicalDocument,
     MedicineBoxItem,
     Pharmacy,
     PharmacyInventory,
     Prescription,
     PurchaseRecord,
     RefillPlan,
+    SourceReference,
     User,
 )
 
@@ -503,6 +507,119 @@ def seed_agent_audit_example(session: Session, user: User, father: FamilyMember)
     )
 
 
+def seed_runtime_examples(
+    session: Session,
+    user: User,
+    mother: FamilyMember,
+) -> dict[str, Any]:
+    """Create deterministic examples for the 4B runtime persistence layer."""
+    document = one_or_create(
+        session,
+        select(MedicalDocument).where(
+            MedicalDocument.user_id == user.id,
+            MedicalDocument.member_id == mother.id,
+            MedicalDocument.title == "Mother sample health report",
+        ),
+        MedicalDocument,
+        {
+            "user_id": user.id,
+            "member_id": mother.id,
+            "document_type": "checkup_report",
+            "title": "Mother sample health report",
+            "object_uri": "seed://medical-documents/mother-checkup-001",
+            "source_text": "Seed document for the report interpretation flow.",
+            "parser_provider": "mock-medical-document-parser",
+            "status": "parsed",
+            "extracted_content": {
+                "document_type": "checkup_report",
+                "findings": ["sleep-related follow-up material"],
+                "disclaimer": "Information organization only; doctor confirmation is required.",
+            },
+            "document_version": "1.0",
+            "need_human_confirmation": True,
+            "confirmed_at": None,
+        },
+    )
+
+    task = one_or_create(
+        session,
+        select(BusinessTask).where(
+            BusinessTask.user_id == user.id,
+            BusinessTask.idempotency_key == "seed-health-record-task-202607",
+        ),
+        BusinessTask,
+        {
+            "user_id": user.id,
+            "member_id": mother.id,
+            "business_domain": "health_record",
+            "intent": "report_interpretation",
+            "status": "needs_confirmation",
+            "user_input": "Please organize and explain the mother's checkup report.",
+            "idempotency_key": "seed-health-record-task-202607",
+            "request_fingerprint": "seed-health-record-fingerprint",
+            "input_payload": {"document_id": document.id},
+            "output_payload": {"summary": "Draft report interpretation awaiting confirmation."},
+            "need_human_confirmation": True,
+            "confirmed_at": None,
+            "current_run_id": None,
+            "degraded": False,
+            "last_error": None,
+        },
+    )
+
+    source = one_or_create(
+        session,
+        select(SourceReference).where(
+            SourceReference.task_id == task.id,
+            SourceReference.source_id == "seed-medical-document",
+        ),
+        SourceReference,
+        {
+            "user_id": user.id,
+            "task_id": task.id,
+            "run_id": None,
+            "source_id": "seed-medical-document",
+            "source_type": "medical_document",
+            "document_id": document.id,
+            "document_version": "1.0",
+            "chunk_id": None,
+            "retrieval_mode": "direct",
+            "provider": "seed",
+            "member_id": mother.id,
+            "verified": True,
+            "source_metadata": {"seed": True},
+        },
+    )
+
+    event = one_or_create(
+        session,
+        select(HealthRecordEvent).where(
+            HealthRecordEvent.user_id == user.id,
+            HealthRecordEvent.member_id == mother.id,
+            HealthRecordEvent.idempotency_key == "seed-health-record-event-202607",
+        ),
+        HealthRecordEvent,
+        {
+            "user_id": user.id,
+            "member_id": mother.id,
+            "source_document_id": document.id,
+            "event_type": "report_interpretation",
+            "occurred_at": datetime.now(timezone.utc),
+            "summary": "Draft report interpretation record awaiting user confirmation.",
+            "idempotency_key": "seed-health-record-event-202607",
+            "structured_data": {"finding": "sleep-related follow-up material"},
+            "source_refs": [
+                {"source_id": source.source_id, "source_type": source.source_type}
+            ],
+            "status": "draft",
+            "need_human_confirmation": True,
+            "confirmed_at": None,
+            "external_action_status": "not_submitted",
+        },
+    )
+    return {"document": document, "task": task, "source": source, "event": event}
+
+
 def main() -> None:
     with SessionLocal() as session:
         family = seed_user_and_family(session)
@@ -510,6 +627,7 @@ def main() -> None:
         seed_pharmacy(session)
         seed_knowledge(session)
         seed_agent_audit_example(session, family["user"], family["father"])
+        seed_runtime_examples(session, family["user"], family["mother"])
         session.commit()
         print("Seed data is ready: user=陈毅, members=本人/父亲/母亲, medication contexts, pharmacy inventory, knowledge rules.")
 

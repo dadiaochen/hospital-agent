@@ -34,7 +34,7 @@ class Settings(BaseModel):
     )
     redis_url: str = Field(default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     rag_vector_enabled: bool = Field(
-        default_factory=lambda: _env_bool("RAG_VECTOR_ENABLED")
+        default_factory=lambda: _env_bool("RAG_VECTOR_ENABLED", False)
     )
     rag_embedding_provider: str = Field(
         default_factory=lambda: os.getenv("RAG_EMBEDDING_PROVIDER", "fastembed")
@@ -45,10 +45,14 @@ class Settings(BaseModel):
             "BAAI/bge-small-zh-v1.5",
         )
     )
+    rag_embedding_dimensions: int = Field(
+        default_factory=lambda: int(os.getenv("RAG_EMBEDDING_DIMENSIONS", "512")),
+        ge=8,
+    )
     rag_embedding_cache_dir: str = Field(
         default_factory=lambda: os.getenv(
-            "RAG_EMBEDDING_CACHE_DIR",
-            "var/models/fastembed",
+            "FASTEMBED_CACHE_PATH",
+            os.getenv("RAG_EMBEDDING_CACHE_DIR", "var/models/fastembed"),
         )
     )
     rag_vector_min_score: float = Field(

@@ -11,6 +11,8 @@ from app.core.config import Settings
 from app.core.database import Base
 from app.models import KnowledgeChunk, KnowledgeDocument
 from app.rag import (
+    HybridRetriever,
+    KeywordRetriever,
     RetrievalRequest,
     SQLAlchemyKnowledgeStore,
     VectorMatch,
@@ -116,7 +118,13 @@ def test_keyword_retriever_returns_no_evidence_for_unknown_query(
 def test_hybrid_retriever_falls_back_when_vector_backend_is_missing(
     knowledge_session: Session,
 ) -> None:
-    retriever = create_knowledge_retriever(knowledge_session, vector_enabled=True)
+    store = SQLAlchemyKnowledgeStore(knowledge_session)
+    retriever = HybridRetriever(
+        KeywordRetriever(store),
+        store,
+        vector_enabled=True,
+        vector_backend=None,
+    )
 
     result = retriever.retrieve(
         RetrievalRequest(query="refill", purpose="refill_sop")

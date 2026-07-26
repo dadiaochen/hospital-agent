@@ -20,6 +20,12 @@ from app.rag.vector_store import (
     KnowledgeEmbeddingIndexer,
     PgVectorSearchBackend,
 )
+from app.rag.embedding import (
+    DeterministicHashEmbedding,
+    FastEmbedEmbedding,
+    create_embedding_provider,
+)
+from app.rag.indexer import index_knowledge
 
 __all__ = [
     "HybridRetriever",
@@ -36,5 +42,9 @@ __all__ = [
     "VectorMatch",
     "VectorSearchBackend",
     "create_knowledge_retriever",
+    "DeterministicHashEmbedding",
+    "FastEmbedEmbedding",
+    "create_embedding_provider",
+    "index_knowledge",
 ]
 

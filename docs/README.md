@@ -1,68 +1,66 @@
 # 项目文档导航
 
-本目录只保留当前有效的项目文档。阶段编号、状态、顺序和 MVP 验收标准以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为唯一来源；其他文档不重复维护阶段流水账。
+本目录只保留当前有效的项目文档。阶段编号、状态、顺序和最终产品验收标准以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为唯一来源；其他文档不得维护相互竞争的阶段计划。
 
 ## 新加入项目
 
-1. 阅读 [PRD.md](PRD.md)，理解业务问题、用户和非目标。
-2. 第一次运行先阅读 [LOCAL_SETUP_AND_DEPLOYMENT.md](LOCAL_SETUP_AND_DEPLOYMENT.md)，再阅读 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) 准备分支和提交。
-3. 阅读 [TECH_DESIGN.md](TECH_DESIGN.md)，理解后端、数据、工具和 Agent 的边界。
-4. 根据要修改的模块继续阅读接口、数据库或 Agent 专项文档。
+1. 阅读 [CURRENT_STATE_AUDIT.md](CURRENT_STATE_AUDIT.md)，确认哪些能力已经实现。
+2. 阅读 [PRD.md](PRD.md) 和 [BUSINESS_WORKFLOWS.md](BUSINESS_WORKFLOWS.md)，理解三条业务线及医疗边界。
+3. 阅读 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 和 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)，确认当前阶段与最终验收。
+4. 第一次运行先阅读 [LOCAL_SETUP_AND_DEPLOYMENT.md](LOCAL_SETUP_AND_DEPLOYMENT.md)，开发协作再阅读 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)。
 
 ## 开发与交付
 
-| 文档 | 何时阅读 | 负责回答的问题 |
-| --- | --- | --- |
-| [LOCAL_SETUP_AND_DEPLOYMENT.md](LOCAL_SETUP_AND_DEPLOYMENT.md) | 第一次运行或环境故障时 | 如何配置 WSL 2、把 Docker 数据放到 E 盘、启动 PostgreSQL/Redis、停机和排错？ |
-| [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) | 演示或面试前 | 如何一键启动、跑固定四场景、解释 RAG/模型模式并核对报告？ |
-| [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | 开始开发前 | 如何启动、测试、分支和提交？ |
-| [TESTING_GUIDE.md](TESTING_GUIDE.md) | 编码和 review 时 | 测什么、如何复现、如何审查？ |
-| [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) | 选择下一项工作前 | 现在到哪个阶段，下一步能做什么？ |
-| [RESUME_NOTES.md](RESUME_NOTES.md) | 准备作品集或面试时 | 哪些亮点已实现，哪些指标不能宣称？ |
+| 文档 | 负责回答的问题 |
+| --- | --- |
+| [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) | 当前阶段、阶段顺序和最终成品标准是什么 |
+| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | 4A、4B、4C 各自交付什么 |
+| [LOCAL_SETUP_AND_DEPLOYMENT.md](LOCAL_SETUP_AND_DEPLOYMENT.md) | 如何安装、迁移、启动和部署 |
+| [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | 如何按分层规则开发 |
+| [TESTING_GUIDE.md](TESTING_GUIDE.md) | 如何运行测试和验收 |
+| [RESUME_NOTES.md](RESUME_NOTES.md) | 哪些亮点可以进入简历，哪些指标还不能写 |
 
-## 产品、技术与数据
+## 产品与架构
 
 | 文档 | 内容 |
 | --- | --- |
-| [PRD.md](PRD.md) | 用户、核心场景、MVP 与医疗非目标。 |
-| [TECH_DESIGN.md](TECH_DESIGN.md) | 分层架构、数据流、安全与当前实现边界。 |
-| [API_SPEC.md](API_SPEC.md) | 已实现 HTTP 接口、未来接口的契约边界。 |
-| [DB_SCHEMA.md](DB_SCHEMA.md) | ORM 表、字段用途、关系、索引与审计原则。 |
-| [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md) | Retriever 契约、关键词基线、向量来源回填与降级。 |
-| [vector_rag_report.4a.md](vector_rag_report.4a.md) | 4A 本地 pgvector/FastEmbed 语义 smoke、四场景回归和资源快照口径。 |
-| [MODEL_GATEWAY.md](MODEL_GATEWAY.md) | 模型 provider、结构化输出、安全门禁、降级和调用 Trace。 |
-| [LLM_CONFIGURATION.md](LLM_CONFIGURATION.md) | deterministic/OpenAI-compatible 双模式、`.env` 字段、诊断和恢复离线模式。 |
-| [model_gateway_report.4b.md](model_gateway_report.4b.md) | 4B 自动化、Docker 无 Key 实跑和真实 provider 待验证口径。 |
-| [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md) | 有界状态图、节点路由、工具调用、确认与运行产物。 |
-| [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md) | Agent 运行 API、run/tool-call 持久化、冻结回放、幂等与确认续跑。 |
-| [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) | Next.js 数据页、成员上下文、API client 和异步状态。 |
-| [AGENT_UI.md](AGENT_UI.md) | 3B Agent 对话、确认续跑、来源、安全与 Trace/Evaluation UI。 |
-| [RUNTIME_E2E_HARNESS.md](RUNTIME_E2E_HARNESS.md) | 3C 真实 API Trace、脱敏 adapter、Guard、指标和报告。 |
-| [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) | 3D 一键 Docker、固定四场景、UI 演示和本地排错。 |
+| [CURRENT_STATE_AUDIT.md](CURRENT_STATE_AUDIT.md) | 当前代码、文档与目标产品的差距 |
+| [PRD.md](PRD.md) | 产品范围、用户、业务目标与验收边界 |
+| [BUSINESS_WORKFLOWS.md](BUSINESS_WORKFLOWS.md) | 智能预问诊、慢病管理与购药、报告解读三条业务线 |
+| [TECH_DESIGN.md](TECH_DESIGN.md) | 总体技术架构与分层设计 |
+| [API_SPEC.md](API_SPEC.md) | HTTP API 契约 |
+| [DB_SCHEMA.md](DB_SCHEMA.md) | 数据模型与持久化约束 |
+| [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md) | 向量检索优先、关键词精确检索与降级策略 |
+| [TOOL_CONTRACTS.md](TOOL_CONTRACTS.md) | Tool Registry、provider 与证据契约 |
+| [SAFETY_POLICY.md](SAFETY_POLICY.md) | Agent 安全、人工确认与医疗边界 |
+| [MODEL_GATEWAY.md](MODEL_GATEWAY.md) | 模型接入、结构化输出与失败降级 |
+| [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) | 患者端前端架构与最终交付标准 |
 
-## Agent 专项
+## Agent 与评测
 
 | 文档 | 内容 |
 | --- | --- |
-| [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) | Planner、业务角色、SafetyAgent、EvaluatorAgent 的工作流。 |
-| [CONTEXT_MANAGEMENT.md](CONTEXT_MANAGEMENT.md) | ContextEnvelope、角色视图、压缩、reset 和长期记忆门槛。 |
-| [EVALUATOR_AGENT.md](EVALUATOR_AGENT.md) | 固定用例、冻结 Trace、确定性评估器和报告口径。 |
-| [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md) | Planner 到 Evaluator 的正式 LangGraph DAG 与实现边界。 |
-| [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md) | 真实 DB tools 如何接入工作流并持久化可查询审计产物。 |
-| [RUNTIME_E2E_HARNESS.md](RUNTIME_E2E_HARNESS.md) | 从 API 外部驱动 Runtime、评估冻结 Trace 并生成脱敏报告。 |
-| [agent_eval_report.example.md](agent_eval_report.example.md) | mock fixture 运行后的示例报告，不代表生产或医疗指标。 |
-| [agent_eval_report.3c.md](agent_eval_report.3c.md) | 本地 PostgreSQL + deterministic provider 的 3C 固定用例报告。 |
-| [mvp_demo_report.3d.md](mvp_demo_report.3d.md) | 全新 Docker PostgreSQL + deterministic provider 的四场景 MVP 演示快照。 |
+| [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) | Multi-Agent 职责、LangGraph 状态图和运行顺序 |
+| [CONTEXT_MANAGEMENT.md](CONTEXT_MANAGEMENT.md) | ContextEnvelope、成员隔离、压缩与重置 |
+| [EVALUATOR_AGENT.md](EVALUATOR_AGENT.md) | Agent 评测、RAG 指标和只读评估边界 |
+| [AGENT_EVAL_REPORT.md](AGENT_EVAL_REPORT.md) | 当前 16 条固定用例的真实回放结果、指标口径和简历使用边界 |
+| [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md) | Agent 运行时 API 与流式事件 |
+| [agent_eval_report.example.md](agent_eval_report.example.md) | 评测报告格式示例 |
 
-## 从零学习本项目
+## 学习与面试
 
-学习材料在 [learning/README.md](learning/README.md)。它不是运行手册，而是把本项目作为一堂完整工程课：从需求和风险边界开始，经过 Docker/PostgreSQL 环境、数据与后端、Agent Harness、测试 review，最后落到简历和面试表达。
+- [learning/README.md](learning/README.md)：按项目实现顺序整理的学习材料。
+- [learning/00_AGENT_PROJECT_FROM_ZERO_TO_ONE.md](learning/00_AGENT_PROJECT_FROM_ZERO_TO_ONE.md)：从需求拆分到代码、测试、指标和简历的教程式主线。
+- [learning/05_RESUME_AND_INTERVIEW.md](learning/05_RESUME_AND_INTERVIEW.md)：简历与口述准备。
+- [learning/13_DIFY_PATIENT_HEALTH_AGENT_INTERNSHIP.md](learning/13_DIFY_PATIENT_HEALTH_AGENT_INTERNSHIP.md)：Dify 患者端医疗智能体实习项目。
+- [INTERVIEW_QA.md](INTERVIEW_QA.md)：互联网医院项目与 Agent 开发面经。
+- [INTERVIEW_QA_TEST_ENGINEERING.md](INTERVIEW_QA_TEST_ENGINEERING.md)：测试开发面经。
+- [GENERAL_INTERVIEW_KNOWLEDGE.md](GENERAL_INTERVIEW_KNOWLEDGE.md)：通用八股与手撕题。
 
-持续追加的真实面试问法统一进入 [项目面经问题库](learning/INTERVIEW_QUESTION_BANK.md)。相似原题追加到同一主题；项目未使用的技术必须先记录取舍，不能直接包装成已实现亮点。
+面试材料可以用“背景、任务、行动、结果”检查结构，但口述时不得朗读 STAR 字母，不以技术栈、内部类名或字段名开场。术语统一采用面试中的自然说法，例如“Agent 安全”和“Agent 评测”。
 
-## 文档维护规则
+## 维护规则
 
-- README 面向 GitHub 访客，保持短而能运行。
-- 本目录的开发文档面向协作者，给出事实、命令和边界。
-- 设计文档描述当前有效结构；历史由 Git 和总路线图承载。
-- 新功能先更新对应契约、测试和文档，再声称已经完成。
+- 需求、阶段或交付标准变化时，先更新总路线图，再同步其他文档。
+- 设计文档描述当前有效设计；历史阶段仅保留在学习记录和变更记录中。
+- 4C 是当前范围内的最终成熟产品阶段，验收通过后不得再用“未来展望”代替未完成能力。

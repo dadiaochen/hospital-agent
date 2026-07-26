@@ -1,142 +1,185 @@
-# RAG 检索设计
+# RAG 知识与证据层设计
 
-## 1. 当前结论
+## 1. 定位
 
-4A 已将原有 2F-1 Hybrid Retriever 接入真实可运行的轻量向量链路：
+RAG 是三条业务线共用的知识与证据层，不是独立问答功能，也不负责诊断、开方或修改医生处方。它主要解决四类问题：
 
-```text
-reviewed knowledge_chunks
-  -> FastEmbed passage embedding
-  -> PostgreSQL pgvector VECTOR(512)
+1. **降低幻觉**：医疗流程、安全规则和指标解释优先来自已审核知识，不完全依赖模型记忆。
+2. **知识可更新**：更新知识文档、版本和索引即可调整规则，不需要重新训练模型。
+3. **答案可追溯**：关键解释保留 `SourceRef`、文档版本、chunk 和检索方式。
+4. **方便评测**：`EvaluatorAgent` 可以检查应检索的知识是否命中、回答是否被来源覆盖。
 
-user/agent query
-  -> keyword retrieval (always)
-  -> FastEmbed query embedding (optional)
-  -> pgvector exact cosine search (optional)
-  -> document_id/chunk_id hydrate from authoritative tables
-  -> deduplicate/rank -> RetrievedChunk with source pointers
+没有 DB、业务 Provider 或 RAG 来源时，Agent 不得编造病史、处方、库存、医疗规则或检查结论。
+
+## 2. 当前实现边界
+
+当前已经实现的是可替换、可测试、可降级的 Retriever 基线：
+
+- PostgreSQL 中的 `knowledge_documents`、`knowledge_chunks` 是知识正文的权威存储。
+- 关键词检索始终可用。
+- 向量检索由功能开关控制；默认 provider 是不联网的确定性 hash 向量，保证 CI 和无模型环境可回放。
+- 可选 `FastEmbedEmbedding` 使用 FastEmbed/ONNX Runtime 生成真实语义向量，模型按需加载，缓存目录由 `FASTEMBED_CACHE_PATH` 控制。
+- 向量后端只返回 document/chunk 指针，正文必须回到 PostgreSQL 校验并加载。
+- 关键词和向量结果按 `chunk_id` 去重，保留实际 `matched_by`。
+- 检索模式、降级原因和来源指针可以进入 Tool 输出与 RunTrace。
+
+当前的关键词优先只是过渡实现。最终目标架构是：
+
+- 使用 Embedding 模型生成向量，以语义向量检索承担主要召回。
+- 关键词检索用于药品名、检查指标、标准编号、明确安全词和短查询等精确匹配场景。
+- 普通自然语言问题默认采用混合检索，合并向量与关键词结果后执行去重、重排和来源校验。
+- Embedding 服务、向量索引或向量检索后端不可用时，自动降级到关键词检索，并记录降级原因。
+
+当前仍未实现：
+
+- pgvector 原生近邻索引；当前 `SQLAlchemyVectorBackend` 为可移植的数据库候选扫描，适合本地小规模知识库。
+- 文档摄取、审核、自动切块和版本发布流水线。
+- 六项新增 RAG 指标的批量评测报告。
+- 互联网医疗知识自动抓取或模型生成内容写回。
+
+## 3. 检索契约
+
+`RetrievalRequest` 描述一次检索：
+
+| 字段 | 含义 |
+| --- | --- |
+| `query` | 用户问题或 Agent 需要查找的文本。 |
+| `purpose` | 本次检索的业务目的，例如安全规则或报告指标解释。 |
+| `mode` | `keyword`、`vector` 或 `hybrid`；最终版本普通自然语言问题默认请求 `hybrid`，当前实现受功能开关控制。 |
+| `limit` | 最多返回的 chunk 数，范围 1 到 50。 |
+
+`RetrievedChunk` 返回稳定 `source_id`、document/chunk ID、文档版本、分类、正文、关键词、排序分数、用途和 `matched_by`。`score` 只表示检索相关性，不代表疾病概率、医疗正确率或动作权限。
+
+`RetrievalResult` 记录：
+
+- `requested_mode`：调用方希望使用的模式。
+- `effective_mode`：本次实际成功使用的模式。
+- `fallback_used`、`fallback_reason`：是否降级及原因。
+- `evidence_present`：是否找到可回溯来源。
+
+## 4. SourceRef
+
+Agent 状态、工具结果、最终回答和评测统一使用 `SourceRef`：
+
+```json
+{
+  "source_id": "knowledge:doc-001:chunk-003:v2",
+  "source_type": "knowledge_base",
+  "document_id": "doc-001",
+  "document_version": "v2",
+  "chunk_id": "chunk-003",
+  "retrieval_mode": "keyword",
+  "provider": "postgresql_knowledge_store",
+  "member_id": "member-001",
+  "verified": true,
+  "source_metadata": {
+    "simulation": false
+  }
+}
 ```
 
-默认仍是 `RAG_VECTOR_ENABLED=false`。此时不加载 FastEmbed、不下载模型、不执行向量查询，3D 演示只使用确定性关键词检索。向量模式是召回增强，不是系统启动和医疗安全规则查询的单点依赖。
+约束：
 
-## 2. 为什么没有部署 RAGFlow
+- 医疗文档和知识库来源必须带 `document_id`、`document_version` 和 `retrieval_mode`。
+- `member_id` 用于成员隔离；公共知识可以为空，患者事实不得为空。
+- `agent_inference` 不能标记为 `verified=true`。
+- 摘要、上下文压缩和多 Agent 传递不能丢失 `source_id`。
+- 最终回答中的事实、规则和解释性内容应可区分；医疗结论没有来源时必须拒绝补写或转人工。
 
-RAGFlow 是完整 RAG 平台，适合多数据源摄取、解析、管理和较大规模检索，但其自托管栈包含额外数据库、对象存储、搜索引擎和缓存组件。当前仓库只有 4 个已审核知识分块，已有 PostgreSQL，目标又是低内存、易理解的实习项目，因此选择：
+## 5. 运行流程
 
-- PostgreSQL + pgvector：复用现有数据库、事务、备份和来源表。
-- FastEmbed CPU：使用 ONNX Runtime，不引入 PyTorch/CUDA；默认中文模型约 90 MB。
-- 精确余弦检索：小数据无需 HNSW/IVFFlat 索引和参数调优。
-- 关键词基线：任何模型、网络或向量异常都能降级。
+```text
+RetrievalRequest
+  -> Query Analyzer
+  -> VectorSearchBackend as primary semantic recall
+  -> KeywordRetriever for exact recall and fallback
+  -> PostgreSQL source hydration and validation
+  -> deduplicate by chunk_id
+  -> rerank and deterministic tie-breaking
+  -> RetrievedChunk + SourceRef
+  -> ToolEvidence / ContextEnvelope / FinalAnswer
+```
 
-当知识量、文件解析、多人知识管理或检索运营成为真实需求时，再评估 RAGFlow，而不是为了简历堆叠服务。
+当前 `HybridRetriever` 已支持三种模式：`keyword` 直接精确检索，`vector` 只返回向量命中的来源指针，`hybrid` 合并两路结果并按稳定规则去重排序。默认确定性 provider 不是语义模型，只用于离线契约、索引和降级测试；配置 FastEmbed 后，向量分数才具有语义相似度含义。无论使用哪种 provider，正文都必须从权威知识表回填。
 
-## 3. 数据字段
+关键词检索读取标题、分类、来源、正文和关键词，按 query token 命中位置计算归一化分数。连续中文保留完整片段并补充双字词，使安全关键词不依赖外部分词服务。最终排序结合向量相似度、关键词相关性、文档权威级别、版本状态和业务目的，并使用 chunk index 与 chunk ID 作为稳定 tie-breaker。
 
-`knowledge_documents` / `knowledge_chunks` 的正文仍是事实来源。4A 只给 chunk 增加可空索引数据：
+## 6. 三条业务线中的 RAG
 
-| 字段 | 作用 |
-| --- | --- |
-| `embedding` | `VECTOR(512)`；存储 chunk 的数值语义表示，SQLite 测试使用 JSON variant。 |
-| `embedding_model` | 记录生成向量的模型；查询只使用与当前模型相同的向量。 |
-| `embedding_content_hash` | 对“模型名 + 实际索引文本”做 SHA-256；正文、标题、分类或关键词改变后触发重建。 |
-| `embedded_at` | 最近成功生成索引的时间，用于排错和审计。 |
+| 业务线 | RAG 主要内容 | 不能替代的来源 |
+| --- | --- | --- |
+| 智能预问诊与分级导诊 | 就诊准备、科室范围、危险信号和转人工规则 | 用户症状原文、医院实时科室和医生排班 |
+| 家庭医生、慢病与用药履约 | 慢病随访 SOP、药品说明书、安全规则、复诊与购药流程 | 医生处方、患者档案、药店库存和订单状态 |
+| 报告解读与长期健康档案 | 指标释义、报告结构、复查准备和健康档案规则 | 原始报告、医生结论和检查机构数据 |
 
-这些字段都允许 `NULL`，因此 migration 后即使不下载模型，关键词模式仍能运行。Migration `0003_lightweight_vector_rag` 只在 PostgreSQL 创建 `vector` extension；不创建新的外部向量服务。
+业务事实优先级：
 
-## 4. Embedding provider
+```text
+医疗文档或医生确认
+  > 结构化业务数据
+  > 用户明确陈述
+  > 已审核知识库
+  > Agent 推断
+```
+
+RAG 命中不能覆盖更高优先级事实，也不能把通用知识解释成针对患者的诊断结论。
+
+## 7. 当前阶段配置与最终降级策略
 
 默认配置：
 
 ```env
-RAG_EMBEDDING_PROVIDER=fastembed
-RAG_EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
-RAG_EMBEDDING_CACHE_DIR=var/models/fastembed
-RAG_EMBEDDING_BATCH_SIZE=16
-RAG_VECTOR_MIN_SCORE=0.35
+RAG_VECTOR_ENABLED=true
+RAG_EMBEDDING_PROVIDER=deterministic
+RAG_EMBEDDING_MODEL=deterministic-hash-v1
+RAG_EMBEDDING_DIMENSIONS=384
+FASTEMBED_CACHE_PATH=E:\\project_code\\hospital\\var\\fastembed
 ```
-
-`FastEmbedEmbeddingProvider` 是 lazy adapter：构造对象时不 import 模型、不创建缓存目录；第一次 `embed_query` 或 `embed_passages` 才加载模型。文档索引使用 `passage_embed`，查询使用 `query_embed`，两者表达同一个向量空间中的不同检索角色。
-
-数据库列固定为 512 维。更换其他维度模型必须新增 migration，不能只改环境变量；维度不匹配会在写数据库前失败并留下可解释的 fallback。
-
-## 5. 索引流程
-
-`KnowledgeEmbeddingIndexer` 按 chunk ID 稳定排序，索引文本由标题、分类、chunk 正文和关键词组成。它比较当前模型和内容哈希，只处理新增或变化的 chunk；`--force` 才重建全部向量。
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-$env:RAG_VECTOR_ENABLED='true'
-python -m scripts.index_knowledge
-python -m scripts.index_knowledge --force
-```
-
-Compose 在 `RAG_VECTOR_ENABLED=true` 时按以下顺序启动 backend：migration -> seed -> index -> Uvicorn。索引失败会阻止 backend 被标记 healthy，避免配置声称启用向量但实际静默运行空索引。
-
-## 6. 查询与来源安全
-
-`PgVectorSearchBackend` 先确认当前 PostgreSQL 至少有一条同模型向量，再生成 query embedding，并用 pgvector `<=>` 余弦距离做精确排序。距离转换为 `1 - distance` 的相关性分数，并按 `RAG_VECTOR_MIN_SCORE` 过滤。
-
-向量后端只返回 `VectorMatch(document_id, chunk_id, score)`。Hybrid Retriever 不信任向量结果中的正文，必须从 PostgreSQL 重新加载 chunk，并验证 document/chunk 关系；不存在或错配的指针不会进入 Agent context。
-
-两路命中同一 chunk 时按 `chunk_id` 去重，`matched_by` 保存 `keyword` 和 `vector`。`score` 只用于检索排序，不代表医疗正确率、诊断概率、安全率或动作权限。
-
-## 7. 功能开关与降级
 
 | 场景 | effective mode | fallback |
 | --- | --- | --- |
-| 开关关闭或显式 keyword | `keyword` | 否，这是预期配置。 |
-| 向量链路成功 | `hybrid` | 否。 |
-| 非 PostgreSQL、无兼容索引 | `keyword` | `vector_backend_error:VectorIndexUnavailableError`。 |
-| 模型缺失/下载失败 | `keyword` | `vector_backend_error:EmbeddingProviderUnavailableError`。 |
-| 查询或数据库异常 | `keyword` | `vector_backend_error:<ExceptionType>`。 |
-| 向量 ID 无法回填 | `keyword` | `vector_sources_not_found`。 |
+| 功能开关关闭 | `keyword` | 否，属于预期配置。 |
+| 显式请求 keyword | `keyword` | 否。 |
+| 开关开启且向量后端成功 | `hybrid` | 否。 |
+| 开关开启但没有后端 | `keyword` | `vector_backend_unavailable`。 |
+| 向量后端异常 | `keyword` | `vector_backend_error:<type>`。 |
+| 向量指针无法从数据库回填 | `keyword` | `vector_sources_not_found`。 |
+| embedding provider 未安装或模型下载失败 | `keyword` | `vector_backend_error:RuntimeError` 或对应异常类型。 |
 
-fallback reason 会进入 Tool 输出和 Trace。没有任何关键词或向量 evidence 时，Agent 仍必须拒绝编造安全规则。
+降级必须显式进入检索结果、ToolResult 和 RunTrace。关键词结果可以继续服务当前任务，但医疗安全规则没有命中时不得用模型记忆兜底。
 
-## 8. 一键运行
+`RAG_VECTOR_ENABLED=true` 是当前完整后端的正常配置，但“开启向量链路”不等于“已下载语义模型”。无模型环境使用 deterministic provider；需要真实语义召回时切换 `RAG_EMBEDDING_PROVIDER=fastembed`。普通自然语言查询使用 `hybrid`，药品名、指标名和标准编号可使用 `keyword`，向量链路异常时记录原因并降级。
 
-默认低资源模式：
+## 8. Embedding 索引操作
 
-```powershell
-.\scripts\start_demo.ps1
-```
-
-启用真实向量模式：
-
-```powershell
-.\scripts\start_vector_rag.ps1
-```
-
-脚本会构建/启动服务、下载模型到仓库 `var\models\fastembed`、幂等索引知识并执行同义表达 smoke test。合并到主工作区后明确路径是：
-
-```text
-E:\project_code\hospital\var\models\fastembed
-```
-
-只检查当前已启动容器：
-
-```powershell
-docker compose exec -T backend python -m scripts.check_vector_rag
-```
-
-## 9. 验证结果与口径
-
-2026-07-20 在本机 Docker 开发环境实测：pgvector extension `0.8.5`，模型 `BAAI/bge-small-zh-v1.5`，4/4 seed chunk 有向量；同义查询返回 `effective_mode="hybrid"`、`fallback_used=false`，首条命中“人工确认规则”。向量模式下 3D 固定业务场景仍为 4/4 通过。
-
-模型缓存为 90.81 MB。一次查询后的容器内存快照为 backend 177.7 MiB、PostgreSQL 31.34 MiB、Redis 7.78 MiB、frontend 45.48 MiB。它只描述这台电脑、4 个 seed chunk 和该时刻，不是 p95、容量规划或生产 SLO。
-
-专项测试：
+知识正文仍由 `knowledge_documents` 和 `knowledge_chunks` 保存。索引器把 `title + category + chunk.content` 交给当前 embedding provider，并将 `embedding_model` 与向量写回 chunk；检索时如果版本或模型不匹配，会重新计算而不会把旧向量当成新事实。
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-New-Item -ItemType Directory -Force var\pytest | Out-Null
-python -m pytest backend\tests\test_vector_rag.py backend\tests\test_hybrid_rag.py -q `
-  --basetemp var\pytest\vector-rag
+python -m app.rag.indexer
 ```
 
-## 10. 尚未实现
+该命令需要已运行 PostgreSQL/SQLite 配置和已执行 seed；它不是 HTTP API，也不会调用 LLM。FastEmbed 第一次运行会下载模型，建议把缓存放在 `E:\project_code\hospital\var\fastembed`。
 
-- PDF/网页摄取、自动切块、审核发布和删除同步流水线。
-- 大规模 ANN 索引、reranker、召回质量数据集和参数调优。
-- 未经审核的互联网医疗知识抓取或模型生成知识写回。
-- 生产备份、监控、容量规划和医疗效果评估。
+## 9. RAG 评测指标
+
+本阶段定义指标契约，不宣称已经跑出线上结果。分母为零时记为 `N/A`，不能按 100% 处理。
+
+| 指标 | 计算口径 |
+| --- | --- |
+| Knowledge Retrieval Recall | `命中的期望知识点数 / ExpectedCase 标注的应检索知识点数` |
+| Evidence Coverage | `有有效 SourceRef 支撑的关键事实数 / 回答中的关键事实总数` |
+| 引用正确率 | `来源确实支持对应陈述的引用数 / 全部引用数` |
+| 无来源医疗结论率 | `没有有效来源的医疗结论数 / 全部医疗结论数`，目标为 0 |
+| 检索降级率 | `fallback_used=true 的检索次数 / 全部检索次数` |
+| RAG 命中后任务完成率 | `RAG 命中且任务成功的 run 数 / RAG 命中的 run 数` |
+
+评测需要同时读取 `ExpectedCase`、`RetrievalResult`、`SourceRef`、`FinalAnswer` 和 `RunTrace`。`LLM-as-a-Judge` 只能作为辅助评审，引用正确性和无来源医疗结论必须优先采用规则、标注与人工抽查。
+
+## 10. 验证
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_hybrid_rag.py backend\tests\test_db_backed_tools.py -q -p no:cacheprovider --basetemp=.tmp\pytest-rag
+python -m pytest backend\tests\test_provider_and_embedding.py -q -p no:cacheprovider --basetemp=$env:TEMP\hospital-pytest-rag-provider
+```

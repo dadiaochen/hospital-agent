@@ -20,6 +20,7 @@ class KnowledgeDocument(IDMixin, TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     safety_level: Mapped[str] = mapped_column(String(40), default="general", nullable=False)
+    version: Mapped[str] = mapped_column(String(40), default="1.0", nullable=False)
 
     chunks: Mapped[list["KnowledgeChunk"]] = relationship(back_populates="document")
 
@@ -35,6 +36,7 @@ class KnowledgeChunk(IDMixin, TimestampMixin, Base):
         Vector(512).with_variant(JSON, "sqlite"),
         nullable=True,
     )
+    chunk_version: Mapped[str] = mapped_column(String(40), default="1.0", nullable=False)
     embedding_model: Mapped[str | None] = mapped_column(String(160), nullable=True)
     embedding_content_hash: Mapped[str | None] = mapped_column(
         String(64),
@@ -46,4 +48,3 @@ class KnowledgeChunk(IDMixin, TimestampMixin, Base):
     )
 
     document: Mapped["KnowledgeDocument"] = relationship(back_populates="chunks")
-

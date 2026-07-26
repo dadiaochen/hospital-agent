@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from app.schemas.business import SourceRef
 from app.tools.tool_schemas import ToolExecutionContext, ToolResult, ToolSpec
 
 
@@ -86,6 +87,7 @@ class ToolRegistry:
                 error_message=f"tool is not registered: {tool_name}",
                 fallback_action="check_tool_registry",
                 schema_valid=False,
+                execution_context=execution_context,
             )
 
         if tool_name not in execution_context.allowed_tools:
@@ -96,6 +98,8 @@ class ToolRegistry:
                 error_message=f"tool is not in execution_context.allowed_tools: {tool_name}",
                 fallback_action="use_allowed_tool_from_context",
                 requires_human_confirmation=spec.requires_human_confirmation,
+                execution_context=execution_context,
+                tool_version=spec.tool_version,
             )
 
         if execution_context.agent_role not in spec.allowed_agent_roles:
@@ -108,6 +112,8 @@ class ToolRegistry:
                 ),
                 fallback_action="route_to_authorized_agent",
                 requires_human_confirmation=spec.requires_human_confirmation,
+                execution_context=execution_context,
+                tool_version=spec.tool_version,
             )
 
         if spec.requires_human_confirmation and not execution_context.human_confirmation_granted:
@@ -118,6 +124,8 @@ class ToolRegistry:
                 error_message=f"{tool_name} requires human confirmation before execution",
                 fallback_action="require_human_confirmation",
                 requires_human_confirmation=True,
+                execution_context=execution_context,
+                tool_version=spec.tool_version,
             )
 
         try:
@@ -131,6 +139,8 @@ class ToolRegistry:
                 fallback_action="fix_tool_input",
                 schema_valid=False,
                 requires_human_confirmation=spec.requires_human_confirmation,
+                execution_context=execution_context,
+                tool_version=spec.tool_version,
             )
 
         try:
@@ -148,6 +158,8 @@ class ToolRegistry:
                 tool_input=validated_input.model_dump(mode="json"),
                 permission_scope=spec.permission_scope,
                 read_only=spec.read_only,
+                tool_version=spec.tool_version,
+                retryable=exc.error_type in {"timeout", "provider_unavailable"},
             )
         except Exception as exc:  # noqa: BLE001 - registry normalizes handler failures.
             return self._failure(
@@ -157,6 +169,9 @@ class ToolRegistry:
                 error_message=str(exc),
                 fallback_action="use_fallback_action",
                 requires_human_confirmation=spec.requires_human_confirmation,
+                execution_context=execution_context,
+                tool_version=spec.tool_version,
+                retryable=True,
             )
 
         try:
@@ -170,11 +185,19 @@ class ToolRegistry:
                 fallback_action="fix_tool_handler_output",
                 schema_valid=False,
                 requires_human_confirmation=spec.requires_human_confirmation,
+                execution_context=execution_context,
+                tool_version=spec.tool_version,
             )
 
         output = validated_output.model_dump()
+        evidence_refs = [
+            SourceRef.model_validate(item)
+            for item in output.get("source_refs", [])
+        ]
         return ToolResult(
             tool_name=tool_name,
+            tool_version=spec.tool_version,
+            provider_mode=execution_context.provider_mode,
             success=True,
             output=output,
             run_id=execution_context.run_id,
@@ -187,7 +210,10 @@ class ToolRegistry:
             latency_ms=self._elapsed_ms(started),
             schema_valid=True,
             requires_human_confirmation=spec.requires_human_confirmation,
-            evidence_present=bool(output.get("evidence_present", False)),
+            evidence_present=bool(output.get("evidence_present", False))
+            or bool(evidence_refs),
+            evidence_refs=evidence_refs,
+            retryable=False,
             source_name=output.get("source_name", tool_name),
             permission_scope=spec.permission_scope,
             read_only=spec.read_only,
@@ -208,9 +234,15 @@ class ToolRegistry:
         tool_input: dict[str, Any] | None = None,
         permission_scope: str | None = None,
         read_only: bool = True,
+        tool_version: str = "v1",
+        retryable: bool = False,
     ) -> ToolResult:
         return ToolResult.failure(
             tool_name=tool_name,
+            tool_version=tool_version,
+            provider_mode=(
+                execution_context.provider_mode if execution_context else "mock"
+            ),
             error_type=error_type,
             error_message=error_message,
             fallback_action=fallback_action,
@@ -223,6 +255,7 @@ class ToolRegistry:
             tool_input=tool_input,
             permission_scope=permission_scope,
             read_only=read_only,
+            retryable=retryable,
         )
 
     @staticmethod

@@ -60,4 +60,4 @@ Then: 只调用当前角色允许的工具
 3. 三条安全或隔离验收条件。
 4. 它应该涉及哪些层，哪些层不该改。
 
-完成后对照 [PRD.md](../PRD.md)、[API_SPEC.md](../API_SPEC.md) 和 [AGENT_WORKFLOW.md](../AGENT_WORKFLOW.md)。
+完成后对照 [PRD.md](../PRD.md)、[API_SPEC.md](../API_SPEC.md)、[BUSINESS_WORKFLOWS.md](../BUSINESS_WORKFLOWS.md) 和 [AGENT_ARCHITECTURE.md](../AGENT_ARCHITECTURE.md)。

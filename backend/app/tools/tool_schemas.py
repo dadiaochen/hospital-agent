@@ -2,6 +2,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
+from app.schemas.business import ProviderMode, SourceRef
+
 
 NonEmptyStr = Annotated[
     str,
@@ -37,6 +39,7 @@ class ToolSpec(ToolContractModel):
     )
 
     name: NonEmptyStr
+    tool_version: NonEmptyStr = "v1"
     description: NonEmptyStr
     input_schema: type[BaseModel]
     output_schema: type[BaseModel]
@@ -64,10 +67,13 @@ class ToolExecutionContext(ToolContractModel):
     allowed_tools: list[NonEmptyStr] = Field(default_factory=list)
     safety_flags: list[NonEmptyStr] = Field(default_factory=list)
     human_confirmation_granted: bool = False
+    provider_mode: ProviderMode = "mock"
 
 
 class ToolResult(ToolContractModel):
     tool_name: NonEmptyStr
+    tool_version: NonEmptyStr = "v1"
+    provider_mode: ProviderMode = "mock"
     success: bool
     output: dict[str, Any] = Field(default_factory=dict)
     run_id: NonEmptyStr | None = None
@@ -81,6 +87,8 @@ class ToolResult(ToolContractModel):
     schema_valid: bool
     requires_human_confirmation: bool
     evidence_present: bool
+    evidence_refs: list[SourceRef] = Field(default_factory=list)
+    retryable: bool = False
     source_name: NonEmptyStr | None = None
     permission_scope: NonEmptyStr | None = None
     read_only: bool = True
@@ -107,9 +115,15 @@ class ToolResult(ToolContractModel):
         tool_input: dict[str, Any] | None = None,
         permission_scope: str | None = None,
         read_only: bool = True,
+        tool_version: str = "v1",
+        provider_mode: ProviderMode = "mock",
+        retryable: bool = False,
+        evidence_refs: list[SourceRef] | None = None,
     ) -> "ToolResult":
         return cls(
             tool_name=tool_name,
+            tool_version=tool_version,
+            provider_mode=provider_mode,
             success=False,
             output={},
             error_type=error_type,
@@ -119,6 +133,8 @@ class ToolResult(ToolContractModel):
             schema_valid=schema_valid,
             requires_human_confirmation=requires_human_confirmation,
             evidence_present=False,
+            evidence_refs=evidence_refs or [],
+            retryable=retryable,
             source_name=None,
             run_id=run_id,
             agent_role=agent_role,

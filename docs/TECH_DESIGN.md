@@ -2,7 +2,7 @@
 
 ## 1. 设计目标
 
-本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前线性基线已实现可重复契约、deterministic Harness、2E API、Hybrid RAG、Model Gateway、LangGraph 编排、Runtime 持久化/API、3A/3B 前端、3C Runtime E2E Harness、3D 一键演示和 4A 轻量向量检索。
+本系统不是将大模型直接接到医疗问答上，而是把模型或规则引擎放进一个可约束、可追踪、可确认、可评估的业务流程中。当前线性基线已实现可重复契约、deterministic Harness、2E API、Hybrid RAG、Model Gateway、LangGraph 编排、Runtime 持久化/API 和 3A/3B 前端；4B 正在把三条产品业务线接入统一后端任务边界。
 
 ## 2. 分层架构
 
@@ -69,19 +69,15 @@ Context、工具、Trace 和评估先由 Pydantic 模型定义，并使用 `extr
 
 SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权查询和跳过确认。EvaluatorAgent 是 post-run 只读评估角色：读取冻结产物，计算质量结果，不能修改答案、调用业务工具或写业务状态。
 
-### 4.6 RAG 以关键词为基线并可选接入真实向量召回
+### 4.6 RAG 采用向量优先目标和可降级实现
 
-2F-1 把原先位于 service 内的知识库扫描整理为 `Retriever` 协议。4A 在同一契约后接入 FastEmbed `BAAI/bge-small-zh-v1.5` 与 PostgreSQL pgvector：Indexer 为已审核 chunk 生成 512 维 passage embedding；查询使用 query embedding 和精确余弦距离。向量后端仍只返回 `document_id`、`chunk_id` 和相关性分数，正文必须重新从数据库回填。
+2F-1 把原先位于 service 内的知识库扫描整理为 `Retriever` 协议。`KeywordRetriever` 从 PostgreSQL 的 `knowledge_documents` / `knowledge_chunks` 加载已审核内容并确定性排序；`HybridRetriever` 可以接收可选的 `VectorSearchBackend`，但向量后端只返回 `document_id`、`chunk_id` 和相关性分数，正文必须重新从数据库回填。
 
-`RAG_VECTOR_ENABLED` 默认关闭，关闭时不加载模型。显式开启后，Compose 在 migration/seed 后幂等索引；模型、索引、查询异常或来源指针无法回填时，系统保留关键词结果并记录 `fallback_used` / `fallback_reason`。结果中的 `score` 仅表示检索相关性，不是医疗正确率、诊断概率或执行授权。完整设计见 [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md)。
+`RAG_VECTOR_ENABLED` 默认开启，确定性 hash provider 负责离线契约测试；配置 `FastEmbedEmbedding` 后才使用 CPU/ONNX 语义模型。向量后端只返回 document/chunk 指针，正文必须回到知识表校验和回填。如果 provider、模型或向量后端异常，保留关键词结果并记录 `fallback_used` / `fallback_reason`。结果中的 `score` 仅表示检索相关性，不是医疗正确率、诊断概率或执行授权。完整设计见 [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md)。
 
 ### 4.7 Model Gateway 先解析再使用
 
 2F-2 定义 `ModelProvider` 与 `ModelGateway`。自动测试和无 Key 环境使用 `DeterministicModelProvider`；配置完整时可以使用 OpenAI-compatible HTTP adapter。Provider 只返回文本，Gateway 必须依次执行 JSON 解析、目标 Pydantic schema 校验和独立输出安全检查，全部通过后才返回结构化对象。
-
-4B 补全了运行时接线：`LangGraphAgentWorkflow` 的默认 Gateway 通过环境感知工厂创建，而不是硬编码 deterministic provider。真实模型当前只位于 FinalAnswer 节点；Planner、工具、RAG、SafetyAgent、确认状态机和 Evaluator 不交给模型自由控制。`AgentRuntimeService` 在 `finally` 中释放工作流自有 HTTP client，调用方注入的 Gateway 保持由调用方管理。
-
-独立模型诊断器默认只校验配置和 deterministic 契约，显式 `--live` 才发一次结构化请求。报告分别记录 primary 是否验证和 fallback 是否使用，避免把降级后的成功答案误报为外部模型连通。
 
 超时、HTTP 错误、provider response 错误、schema 失败和 safety 失败都产生 `ModelProviderAttemptTrace`。配置了 fallback 时，Gateway 再调用 deterministic provider；fallback 也失败则返回 `output=None` 和失败 Trace，不把原始文本交给 Agent。规则型输出检查是 Gateway 的最后一道文本门禁，不替代 LangGraph 中的 SafetyAgent。完整设计见 [MODEL_GATEWAY.md](MODEL_GATEWAY.md)。
 
@@ -89,7 +85,7 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 2G-1 用 `StateGraph` 编排 Planner、ContextManager、四类业务角色、SafetyAgent、确认草稿、FinalAnswer、RunTrace、reset 和 Evaluator。`WorkflowState` 只传 Pydantic 业务产物和节点访问记录；条件边由显式 intent/required tools 决定，不允许模型自由选择无限循环。
 
-节点只能通过 ContextManager 获得 role view，通过 Tool Registry 调用工具，通过 Model Gateway 生成结构化答案。高风险 flag 会在确认草稿前直接路由到安全答案；普通关键动作只有显式确认后才执行本地 draft 工具。图本身仍返回纯 `WorkflowRunResult`；2G-2 的 service adapter 负责事务、审计与 HTTP 边界。完整图设计见 [LANGGRAPH_WORKFLOW.md](LANGGRAPH_WORKFLOW.md)。
+节点只能通过 ContextManager 获得 role view，通过 Tool Registry 调用工具，通过 Model Gateway 生成结构化答案。高风险 flag 会在确认草稿前直接路由到安全答案；普通关键动作只有显式确认后才执行本地 draft 工具。图本身仍返回纯 `WorkflowRunResult`，service adapter 负责事务、审计与 HTTP 边界。完整图设计见 [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md)。
 
 ### 4.9 Runtime Adapter 冻结并持久化运行产物
 
@@ -101,19 +97,7 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 3A 在浏览器侧增加 `MemberProvider`、统一 API client 和页面级 `useApiResource`。Provider 只保存当前选择的 `member_id`；成员切换会改变资源 key、取消旧请求并清空旧数据。家庭档案、药箱、处方、购药、确认草稿和 run 响应还要通过 `assertMemberScoped` 校验返回 `member_id`，异常时拒绝展示而不是静默过滤。
 
-页面统一区分 loading、empty、error 和 data；搜索类页面另有“尚未查询”状态。3B 的 Agent 页面通过 typed POST client 发起首次未确认 run，并只在后端返回待确认且未阻断时允许同任务续跑。Agent 冻结产物还通过 `assertAgentArtifactsScoped` 检查成员，Run 详情保持 FinalAnswer 与 EvaluationResult 只读。前端检查是纵深防御，后端 demo-user/member scope 仍是权限真相来源。完整说明见 [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) 和 [AGENT_UI.md](AGENT_UI.md)。
-
-### 4.11 Runtime E2E 从 HTTP 边界评估真实冻结产物
-
-3C 的 `RuntimeE2EHarnessRunner` 不进入 Router、Service 或 LangGraph 内部调用方法，而是像外部客户端一样发现 seed 成员、执行 `POST /api/agent-runs` 和可选 `/continue`。`RuntimeTraceAdapter` 将 API artifacts 递归脱敏，并验证 RunTrace、RunSummary、SafetyTrace、Tool/RAG refs 的 run/task/member 作用域后，才把新的冻结 Trace 交给 DeterministicEvaluator。
-
-固定用例覆盖正常续方、复诊、提醒、高风险阻断、工具空数据失败、无来源拒答、同成员隔离和两类 API Guard。报告只保留用例级状态与指标，不保存成员/run ID 或答案正文。完整说明见 [RUNTIME_E2E_HARNESS.md](RUNTIME_E2E_HARNESS.md)。
-
-### 4.12 一键交付显式化初始化依赖
-
-3D 将本地交付链固定为 PostgreSQL/Redis healthcheck、backend migration、幂等 seed、Uvicorn healthcheck、Next.js production build/start 和外部四场景 Runner。backend 只在 migration 与 seed 都成功后启动；固定 Runner 只走公开 API，继续复用 RuntimeTraceAdapter 和 DeterministicEvaluator，不创建第二套业务逻辑。
-
-默认关键词 RAG 与 deterministic provider 保证无 Embedding、无模型 Key也能复现。OpenAI-compatible provider 仍是可选模式；向量检索仍只有可注入协议。完整运行与模式说明见 [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md)。
+页面统一区分 loading、empty、error 和 data；搜索类页面另有“尚未查询”状态。Agent 页面通过 typed POST client 发起首次未确认 run，并只在后端返回待确认且未阻断时允许同任务续跑。Agent 冻结产物还通过 `assertAgentArtifactsScoped` 检查成员，Run 详情保持 FinalAnswer 与 EvaluationResult 只读。前端检查是纵深防御，后端 demo-user/member scope 仍是权限真相来源。完整说明见 [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md)。
 
 ## 5. 当前实现边界
 
@@ -121,11 +105,9 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 | --- | --- |
 | ORM、迁移、seed、只读 DB tools、本地 draft tool 与草稿状态机 API | 生产认证和外部业务提交。 |
 | 家庭、药箱、处方/购药、库存、知识检索和 Agent 审计的只读 API | 真实医院、药店和推送 API。 |
-| ContextManager、Trace、fixture Harness、确定性评估、双模式 Model Gateway、LangGraph DAG 和 Agent Runtime API/持久化 | 真实厂商模型质量报告、生产认证和外部系统集成。 |
-| 权限、成员隔离、确认门禁、失败 fallback、关键词 Retriever 与可选 FastEmbed/pgvector 混合检索 | 文档摄取平台、大规模 ANN/reranker 和互联网知识抓取。 |
-| 3A/3B Next.js 数据页、Agent 对话、本地确认续跑、Trace/Evaluation 详情和客户端成员响应检查 | 生产浏览器监控、真实登录和外部系统集成。 |
-| 3C Runtime E2E、Trace 脱敏 adapter、API Guard 和本地 PostgreSQL 报告 | 生产流量回放、临床有效性或真实 LLM 质量评测。 |
-| 3D Compose 自动 migration/seed、四项 healthcheck、固定四场景和脱敏演示报告 | 生产编排、真实登录、秘密管理、HTTPS、浏览器自动化和高可用。 |
+| ContextManager、Trace、fixture Harness、确定性评估、Model Gateway、LangGraph DAG 和 Agent Runtime API/持久化 | 线上模型质量验证、生产认证和外部系统集成。 |
+| 权限、成员隔离、确认门禁、失败 fallback 与关键词/混合 Retriever | 真实 Embedding provider、向量数据库和互联网知识抓取。 |
+| 当前 Next.js 数据页、Agent 对话、本地确认续跑、Trace/Evaluation 详情和客户端成员响应检查 | 4C 三条业务线成熟页面、浏览器 E2E 与真实 Trace Harness。 |
 
 详细顺序、验收和非目标以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
 
@@ -143,7 +125,6 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 - 关键词与混合检索：[retriever.py](../backend/app/rag/retriever.py)
 - Model Gateway 契约：[model_gateway_schemas.py](../backend/app/agent/model_gateway_schemas.py)
 - Provider、解析与 fallback：[model_gateway.py](../backend/app/agent/model_gateway.py)
-- Provider 配置与 live 诊断：[model_provider_diagnostic.py](../backend/app/agent/model_provider_diagnostic.py)
 - 模型输出安全检查：[model_output.py](../backend/app/safety/model_output.py)
 - LangGraph 状态与节点：[langgraph_workflow.py](../backend/app/agent/langgraph_workflow.py)
 - 工作流输入输出契约：[workflow_schemas.py](../backend/app/agent/workflow_schemas.py)
@@ -153,7 +134,3 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 - 前端 API 客户端：[client.ts](../frontend/lib/api/client.ts)
 - 前端成员上下文：[MemberProvider.tsx](../frontend/components/providers/MemberProvider.tsx)
 - Agent Runtime HTTP DTO：[agent_runtime.py](../backend/app/schemas/agent_runtime.py)
-- Runtime E2E Runner：[runtime_harness.py](../backend/app/agent/runtime_harness.py)
-- Runtime Trace 脱敏适配：[runtime_trace_adapter.py](../backend/app/agent/runtime_trace_adapter.py)
-- 固定 MVP Demo Runner：[demo_runner.py](../backend/app/agent/demo_runner.py)
-- 一键启动脚本：[start_demo.ps1](../scripts/start_demo.ps1)

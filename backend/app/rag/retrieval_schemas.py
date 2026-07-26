@@ -4,8 +4,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 NonEmptyStr = Annotated[str, Field(min_length=1)]
-RetrievalMode = Literal["keyword", "hybrid"]
-EffectiveRetrievalMode = Literal["keyword", "hybrid"]
+RetrievalMode = Literal["keyword", "vector", "hybrid"]
+EffectiveRetrievalMode = Literal["keyword", "vector", "hybrid"]
 MatchMode = Literal["keyword", "vector"]
 
 

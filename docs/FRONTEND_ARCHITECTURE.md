@@ -100,7 +100,7 @@ npm run build
 5. `confirmed` 是否明确为本地状态，而不是医院已提交或提醒已推送？
 6. `source_id` 是否随知识结果展示？
 7. 首次运行是否固定发送 `human_confirmation_granted=false`，续跑是否需要用户勾选并显式提交 `true`？
-8. Trace 是否只读，是否区分单次 EvaluationResult 与 3C 才生成的真实聚合报告？
+8. Trace 是否只读，是否区分单次 EvaluationResult 与最终阶段 4C 生成的真实聚合报告？
 
 ## 9. 非目标
 

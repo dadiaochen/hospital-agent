@@ -57,7 +57,12 @@
 - `docs/TECH_DESIGN.md`
 - `docs/API_SPEC.md`
 - `docs/DB_SCHEMA.md`
-- `docs/AGENT_WORKFLOW.md`
+- `docs/BUSINESS_WORKFLOWS.md`
+- `docs/AGENT_ARCHITECTURE.md`
+- `docs/RAG_RETRIEVAL.md`
+- `docs/TOOL_CONTRACTS.md`
+- `docs/SAFETY_POLICY.md`
+- `docs/EVALUATOR_AGENT.md`
 - `docs/RESUME_NOTES.md`
 - 项目 md 文档
 
@@ -69,6 +74,8 @@
 - 测试方式；
 - 下一步建议；
 - 与简历描述相关的项目亮点。
+
+面经术语规则：面试经验文档中的名词必须采用目标岗位面试中实际会使用的说法，不能直接把代码类名、内部模块名或直译词当作面试术语。例如正式实现名 `SafetyAgent` 在面经中统一表达为“Agent 安全”，不得写成“安全代理”、`safeagent` 或“safe 代理”；正式评测实现统一表达为“Agent 评测”。架构文档和代码可以保留正式标识符，但面经和简历口述必须使用面试口径。自我介绍和项目介绍可以在准备时按 STAR 检查结构，但口头答案不得朗读 STAR 字母或英文标签，也不得把技术栈、内部类名和字段名当成开场介绍。
 
 ## 6. 输出格式
 

@@ -85,8 +85,10 @@ class SQLAlchemyKnowledgeStore:
         return KnowledgeRecord(
             document_id=document.id,
             chunk_id=chunk.id,
-            document_version=_timestamp_version(document.updated_at),
-            chunk_version=_timestamp_version(chunk.updated_at),
+            document_version=document.version
+            or _timestamp_version(document.updated_at),
+            chunk_version=chunk.chunk_version
+            or _timestamp_version(chunk.updated_at),
             title=document.title,
             category=document.category,
             source=document.source,
@@ -145,8 +147,10 @@ class HybridRetriever:
 
     def retrieve(self, request: RetrievalRequest) -> RetrievalResult:
         keyword_result = self._keyword_retriever.retrieve(request)
-        if request.mode == "keyword" or not self._vector_enabled:
+        if request.mode == "keyword":
             return keyword_result
+        if not self._vector_enabled:
+            return _with_fallback(keyword_result, "vector_search_disabled")
         if self._vector_backend is None:
             return _with_fallback(keyword_result, "vector_backend_unavailable")
 
@@ -163,7 +167,18 @@ class HybridRetriever:
         if vector_matches and not vector_sources:
             return _with_fallback(keyword_result, "vector_sources_not_found")
         if not vector_sources:
-            return keyword_result
+            return _with_fallback(keyword_result, "vector_no_matches")
+
+        if request.mode == "vector":
+            sources = vector_sources[: request.limit]
+            return RetrievalResult(
+                query=request.query,
+                purpose=request.purpose,
+                requested_mode=request.mode,
+                effective_mode="vector",
+                evidence_present=bool(sources),
+                sources=sources,
+            )
 
         merged = _merge_sources(keyword_result.sources, vector_sources)
         sources = merged[: request.limit]
@@ -216,9 +231,24 @@ def create_knowledge_retriever(
         settings.rag_vector_enabled if vector_enabled is None else vector_enabled
     )
     if resolved_vector_enabled and vector_backend is None and vector_enabled is None:
-        from app.rag.vector_store import create_configured_vector_backend
+        if settings.rag_embedding_provider == "fastembed":
+            from app.rag.vector_store import create_configured_vector_backend
 
-        vector_backend = create_configured_vector_backend(db)
+            vector_backend = create_configured_vector_backend(db)
+        else:
+            from app.rag.embedding import create_embedding_provider
+            from app.rag.vector_backend import SQLAlchemyVectorBackend
+
+            embedding_provider = create_embedding_provider(
+                settings.rag_embedding_provider,
+                model_name=settings.rag_embedding_model,
+                dimensions=settings.rag_embedding_dimensions,
+                cache_dir=settings.rag_embedding_cache_dir,
+            )
+            vector_backend = SQLAlchemyVectorBackend(
+                db,
+                embedding_provider=embedding_provider,
+            )
     return HybridRetriever(
         KeywordRetriever(store),
         store,
