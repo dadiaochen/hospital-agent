@@ -132,7 +132,7 @@ RAG 命中不能覆盖更高优先级事实，也不能把通用知识解释成�
 RAG_VECTOR_ENABLED=true
 RAG_EMBEDDING_PROVIDER=deterministic
 RAG_EMBEDDING_MODEL=deterministic-hash-v1
-RAG_EMBEDDING_DIMENSIONS=384
+RAG_EMBEDDING_DIMENSIONS=512
 FASTEMBED_CACHE_PATH=E:\\project_code\\hospital\\var\\fastembed
 ```
 

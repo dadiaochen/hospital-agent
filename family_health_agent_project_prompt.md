@@ -95,6 +95,8 @@ Raw Conversation -> ContextEnvelope -> Role View -> Tool/RAG Evidence
 
 `4C` 建立持续维护的项目面经问题库。每个主题保留用户或面试官原题原句，并提供 30 秒短答、项目展开回答、技术解释、代码证据、记忆方法和可能追问。相似题追加到已有主题，不复制冲突答案；新考点才新增条目。项目未使用的技术必须标记为仅学习、候选或明确不做，并先讨论必要性再决定是否进入路线图，不能包装成已实现经历。
 
+当前数据库 schema 维护记录：Alembic 已整理为唯一线性迁移链 `0001_initial_schema -> 0002_add_agent_harness_trace_fields -> 0003_lightweight_vector_rag -> 0004_business_task_runtime -> 0005_knowledge_metadata`。`0003` 统一负责知识块向量字段，`0005` 只负责文档/分块版本字段；不得再创建平行 `0003` 或重复添加 `embedding`、`embedding_model`。提交前必须用 `python -m alembic heads` 检查唯一 head，并在临时 SQLite 与 Docker PostgreSQL 环境分别验证升级链。
+
 ## 7. 阅读顺序
 
 - 协作者：从 [docs/README.md](docs/README.md) 和 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) 开始。

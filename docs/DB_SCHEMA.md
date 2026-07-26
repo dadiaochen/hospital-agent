@@ -93,6 +93,28 @@ Alembic 默认将内部 `alembic_version.version_num` 建为 `VARCHAR(32)`，但
 3C Runtime E2E 同样没有修改 ORM、Alembic migration 或 seed。Runner 只通过现有 HTTP API 触发 run 并读取冻结 artifacts；脱敏 JSON/Markdown 报告属于测试产物，不写入业务表。PostgreSQL 集成报告复用现有 seed 数据，pytest 则继续使用隔离 SQLite。
 
 3D 没有新增 ORM 字段或 migration，也没有修改 seed 业务内容。Docker backend 入口只是自动执行现有 `alembic upgrade head` 与幂等 seed；固定四场景通过现有 API 创建 run、tool-call 审计和本地草稿，外部状态始终是 `not_submitted`。
-## 10. 4B 模型接入说明
+## 10. 当前迁移链
 
-4B 没有新增 ORM 字段或 Alembic migration。模型 provider 配置只来自 backend 环境变量；Key、完整 prompt 和 provider 原始文本不写入数据库。既有 `agent_runs.raw_state` 只保存版本化、脱敏的 `ModelCallTrace`。
+当前仓库必须保持一条 Alembic head，完整升级顺序为：
+
+```text
+0001_initial_schema
+  -> 0002_add_agent_harness_trace_fields
+  -> 0003_lightweight_vector_rag
+  -> 0004_business_task_runtime
+  -> 0005_knowledge_metadata
+```
+
+每个 revision 的职责边界如下：
+
+- `0001_initial_schema`：基础用户、家庭成员、药品、知识库和审计表。
+- `0002_add_agent_harness_trace_fields`：补充 Agent run/tool-call 的 trace 字段，并在 PostgreSQL 中扩大 Alembic 内部版本号列。
+- `0003_lightweight_vector_rag`：在 `knowledge_chunks` 增加可空 `VECTOR(512)`（SQLite 使用 JSON 兼容类型）、embedding 模型名、内容哈希和索引时间。
+- `0004_business_task_runtime`：增加业务任务、provider 调用、来源引用、医疗文档和健康事件等 runtime 表。
+- `0005_knowledge_metadata`：增加知识文档 `version` 与知识分块 `chunk_version`。它只负责版本元数据，不重复创建 0003 已拥有的向量字段。
+
+禁止再次创建平行的 `0003` revision；新增 schema 变更必须从 `0005_knowledge_metadata` 继续串联，并同步 ORM、seed、测试和本节说明。验收命令是 `python -m alembic heads`，预期只输出 `0005_knowledge_metadata`。
+
+## 11. 4B 模型接入说明
+
+4B 的模型 provider 配置只来自 backend 环境变量，不新增 provider-specific ORM 字段；当前仓库完整 schema 仍以本节的 `0001` 到 `0005` 迁移链为准。Key、完整 prompt 和 provider 原始文本不写入数据库。既有 `agent_runs.raw_state` 只保存版本化、脱敏的 `ModelCallTrace`。

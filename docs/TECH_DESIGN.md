@@ -99,6 +99,20 @@ SafetyAgent 是运行时拦截器，负责处理高风险医疗请求、越权�
 
 页面统一区分 loading、empty、error 和 data；搜索类页面另有“尚未查询”状态。Agent 页面通过 typed POST client 发起首次未确认 run，并只在后端返回待确认且未阻断时允许同任务续跑。Agent 冻结产物还通过 `assertAgentArtifactsScoped` 检查成员，Run 详情保持 FinalAnswer 与 EvaluationResult 只读。前端检查是纵深防御，后端 demo-user/member scope 仍是权限真相来源。完整说明见 [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md)。
 
+### 4.11 Schema 演进与迁移图
+
+数据库结构由 Alembic 版本文件管理，当前只允许一条线性 head：
+
+```text
+0001_initial_schema
+  -> 0002_add_agent_harness_trace_fields
+  -> 0003_lightweight_vector_rag
+  -> 0004_business_task_runtime
+  -> 0005_knowledge_metadata
+```
+
+向量字段只能由 `0003_lightweight_vector_rag` 创建，知识文档/分块版本字段只能由 `0005_knowledge_metadata` 创建；后续 migration 不得重复添加同名列。修改 ORM 时必须同时检查 migration、seed、SQLite 测试和 PostgreSQL 迁移结果，提交前执行 `python -m alembic heads` 并确认只有 `0005_knowledge_metadata`。
+
 ## 5. 当前实现边界
 
 | 已实现 | 尚未实现 |

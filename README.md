@@ -109,7 +109,8 @@ python -m pytest backend\tests\test_business_task_api.py backend\tests\test_prov
 ```text
 RAG_VECTOR_ENABLED=true
 RAG_EMBEDDING_PROVIDER=fastembed
-RAG_EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+RAG_EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
+RAG_EMBEDDING_DIMENSIONS=512
 FASTEMBED_CACHE_PATH=E:\\project_code\\hospital\\var\\fastembed
 ```
 

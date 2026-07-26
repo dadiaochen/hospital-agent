@@ -1,7 +1,7 @@
 """add business task runtime tables
 
-Revision ID: 0003_business_task_runtime
-Revises: 0002_add_agent_harness_trace_fields
+Revision ID: 0004_business_task_runtime
+Revises: 0003_lightweight_vector_rag
 """
 
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "0003_business_task_runtime"
-down_revision: Union[str, None] = "0002_add_agent_harness_trace_fields"
+revision: str = "0004_business_task_runtime"
+down_revision: Union[str, None] = "0003_lightweight_vector_rag"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
