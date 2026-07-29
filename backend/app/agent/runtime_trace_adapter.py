@@ -28,7 +28,16 @@ SENSITIVE_KEY_PARTS = (
     "scratchpad",
     "secret",
     "token",
+    "access_token",
+    "bearer_token",
+    "refresh_token",
 )
+SAFE_TOKEN_COUNT_KEYS = {
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "token_usage_available",
+}
 
 
 class RuntimeTraceAdapterError(ValueError):
@@ -170,6 +179,8 @@ def _redact_sensitive_values(value: Any) -> tuple[Any, list[str]]:
 
 def _is_sensitive_key(key: str) -> bool:
     normalized = key.casefold().replace("-", "_")
+    if normalized in SAFE_TOKEN_COUNT_KEYS:
+        return False
     return any(part in normalized for part in SENSITIVE_KEY_PARTS)
 
 

@@ -1,5 +1,7 @@
 # 前端架构与数据页面
 
+> 本文记录当前 3A/3B 页面。4B 任务七后端状态机已经完成；4C 仍需要把页面迁移为“展示自动生成的本地 DRAFT，用户确认执行”，并展示首次 run 与 continuation run 的关联。
+
 ## 1. 目标与边界
 
 3A/3B 前端使用 Next.js App Router、React、TypeScript 和 Tailwind CSS，把 FastAPI 读取接口与 Agent Runtime API 变成可演示页面。它负责展示、查询条件、加载状态、显式人工确认和客户端隔离检查，不负责数据库查询、医疗判断、Agent 编排或外部业务提交。
@@ -99,7 +101,7 @@ npm run build
 4. loading、empty、error 和尚未查询是否被区分？
 5. `confirmed` 是否明确为本地状态，而不是医院已提交或提醒已推送？
 6. `source_id` 是否随知识结果展示？
-7. 首次运行是否固定发送 `human_confirmation_granted=false`，续跑是否需要用户勾选并显式提交 `true`？
+7. 4C 页面是否消费任务七已提供的 `confirmation_state=DRAFT`，展示草稿后只确认执行，而不是继续渲染“是否允许创建草稿”的旧文案？
 8. Trace 是否只读，是否区分单次 EvaluationResult 与最终阶段 4C 生成的真实聚合报告？
 
 ## 9. 非目标
@@ -109,3 +111,5 @@ npm run build
 - 不调用 LLM，不执行 LangGraph，不直接访问数据库。
 - 不实现医院提交、药店下单、支付、短信或推送；`confirmed` 与 `draft` 都只是本地状态。
 - 不在浏览器重算 Evaluator 指标，也不允许 UI 修改冻结 FinalAnswer、RunTrace 或 EvaluationResult。
+
+4C 迁移完成前，前端不得提前假设新的 `confirmation_state` 已上线；迁移完成后应删除旧布尔字段交互，避免用户被要求确认两次。

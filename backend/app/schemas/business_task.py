@@ -19,6 +19,7 @@ class BusinessTaskCreateRequest(ApiSchema):
     user_input: str = Field(min_length=1)
     input_payload: dict[str, Any] = Field(default_factory=dict)
     idempotency_key: str = Field(min_length=1, max_length=120)
+    thread_id: str | None = Field(default=None, min_length=1, max_length=120)
     provider_mode: ProviderMode = "mock"
     human_confirmation_granted: Literal[False] = False
 
@@ -26,6 +27,8 @@ class BusinessTaskCreateRequest(ApiSchema):
 class BusinessTaskConfirmRequest(ApiSchema):
     human_confirmation_granted: Literal[True] = True
     idempotency_key: str = Field(min_length=1, max_length=120)
+    checkpoint_version: int | None = Field(default=None, ge=1)
+    confirmation_version: int | None = Field(default=None, ge=1)
 
 
 class BusinessTaskSummaryResponse(ApiSchema):
@@ -34,6 +37,8 @@ class BusinessTaskSummaryResponse(ApiSchema):
     member_id: str
     business_domain: str
     intent: str
+    provider_mode: str
+    thread_id: str
     status: str
     user_input: str
     input_payload: dict[str, Any]
@@ -41,6 +46,8 @@ class BusinessTaskSummaryResponse(ApiSchema):
     need_human_confirmation: bool
     confirmed_at: datetime | None = None
     current_run_id: str | None = None
+    checkpoint_version: int
+    confirmation_version: int
     degraded: bool
     last_error: str | None = None
     created_at: datetime
@@ -55,6 +62,8 @@ class BusinessTaskExecutionResponse(ApiSchema):
     need_human_confirmation: bool
     confirmation_request: dict[str, Any]
     confirmation_result: dict[str, Any]
+    confirmation_state: str = "NONE"
+    confirmation_draft: dict[str, Any] = Field(default_factory=dict)
     safety_flags: list[str]
     source_refs: list[SourceRef]
     tool_calls: list[dict[str, Any]]
@@ -65,6 +74,11 @@ class BusinessTaskExecutionResponse(ApiSchema):
     run_summary: RunSummary | None = None
     evaluation_result: EvaluationResult | None = None
     idempotent_replay: bool = False
+    checkpoint_version: int = 0
+    confirmation_version: int = 0
+    checkpoint_source: str = "postgresql"
+    resumed_from_run_id: str | None = None
+    restored_source_ids: tuple[str, ...] = ()
 
 
 class BusinessTaskListResponse(ApiSchema):

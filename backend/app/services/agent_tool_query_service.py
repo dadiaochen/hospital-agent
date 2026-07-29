@@ -23,18 +23,18 @@ def get_health_profile_context(
     user_id: str,
     member_id: str,
 ) -> dict[str, Any] | None:
-    member = db.scalar(
-        select(FamilyMember).where(
+    row = db.execute(
+        select(HealthProfile, FamilyMember)
+        .join(FamilyMember, HealthProfile.member_id == FamilyMember.id)
+        .where(
+            HealthProfile.member_id == member_id,
             FamilyMember.id == member_id,
             FamilyMember.user_id == user_id,
         )
-    )
-    if member is None:
+    ).first()
+    if row is None:
         return None
-
-    profile = db.scalar(select(HealthProfile).where(HealthProfile.member_id == member_id))
-    if profile is None:
-        return None
+    profile, member = row
 
     return {
         "source_id": f"health_profile:{profile.id}",
@@ -58,18 +58,32 @@ def get_health_profile_context(
     }
 
 
-def get_prescription_context(db: Session, member_id: str) -> dict[str, Any] | None:
+def get_prescription_context(
+    db: Session,
+    user_id: str,
+    member_id: str,
+) -> dict[str, Any] | None:
     prescriptions = list(
         db.scalars(
             select(Prescription)
-            .where(Prescription.member_id == member_id)
+            .join(FamilyMember, Prescription.member_id == FamilyMember.id)
+            .where(
+                Prescription.member_id == member_id,
+                FamilyMember.id == member_id,
+                FamilyMember.user_id == user_id,
+            )
             .order_by(Prescription.issued_at.desc())
         )
     )
     purchase_records = list(
         db.scalars(
             select(PurchaseRecord)
-            .where(PurchaseRecord.member_id == member_id)
+            .join(FamilyMember, PurchaseRecord.member_id == FamilyMember.id)
+            .where(
+                PurchaseRecord.member_id == member_id,
+                FamilyMember.id == member_id,
+                FamilyMember.user_id == user_id,
+            )
             .order_by(PurchaseRecord.purchased_at.desc())
         )
     )
@@ -115,11 +129,20 @@ def get_prescription_context(db: Session, member_id: str) -> dict[str, Any] | No
     }
 
 
-def get_medicine_box_context(db: Session, member_id: str) -> dict[str, Any] | None:
+def get_medicine_box_context(
+    db: Session,
+    user_id: str,
+    member_id: str,
+) -> dict[str, Any] | None:
     items = list(
         db.scalars(
             select(MedicineBoxItem)
-            .where(MedicineBoxItem.member_id == member_id)
+            .join(FamilyMember, MedicineBoxItem.member_id == FamilyMember.id)
+            .where(
+                MedicineBoxItem.member_id == member_id,
+                FamilyMember.id == member_id,
+                FamilyMember.user_id == user_id,
+            )
             .order_by(MedicineBoxItem.medicine_name)
         )
     )

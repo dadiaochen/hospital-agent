@@ -1,8 +1,11 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import KnowledgeChunk, KnowledgeDocument
 from app.rag.embedding import DeterministicHashEmbedding, EmbeddingProvider, cosine_similarity
+from app.rag.embedding_provider import EMBEDDING_SCHEMA_VERSION
 from app.rag.retrieval_schemas import RetrievalRequest, VectorMatch
 
 
@@ -43,8 +46,19 @@ class SQLAlchemyVectorBackend:
                 VectorMatch(
                     document_id=document.id,
                     chunk_id=chunk.id,
+                    document_version=document.version
+                    or _timestamp_version(document.updated_at),
+                    chunk_version=chunk.chunk_version
+                    or _timestamp_version(chunk.updated_at),
+                    embedding_schema_version=EMBEDDING_SCHEMA_VERSION,
                     score=score,
                 )
             )
         matches.sort(key=lambda item: (-item.score, item.chunk_id))
         return matches[: request.limit]
+
+
+def _timestamp_version(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()

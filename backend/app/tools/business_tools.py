@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.models import HealthRecordEvent
 from app.providers.mock import build_mock_provider_registry
 from app.providers.registry import ProviderRegistry
-from app.providers.schemas import ProviderRequest
+from app.providers.schemas import ProviderAttemptTrace, ProviderRequest
+from app.core.reliability import ErrorCategory
 from app.rag.retrieval_schemas import RetrievalRequest
 from app.rag.retriever import Retriever, create_knowledge_retriever
 from app.schemas.business import BusinessDomain, SourceRef
@@ -41,9 +42,14 @@ class ProviderToolOutput(ToolContractModel):
     success: bool
     data: dict[str, Any] = Field(default_factory=dict)
     source_refs: list[SourceRef] = Field(default_factory=list)
+    error_type: str | None = None
+    error_category: ErrorCategory | None = None
+    error_message: str | None = None
     retryable: bool = False
     degraded: bool = False
     fallback_reason: str | None = None
+    latency_ms: int = Field(default=0, ge=0)
+    attempts: list[ProviderAttemptTrace] = Field(default_factory=list)
     provider_call: dict[str, Any]
 
 
@@ -277,9 +283,16 @@ def _provider_handler(
                 "request_payload": request.model_dump(mode="json"),
                 "response_payload": response_payload,
                 "success": response.success,
+                "error_type": response.error_type,
+                "error_category": response.error_category,
                 "retryable": response.retryable,
                 "degraded": response.degraded,
                 "fallback_reason": response.fallback_reason,
+                "latency_ms": response.latency_ms,
+                "attempts": [
+                    attempt.model_dump(mode="json")
+                    for attempt in response.attempts
+                ],
             },
         }
 
@@ -313,6 +326,12 @@ def _knowledge_handler(retriever: Retriever):
                 verified=True,
                 source_metadata={
                     "matched_by": list(source.matched_by),
+                    "keyword_score": source.keyword_score,
+                    "vector_score": source.vector_score,
+                    "keyword_rank": source.keyword_rank,
+                    "vector_rank": source.vector_rank,
+                    "rrf_score": source.rrf_score,
+                    "chunk_version": source.chunk_version,
                     "fallback_used": result.fallback_used,
                     "fallback_reason": result.fallback_reason,
                     "embedding_model": result.embedding_model,

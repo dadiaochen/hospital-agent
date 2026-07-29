@@ -12,6 +12,7 @@ htmlcov/
 node_modules/
 .next/
 out/
+output/
 dist/
 build/
 *.log

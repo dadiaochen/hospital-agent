@@ -1,5 +1,7 @@
 # 从零学习本项目
 
+> 学习文档按项目形成过程保留，适合逐步理解旧接口和代码演进。它们不是当前阶段计划或最终架构的权威来源；遇到旧 Agent 名称、`human_confirmation_granted` 或旧阶段号时，请同时对照 [开发总路线图](../DEVELOPMENT_ROADMAP.md) 与 [技术设计](../TECH_DESIGN.md)。
+
 这是一套以当前仓库为案例的工程学习路径。目标不是背框架名词，而是学会从一个模糊需求出发，逐步做出可演示、可测试、可解释的系统，并能在实习面试中讲清自己的设计判断。
 
 ## 建议顺序
@@ -21,6 +23,10 @@
 | [11 3A 前端数据页面](11_3A_FRONTEND_DATA_PAGES.md) | 从 React 状态、HTTP client 和成员上下文读懂 loading/empty/error 与跨成员防线。 | `MemberProvider.tsx`、`client.ts`、各 `page.tsx` |
 | [12 3B Agent UI 与 Trace](12_3B_AGENT_UI_AND_TRACE.md) | 从 POST 请求、幂等和人工确认，读懂来源、安全、冻结 Trace 与 Postman 验证。 | `app/agent/page.tsx`、`AgentRunResult.tsx`、`RunTraceDetails.tsx` |
 | [13 Dify 患者端医疗服务智能体](13_DIFY_PATIENT_HEALTH_AGENT_INTERNSHIP.md) | 还原互联网医院实习业务，设计诊前问诊、慢病复诊、诊后用药和智能舌诊四条工作流，并准备简历与面试表达。 | Dify Chatflow / Workflow、公司已有问诊/处方/购药/舌诊服务 |
+| [14 3D MVP 交付](14_3D_MVP_DELIVERY.md) | 用固定脚本启动、验证和演示后端、前端与 Agent 链路。 | `scripts/demo/`、`docs/DEMO_RUNBOOK.md` |
+| [15 4A 轻量向量 RAG](15_4A_LIGHTWEIGHT_VECTOR_RAG.md) | 理解 FastEmbed、本地索引、pgvector 和关键词降级的组合。 | `backend/app/rag/`、`backend/app/services/knowledge_index_service.py` |
+| [16 4B LLM 双模式](16_4B_LLM_DUAL_MODE.md) | 理解 deterministic provider、OpenAI-compatible provider、结构化输出和 fallback。 | `backend/app/agent/model_gateway.py`、`backend/app/agent/provider.py` |
+| [17 核心代码走读](17_CORE_CODE_WALKTHROUGH.md) | 按真实调用链学习 Planner、Supervisor、领域 Agent、Safety、Context、RAG、Model Gateway、Trace 和 Evaluator 的关键实现。 | `backend/app/agent/`、`backend/app/services/business_task_service.py`、`backend/app/tools/` |
 
 ## 使用方法
 

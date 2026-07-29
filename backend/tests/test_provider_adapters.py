@@ -123,11 +123,15 @@ def test_registry_rejects_provider_response_identity_mismatch(mismatch: str) -> 
 
     registry.register("demo", handler)
 
-    with pytest.raises(ValueError):
-        registry.invoke(
-            "demo",
-            _request(operation="check", business_domain="health_record"),
-        )
+    response = registry.invoke(
+        "demo",
+        _request(operation="check", business_domain="health_record"),
+    )
+
+    assert response.success is False
+    assert response.error_category == "schema"
+    assert response.fallback_reason == "provider_identity_mismatch"
+    assert len(response.attempts) == 1
 
 
 def test_degraded_response_requires_a_fallback_reason() -> None:

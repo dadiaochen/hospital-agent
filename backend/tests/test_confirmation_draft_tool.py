@@ -18,6 +18,7 @@ from app.models import (
     Prescription,
     PurchasePlan,
     RefillPlan,
+    AgentRun,
     User,
 )
 from app.tools.db_tools import create_db_tool_registry
@@ -363,6 +364,55 @@ def test_forbidden_medical_action_language_is_rejected(
     assert result.error_type == "medical_safety_violation"
     assert result.fallback_action == "route_to_safety_agent"
     assert db_session.scalar(select(func.count()).select_from(RefillPlan)) == 0
+
+
+def test_forbidden_phrase_in_trusted_knowledge_evidence_is_not_an_action(
+    registry: ToolRegistry,
+) -> None:
+    result = registry.call(
+        "create_confirmation_draft",
+        _input(
+            payload={
+                "medicine_name": "amlodipine tablets",
+                "prescription_id": FATHER_RX_ID,
+                "plan_detail": {
+                    "knowledge": {
+                        "content": "Policy example: automatic prescription is forbidden.",
+                    }
+                },
+            }
+        ),
+        _context("RefillAgent", FATHER_ID),
+    )
+
+    assert result.success is True
+
+
+def test_tool_failure_does_not_rollback_outer_agent_run(
+    registry: ToolRegistry,
+    db_session: Session,
+) -> None:
+    run = AgentRun(
+        id="outer-run-for-tool-savepoint",
+        user_id=USER_ID,
+        member_id=FATHER_ID,
+        user_goal="prepare a local draft",
+        status="running",
+        safety_result={},
+        raw_state={},
+    )
+    db_session.add(run)
+    db_session.flush()
+
+    result = registry.call(
+        "create_confirmation_draft",
+        _input(summary="Increase dose and prepare the refill automatically."),
+        _context("RefillAgent", FATHER_ID, run_id=run.id),
+    )
+
+    assert result.success is False
+    assert result.error_type == "medical_safety_violation"
+    assert db_session.get(AgentRun, run.id) is not None
 
 
 def test_tool_result_maps_to_trace_without_external_success_claim(

@@ -1,11 +1,17 @@
 from collections.abc import Callable
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from app.core.reliability import RETRYABLE_ERROR_CATEGORIES, classify_error
 from app.schemas.business import SourceRef
-from app.tools.tool_schemas import ToolExecutionContext, ToolResult, ToolSpec
+from app.tools.tool_schemas import (
+    ToolAttemptTrace,
+    ToolExecutionContext,
+    ToolResult,
+    ToolSpec,
+)
 
 
 ToolHandler = Callable[[BaseModel, ToolExecutionContext], BaseModel | dict[str, Any]]
@@ -21,19 +27,26 @@ class ToolExecutionError(Exception):
         error_type: str = "handler_error",
         fallback_action: str = "manual_review",
         schema_valid: bool = True,
+        retryable: bool | None = None,
     ) -> None:
         super().__init__(message)
         self.error_type = error_type
         self.fallback_action = fallback_action
         self.schema_valid = schema_valid
+        self.retryable = (
+            classify_error(error_type) in RETRYABLE_ERROR_CATEGORIES
+            if retryable is None
+            else retryable
+        )
 
 
 class ToolRegistry:
     """Deterministic tool registry contract layer."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, sleeper: Callable[[float], None] = sleep) -> None:
         self._specs: dict[str, ToolSpec] = {}
         self._handlers: dict[str, ToolHandler] = {}
+        self._sleeper = sleeper
 
     def register(self, tool_spec: ToolSpec, handler: ToolHandler) -> None:
         if tool_spec.name in self._specs:
@@ -143,40 +156,101 @@ class ToolRegistry:
                 tool_version=spec.tool_version,
             )
 
-        try:
-            raw_output = self._handlers[tool_name](validated_input, execution_context)
-        except ToolExecutionError as exc:
-            return self._failure(
-                tool_name=tool_name,
-                started=started,
-                error_type=exc.error_type,
-                error_message=str(exc),
-                fallback_action=exc.fallback_action,
-                schema_valid=exc.schema_valid,
-                requires_human_confirmation=spec.requires_human_confirmation,
-                execution_context=execution_context,
-                tool_input=validated_input.model_dump(mode="json"),
-                permission_scope=spec.permission_scope,
-                read_only=spec.read_only,
-                tool_version=spec.tool_version,
-                retryable=exc.error_type in {"timeout", "provider_unavailable"},
-            )
-        except Exception as exc:  # noqa: BLE001 - registry normalizes handler failures.
-            return self._failure(
-                tool_name=tool_name,
-                started=started,
-                error_type="handler_error",
-                error_message=str(exc),
-                fallback_action="use_fallback_action",
-                requires_human_confirmation=spec.requires_human_confirmation,
-                execution_context=execution_context,
-                tool_version=spec.tool_version,
-                retryable=True,
-            )
+        attempts: list[ToolAttemptTrace] = []
+        raw_output: BaseModel | dict[str, Any] | None = None
+        max_attempts = spec.retry_policy.max_attempts if spec.read_only else 1
+        for attempt_no in range(1, max_attempts + 1):
+            attempt_started = perf_counter()
+            try:
+                raw_output = self._handlers[tool_name](
+                    validated_input,
+                    execution_context,
+                )
+            except ToolExecutionError as exc:
+                category = classify_error(exc.error_type)
+                can_retry = (
+                    spec.read_only
+                    and exc.retryable
+                    and category in RETRYABLE_ERROR_CATEGORIES
+                    and attempt_no < max_attempts
+                )
+                attempts.append(
+                    ToolAttemptTrace(
+                        attempt_no=attempt_no,
+                        success=False,
+                        latency_ms=self._elapsed_ms(attempt_started),
+                        error_type=exc.error_type,
+                        error_category=category,
+                        retryable=can_retry,
+                    )
+                )
+                if can_retry:
+                    if spec.retry_policy.backoff_ms:
+                        self._sleeper(spec.retry_policy.backoff_ms / 1000)
+                    continue
+                return self._failure(
+                    tool_name=tool_name,
+                    started=started,
+                    error_type=exc.error_type,
+                    error_message=str(exc),
+                    fallback_action=exc.fallback_action,
+                    schema_valid=exc.schema_valid,
+                    requires_human_confirmation=spec.requires_human_confirmation,
+                    execution_context=execution_context,
+                    tool_input=validated_input.model_dump(mode="json"),
+                    permission_scope=spec.permission_scope,
+                    read_only=spec.read_only,
+                    tool_version=spec.tool_version,
+                    retryable=False,
+                    attempts=attempts,
+                )
+            except Exception:  # noqa: BLE001 - registry hides raw handler errors.
+                attempts.append(
+                    ToolAttemptTrace(
+                        attempt_no=attempt_no,
+                        success=False,
+                        latency_ms=self._elapsed_ms(attempt_started),
+                        error_type="handler_error",
+                        error_category="internal",
+                        retryable=False,
+                    )
+                )
+                return self._failure(
+                    tool_name=tool_name,
+                    started=started,
+                    error_type="handler_error",
+                    error_message="tool handler failed",
+                    fallback_action="use_fallback_action",
+                    requires_human_confirmation=spec.requires_human_confirmation,
+                    execution_context=execution_context,
+                    tool_input=validated_input.model_dump(mode="json"),
+                    permission_scope=spec.permission_scope,
+                    read_only=spec.read_only,
+                    tool_version=spec.tool_version,
+                    retryable=False,
+                    attempts=attempts,
+                )
+            else:
+                attempts.append(
+                    ToolAttemptTrace(
+                        attempt_no=attempt_no,
+                        success=True,
+                        latency_ms=self._elapsed_ms(attempt_started),
+                    )
+                )
+                break
 
         try:
             validated_output = spec.output_schema.model_validate(raw_output)
         except ValidationError as exc:
+            attempts[-1] = ToolAttemptTrace(
+                attempt_no=attempts[-1].attempt_no,
+                success=False,
+                latency_ms=attempts[-1].latency_ms,
+                error_type="output_schema_error",
+                error_category="schema",
+                retryable=False,
+            )
             return self._failure(
                 tool_name=tool_name,
                 started=started,
@@ -186,7 +260,11 @@ class ToolRegistry:
                 schema_valid=False,
                 requires_human_confirmation=spec.requires_human_confirmation,
                 execution_context=execution_context,
+                tool_input=validated_input.model_dump(mode="json"),
+                permission_scope=spec.permission_scope,
+                read_only=spec.read_only,
                 tool_version=spec.tool_version,
+                attempts=attempts,
             )
 
         output = validated_output.model_dump()
@@ -194,19 +272,42 @@ class ToolRegistry:
             SourceRef.model_validate(item)
             for item in output.get("source_refs", [])
         ]
+        semantic_success = output.get("success") is not False
+        if not semantic_success:
+            error_type = str(output.get("error_type") or "provider_unavailable")
+            attempts[-1] = ToolAttemptTrace(
+                attempt_no=attempts[-1].attempt_no,
+                success=False,
+                latency_ms=attempts[-1].latency_ms,
+                error_type=error_type,
+                error_category=classify_error(error_type),
+                retryable=False,
+            )
+        else:
+            error_type = None
+
         return ToolResult(
             tool_name=tool_name,
             tool_version=spec.tool_version,
             provider_mode=execution_context.provider_mode,
-            success=True,
+            success=semantic_success,
             output=output,
             run_id=execution_context.run_id,
             agent_role=execution_context.agent_role,
             member_id=execution_context.member_id,
             tool_input=validated_input.model_dump(mode="json"),
-            error_type=None,
-            error_message=None,
-            fallback_action=None,
+            error_type=error_type,
+            error_category=(classify_error(error_type) if error_type else None),
+            error_message=(
+                str(output.get("error_message"))
+                if output.get("error_message")
+                else None
+            ),
+            fallback_action=(
+                str(output.get("fallback_reason"))
+                if output.get("fallback_reason")
+                else None
+            ),
             latency_ms=self._elapsed_ms(started),
             schema_valid=True,
             requires_human_confirmation=spec.requires_human_confirmation,
@@ -214,6 +315,7 @@ class ToolRegistry:
             or bool(evidence_refs),
             evidence_refs=evidence_refs,
             retryable=False,
+            attempts=attempts,
             source_name=output.get("source_name", tool_name),
             permission_scope=spec.permission_scope,
             read_only=spec.read_only,
@@ -236,6 +338,7 @@ class ToolRegistry:
         read_only: bool = True,
         tool_version: str = "v1",
         retryable: bool = False,
+        attempts: list[ToolAttemptTrace] | None = None,
     ) -> ToolResult:
         return ToolResult.failure(
             tool_name=tool_name,
@@ -256,6 +359,7 @@ class ToolRegistry:
             permission_scope=permission_scope,
             read_only=read_only,
             retryable=retryable,
+            attempts=attempts,
         )
 
     @staticmethod

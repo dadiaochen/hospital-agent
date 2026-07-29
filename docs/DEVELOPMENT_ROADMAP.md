@@ -1,242 +1,483 @@
 # Development Roadmap
 
-## 1. 文档地位
+## 1. 唯一权威
 
-本文档是项目阶段编号、状态、依赖关系和实施顺序的唯一权威来源。
+本文档是项目阶段编号、状态、依赖关系、实施顺序和完成标准的唯一权威来源。
 
-- `README.md`、`NEXT_STEPS.md` 和子系统文档只能引用本文档。
-- 未先更新本文档，不得新增阶段编号、改变顺序或把规划写成已完成能力。
-- 每次只允许一个 `NEXT` 阶段。
+- `README.md` 只展示当前能力和入口，不维护另一套路标。
+- 子系统文档只解释本领域设计，不新增阶段编号或改变任务状态。
+- 已实现、正在实现和计划能力必须分开表述。
+- 同一时间只允许一个 `NEXT`；完成当前任务后才能移动 `NEXT`。
+- Git 历史保留已经完成的阶段事实，不为“最终架构看起来整齐”而改写过去。
 
-## 2. 产品目标
+## 2. 产品定位
 
-项目从原有“四个家庭用药演示场景”升级为面向患者端的家庭健康服务 Multi-Agent 系统，复用已完成的互联网医院 Agent 基础设施，逐步支持三条业务主线：
+项目定位为：
 
-1. 智能预问诊与分级导诊：整理主诉与就诊材料，给出科室或就医路径建议，不做疾病诊断。
-2. 家庭医生、慢病与用药履约：管理家庭成员、复诊材料、处方药续方准备、购药候选、用药提醒与用药安全确认。
-3. 报告解读与长期健康档案：解析检查、体检、中医和舌诊报告，解释指标并沉淀有来源的健康事件，不替代医生结论。
+> 面向家庭健康场景的有界多 Agent 系统。简单单领域请求直接进入领域 Agent；复杂跨领域请求由一次性 TaskPlanner 拆解，再由串行 bounded Supervisor 协调三个领域 Agent。系统通过 Tool Registry、RAG 溯源、三层安全治理、人工确认、成员隔离和 Evaluation Harness，形成可追踪、可回放、可测试的业务闭环。
 
-系统不是 AI 医生，不诊断、不自动开方、不修改医生处方、不建议用户自行调整剂量。复诊、购药、提醒和健康档案写入等关键动作必须经过用户确认。
+三条业务线：
 
-## 3. 已完成基础
+1. 智能预问诊与分级导诊：整理主诉、识别缺失信息和红旗症状，提供就医路径准备，不诊断疾病。
+2. 家庭医生、慢病与用药履约：整理处方、药箱、续方、购药候选和提醒草稿，不开方、不改剂量、不自动下单。
+3. 报告解读与长期健康档案：解析报告、解释指标、整理趋势和健康事件草稿，不把模型解释写成诊断事实。
 
-原项目 1 至 3B 已完成，作为新产品线共享基础保留：
+系统不是 AI 医生，不诊断、不自动开方、不修改处方，不建议用户自行加量、减量、停药或换药。当前产品不执行真实医院、药店、支付或通知系统写操作。
 
-| 能力 | 现状 |
-| --- | --- |
-| 工程骨架 | FastAPI、Next.js、PostgreSQL、Redis、Docker |
-| 数据层 | SQLAlchemy、Alembic、seed、家庭成员与用药相关模型 |
-| API | 家庭成员、药箱、处方、知识、草稿确认、Agent Run 与 Trace |
-| Agent 基础设施 | Tool Registry、ContextEnvelope、Model Gateway、LangGraph 有界工作流 |
-| 安全与确认 | 运行时 Agent 安全、人工确认门、成员隔离 |
-| RAG | 关键词检索基线与可选向量检索，返回基础来源信息 |
-| 评测 | DeterministicEvaluator、16 条基线用例、Harness 报告 |
-| 前端 | 家庭数据、Agent 对话、确认与 Trace 页面 |
-
-这些能力已经围绕续方、提醒、购药和高风险拦截跑通，但尚未覆盖新规范中的三条完整业务主线、统一 Provider Adapter、通用 `SourceRef` 和新版 RAG 评测指标。
-
-## 4. 共享产品决策
-
-| 决策 | 选择 | 约束 |
-| --- | --- | --- |
-| 交付级别 | 成熟、可完整运行与部署的 Agent 产品 | 不伪装生产医院能力，不虚构外部系统结果 |
-| 外部系统 | Provider Adapter | `mock`、`sandbox`、`real` 三种模式显式区分 |
-| 模型策略 | 真实模型 + deterministic provider | CI 和无 Key 环境可离线运行 |
-| 用户与家庭 | 固定 demo user，严格 `member_id` 隔离 | 不实现完整登录系统 |
-| 关键动作 | 先生成草稿，再由用户确认 | 不直接提交医院、药店或通知系统 |
-| RAG | 最终以向量语义检索为主要召回，关键词用于精确匹配与降级兜底 | 默认混合检索并重排，医疗解释和规则结论必须可追溯 |
-| Agent 工作流 | 有界状态图 | 不实现无限自主循环 |
-
-## 5. RAG 目标与契约
-
-RAG 解决四类核心问题：
-
-1. 降低幻觉：医疗流程、安全规则和指标解释不依赖模型记忆。
-2. 知识可更新：通过更新知识文档和版本调整规则，不重新训练模型。
-3. 答案可追溯：关键解释关联 `SourceRef`、文档版本和检索方式。
-4. 方便评测：EvaluatorAgent 可以检查知识是否命中、证据是否覆盖回答。
-
-所有检索结果最终统一映射为 `SourceRef`，至少包含：
-
-- `source_id`
-- `source_type`
-- `document_id`
-- `document_version`
-- `chunk_id`
-- `retrieval_mode`
-- `provider`
-- `member_id`
-- `verified`
-
-事实优先级为：医生确认或权威医疗文档 > 结构化数据库 > 用户明确陈述 > 审核后的知识库 > Agent 推断。Agent 推断不能写成患者事实。
-
-评测层必须逐步增加：
-
-- Knowledge Retrieval Recall
-- Evidence Coverage
-- 引用正确率
-- 无来源医疗结论率
-- 检索降级率
-- RAG 命中后任务完成率
-
-未真实运行的指标只能标为“定义”或“目标”，不能写成已达成结果。
-
-## 6. 状态说明
+## 3. 状态定义
 
 | 状态 | 含义 |
 | --- | --- |
-| `DONE` | 代码、测试和文档已经验证 |
-| `NEXT` | 唯一允许立即开始的阶段 |
-| `PLANNED` | 已定义但前置阶段未完成 |
-| `OUT` | 明确不属于当前项目范围 |
+| `DONE` | 代码、测试、文档和必要运行验证均已完成 |
+| `NEXT` | 当前唯一允许开始的任务 |
+| `PLANNED` | 已确定范围，但前置任务尚未完成 |
+| `OUT` | 明确不属于当前最终产品范围 |
 
-## 7. 总体阶段
+设计文档完成不等于代码完成；fixture/mock 结果不等于真实模型、生产或临床指标。
 
-旧阶段 1 至 3B 均为 `DONE`。产品升级后的实施只保留 `4A`、`4B` 和最终交付阶段 `4C`。
+## 4. 最终架构决策
 
-| 阶段 | 状态 | 目标 | 核心验收 |
+### 4.1 路由和编排
+
+- 先通过可信身份、`user_id + member_id + resource_id` 和请求前 Safety Guard。
+- Complexity/Intent Router 将请求分为简单单领域与复杂跨领域。
+- 简单请求直接进入 `TriageAgent`、`MedicationAgent` 或 `ReportAgent`，不调用 Planner，不进入 Supervisor 循环。
+- 复杂请求才调用一次性 `TaskPlanner`，最多生成 3 个有依赖关系的步骤。
+- 串行 bounded Supervisor 只执行计划：选择下一个满足依赖的业务角色，处理有限重试、降级和终止；不得修改用户目标、成员、治理策略或产生计划外角色。
+- 业务 Agent 统一返回 `AgentTaskResult`，不能直接调用其他 Agent。
+- 不实现 Agent 级并行调度或复杂自动重规划。领域 Agent 内部对无依赖、只读的 Provider、数据库和 RAG 查询可以受控异步并发。
+
+### 4.2 三个领域 Agent
+
+| Agent | 有限决策 | 禁止能力 |
+| --- | --- | --- |
+| `TriageAgent` | 选择需要补充的槽位、查询档案/导诊规则、完成/澄清/阻断 | 诊断疾病、修改红旗症状硬规则、绕过急诊提示 |
+| `MedicationAgent` | 选择查询处方、药箱、药店或续方规则，决定草稿类型 | 修改处方、改变剂量、凭模型生成库存事实 |
+| `ReportAgent` | 选择解析报告、读取历史指标、检索指标知识或转人工 | 篡改报告原文、无来源补医学结论 |
+
+现有 `ProfileAgent`、`RefillAgent`、`PharmacyAgent`、`ReminderAgent` 在最终架构中收敛为 Medication 领域内的步骤、能力或 Tool，不再作为独立 Agent 增加层级。
+
+### 4.3 模型参与边界
+
+- 无 Key、CI 和自动测试使用 deterministic policy/provider。
+- 配置真实模型时，Router、TaskPlanner、三个领域 Agent 和 Supervisor 只能在固定候选项内输出结构化决策。
+- 模型不能自由生成角色名、工具名、身份字段、状态迁移或医疗动作。
+- 所有模型决策必须经过 Pydantic schema、角色/工具白名单、步骤依赖、成员权限、最大步数和安全策略校验。
+- Model Gateway 继续负责 provider、timeout、schema、安全检查和 deterministic fallback；未经校验的 provider 原文不得进入状态或用户答案。
+
+### 4.4 三层安全治理
+
+1. **Request Safety Guard**：在普通业务执行前拦截严重症状、改剂量、停换药、越权成员访问和绕过规则请求。
+2. **Action Policy Guard**：在草稿写入、确认和任何受保护工具前检查角色权限、成员、动作类型、版本、幂等键和确认状态。
+3. **Final Output SafetyAgent**：在用户可见候选答案冻结前检查诊断、处方、剂量、无来源结论和危险表达。
+
+SafetyAgent 属于治理层，不是 Supervisor 的候选业务角色。EvaluatorAgent 在答案和证据冻结后只读评估，也不能被 Supervisor 跳过。
+
+### 4.5 草稿与确认
+
+- Agent 可以自动创建本地、可审计的 `DRAFT`；创建草稿不代表外部业务已执行。
+- 用户只确认真正的执行动作，不确认“是否允许生成草稿”。
+- 状态机：`DRAFT -> CONFIRMED -> EXECUTED`，旁路终态为 `REJECTED / EXPIRED / FAILED`。
+- 当前 `EXECUTED` 只表示契约允许的本地状态迁移，`external_action_status` 保持 `not_submitted`。
+- 相同幂等键和相同请求返回首次结果；相同幂等键和不同请求返回冲突。
+- 并发确认由 PostgreSQL 行锁或条件更新保证只有一次合法迁移。
+
+待确认任务采用同一 `task_id` 下两次独立 run：首次 run 冻结 `DRAFT`、答案和证据后结束；用户确认时创建 continuation run，从 PostgreSQL Task Checkpoint 恢复进度、重新读取必要事实，再执行允许的本地状态迁移。
+
+### 4.6 最终分层状态架构
+
+| 层 | 作用 | 权威性 |
+| --- | --- | --- |
+| LangGraph Run Working State | 单次 run 的 ContextEnvelope、调度游标和临时角色结果 | 临时；run 后 reset |
+| PostgreSQL Task Checkpoint | RunSummary、步骤进度、确认记录、冻结产物和用户确认偏好 | 权威存储 |
+| Redis Short-lived Task Cache | TTL 任务缓存、短期 checkpoint 加速和多实例协调 | 非权威；故障时回源 PostgreSQL |
+| PostgreSQL + pgvector Knowledge RAG | 独立、版本化、已审核的医疗知识和 SourceRef | 知识来源，不是个人记忆 |
+
+系统不保存长期完整聊天，不建立个人健康向量记忆。处方、报告原值、过敏史、药箱和库存是业务事实，每次 run 必须从业务数据库或 Provider 重新读取。用户偏好只允许在明确确认、成员绑定、来源和版本齐全时写入 PostgreSQL。
+
+### 4.7 Provider、RAG 和观测范围
+
+- 当前已有七个兼容 mock adapter；最终验收只做深 `MedicalDocumentParserProvider`、`PharmacyProvider`、`HospitalOrConsultationProvider` 三类，其余不扩展为空壳能力。
+- RAG 保留 PostgreSQL、pgvector、FastEmbed、Keyword Retriever、RRF、SourceRef、版本校验和关键词降级。
+- HNSW 只描述为可扩展索引路径；没有真实基准前，不宣称性能提升。
+- 使用现有 RunTrace/结构化 observation 字段记录 request、run、node、tool、latency、error、retry、fallback、source、model 和 token。
+- 不实现 MCP Server、OpenTelemetry/Jaeger。LLM Judge 仅可作为离线辅助实验，不进入运行链路，也不是验收硬门槛。
+
+## 5. 已完成阶段账本
+
+| 阶段 | 状态 | 已验证结果 |
+| --- | --- | --- |
+| 1 | `DONE` | 产品范围、基础页面和项目骨架 |
+| 2A / 2A.1 | `DONE` | SQLAlchemy、Alembic、seed、模型测试与 Agent trace 字段 |
+| 2A.2 | `DONE` | Context Lifecycle、Reset/Compaction 和 EvaluatorAgent 设计 |
+| 2B | `DONE` | Pydantic Agent 契约、16 条 fixture、deterministic evaluator、HarnessRunner、ContextManager |
+| 2C–2G | `DONE` | Tool Registry、读取/草稿 API、Hybrid RAG、Model Gateway、LangGraph DAG、Runtime API 和持久化 |
+| 3A | `DONE` | Next.js 家庭数据页面 |
+| 3B | `DONE` | Agent UI、确认续跑与 Trace/Evaluation 展示 |
+| 3C | `DONE` | Runtime E2E Harness 与真实本地冻结 Trace 回放 |
+| 3D | `DONE` | Docker Compose MVP、固定演示脚本和脱敏报告 |
+| 4A | `DONE` | 产品重基线、SourceRef/Provider Mode、FastEmbed + pgvector 路径和知识版本元数据 |
+
+## 6. 最终阶段
+
+| 阶段 | 状态 | 目标 |
+| --- | --- | --- |
+| 4B | `DONE` | 完成可靠后端 Agent：最终契约、三领域 Agent、按需 Planner、bounded Supervisor、安全/确认、状态缓存、Provider/RAG 可靠性和 32 条评测 |
+| 4C | `NEXT` | 完成患者端、浏览器 E2E、黄金演示和最终交付；4C 完成后不再新增必要产品阶段 |
+
+## 7. 4B 任务拆分与审计
+
+任务一至四保留真实完成历史；此前过重的“任务五”已按 grill-me 决策拆分为可独立验收的任务五至十三。
+
+| 任务 | 状态 | 目标 | 关键验收 |
 | --- | --- | --- | --- |
-| 4A | `DONE` | 产品重基线与共享业务契约 | 当前状态审计、三条业务线、Provider 模式、`SourceRef` 和 RAG 指标定义一致 |
-| 4B | `NEXT` | 完整后端 Agent 能力 | Provider、工具、向量优先 RAG、三条 LangGraph 业务子图、API、持久化、安全与评测后端全部跑通 |
-| 4C | `PLANNED` | 完整产品交付 | 成熟患者端、完整前后端闭环、E2E、评测、Docker 部署、可观测性和项目材料一次性收口 |
+| 1. 整理 Git 线性历史 | `DONE` | 保护旧成果并把 4B 放到线性基线上 | 当前分支从 `2571f91` 线性延伸，存在备份分支和 stash |
+| 2. 解决 Alembic 冲突 | `DONE` | 统一迁移链和向量维度 | 当前唯一链 `0001 -> ... -> 0007`，pgvector 为 512 维 |
+| 3. 统一向量 RAG | `DONE` | FastEmbed/pgvector + 关键词降级 | canonical embedding、HNSW、版本/hash/schema 和 SourceRef 已有离线回归 |
+| 4. 接通新业务 Model Gateway | `DONE` | 新业务子图支持 deterministic/真实模型双模式 | 三条业务分支已接 Gateway；无 Key 可运行，失败保留 trace/fallback |
+| 5. 最终契约与复杂度路由 | `DONE` | 冻结目标角色和结构化决策契约 | 新契约、deterministic Router、简单/复杂/高风险/歧义 gold cases 和旧工作流回归通过 |
+| 6. 三领域 Agent 与 bounded Supervisor | `DONE` | 实现简单直达和复杂任务串行协作 | 三 Agent 各有有限决策点；Planner 最多 3 步；非法角色、依赖、超步数失败；无 Agent 级并行/自由重规划 |
+| 7. 三层安全与确认状态机 | `DONE` | 消除 Safety 顺序和双重确认矛盾 | Request/Action/Output 三层门禁；自动 DRAFT；只确认执行；幂等、并发、越权和阻断测试通过 |
+| 8. 分层状态与两次 run 续跑 | `DONE` | PostgreSQL 权威 checkpoint + Redis TTL cache | 首次/continuation run 同 task；Redis 丢失回源 PostgreSQL；不恢复 scratchpad；偏好写入需确认 |
+| 9. Tool 与三类 Provider 可靠性 | `DONE` | 统一错误、有限重试和三个重点 Provider | 参数/权限错误不重试；timeout/429/可恢复 5xx 有限重试；三个 Provider 的 mock/degraded/schema/source 测试通过 |
+| 10. RAG、成员隔离与可观测性补强 | `DONE` | RRF、来源决策、攻击式隔离和排障 Trace | keyword/vector/RRF/fallback、过期版本、跨成员资源攻击、缓存污染和脱敏 observation 测试通过 |
+| 11. 32 条 Harness 与消融实验 | `DONE` | 用冻结业务 RunTrace 评测三种架构 | 32 条分类完整；A/B/C 共享模型、工具目录、RAG、安全、确认和 token 上限；可重复报告已生成 |
+| 12. PostgreSQL/Redis/Docker 后端验收 | `DONE` | 验证迁移、缓存回源、并发确认、API 和真实 wall-clock | Docker PostgreSQL/Redis/FastAPI/Next.js、migration/seed、RAG 索引、Redis 故障、并发状态机和三业务 API 已通过 |
+| 13. 4B 文档与 Git 收口 | `DONE` | 校准事实、报告并建立回滚点 | 文档无竞争路线图；真实指标复核；完整测试通过；4B tag 已创建并合并 main |
 
-## 8. 阶段详细定义
+### 7.1 任务五：最终契约与复杂度路由
 
-### 4A 产品重基线与共享业务契约
+状态：`DONE`。本任务只冻结边界和确定性路由，没有修改旧 LangGraph 图，也没有实现 Supervisor 或领域 Agent。
 
-目标：
+交付：
 
-- 以新产品规范和当前代码完成度重写产品边界。
-- 定义三条业务域、Provider 模式和通用 `SourceRef`。
-- 在现有 Tool Registry 契约中增加兼容字段，不实现外部 Provider。
-- 合并重复、过时文档，建立新的文档导航。
+- `ComplexityRoute`：`simple_single_domain` 或 `complex_cross_domain`，包含目标领域和理由码。
+- `TaskPlan`：只为复杂请求生成，最多 3 个步骤，每步有 `step_id/role/objective/dependencies`。
+- `AgentTaskResult`：统一返回 `status/facts/source_refs/tool_calls/missing_information/requested_confirmation/failure_reason`。
+- `SupervisorDecision`：只允许 `call_role/retry/degrade/finish/stop`，包含 step、role、依赖和终止原因。
+- `SafetyDecision`：区分 request、action 和 final-output 三种治理阶段。
+- 三个目标领域角色的契约枚举、允许工具和完成条件边界。
 
-验收：
+已实现文件：
 
-- 新旧能力差异有审计记录。
-- 代码中的共享契约可导入并有最小测试。
-- 旧功能测试不因兼容字段而失败。
-- RAG 的四个目标和六项评测指标进入正式设计。
-
-非目标：新业务 API、Provider 实现、新 LangGraph 子图、前端业务页面。
-
-### 4B 完整后端 Agent 能力
-
-目标：
-
-- 实现 Hospital、Pharmacy、Online Consultation、Geo、Notification、Medical Document Parser 和 Medical Vision Provider Adapter。
-- 所有 Provider 支持 `mock`；存在可用测试环境或正式接口时，通过相同契约启用 `sandbox` 或 `real`。
-- 升级 Tool Registry，使工具输出统一携带 `tool_version`、`provider_mode`、`SourceRef`、`retryable`、降级原因和 Trace。
-- 接入 Embedding provider 与向量索引，以语义向量检索承担主要召回；关键词检索负责精确匹配和降级兜底；默认完成混合检索、去重、重排、正文回填和版本校验。
-- 实现智能预问诊与分级导诊、家庭医生与慢病用药、报告解读与长期健康档案三条 LangGraph 有界业务子图。
-- 提供三条业务线的正式 API、任务续跑、草稿确认、来源查询和运行记录查询。
-- 持久化业务任务、Provider 调用、知识版本、来源引用、确认记录、RunTrace 和评测结果。
-- 复用统一 ContextEnvelope、Tool Registry、RAG、Agent 安全、确认门、RunTrace 和 EvaluatorAgent。
+- `backend/app/agent/orchestration_schemas.py`
+- `backend/app/agent/complexity_router.py`
+- `backend/app/agent/safety.py`：增加 request/action/final-output 阶段和标准 outcome。
+- `backend/tests/test_orchestration_contracts.py`
+- `backend/tests/test_complexity_router.py`
 
 验收：
 
-- 不可用的真实集成返回结构化降级，不伪造实时结果。
-- 权限、成员隔离、超时、重试、确认门和输出 schema 测试通过。
-- 关键词、向量、混合检索、重排及降级路径可离线验证。
-- 每条子图有明确输入、状态、终止条件、异常路径和用户确认点。
-- 医疗事实来自数据库、Provider 或 RAG；报告解释逐条关联 `SourceRef`。
-- 不允许自动诊断、开方、改剂量或执行外部关键动作。
-- deterministic + mock 模式下可完整跑通；配置外部能力后可切换 sandbox/real，不修改上层业务代码。
-- 后端单元测试、集成测试、迁移、seed 和三条业务线 API 回归通过。
+- 简单任务不会创建 TaskPlan，也不会进入 Supervisor 循环。
+- 复杂任务计划最多 3 步，角色只能是 Triage/Medication/Report。
+- 模型只输出固定候选决策；非法字段、角色、工具或成员覆盖被拒绝。
+- 当前旧角色保留兼容读取，但在目标工作流中不再作为独立 Agent 路由。
+- deterministic Router 不访问数据库、LLM、Provider、Tool Registry 或 LangGraph；它只读取结构化身份、成员和用户输入。
 
-### 4C 完整产品交付
+验证命令：
 
-目标：
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_orchestration_contracts.py backend\tests\test_complexity_router.py backend\tests\test_agent_contract_schemas.py backend\tests\test_langgraph_workflow.py -q -p no:cacheprovider --basetemp=var\pytest\4b-task5
+```
 
-- 建设面向患者的成熟前端，完整覆盖智能预问诊、家庭慢病用药和报告解读三条业务线。
-- 患者端展示家庭成员、任务进度、工具结果、证据来源、安全提示、待确认动作、降级状态和运行记录。
-- 页面完整覆盖 loading、empty、error、degraded、confirmation、resume 和 completed 状态。
-- 扩展评测集，覆盖三条业务线、工具异常、跨成员串扰、无来源结论和 RAG 降级。
-- 在现有 Agent 评测指标上加入六项 RAG 指标，使用真实 RunTrace 和来源引用执行 E2E 与 Harness。
-- 完成 Docker 一键启动、健康检查、结构化日志、关键链路观测、README、简历和面经事实校准。
-- 删除临时页面、重复契约和仅用于过渡的实现，使仓库达到最终交付状态。
+### 7.2 任务六：三领域 Agent 与 bounded Supervisor
+
+状态：`DONE`。本任务实现了不依赖外部系统的确定性领域编排内核；它消费任务五冻结的 `ComplexityRoute`、`TaskPlan`、`AgentTaskResult` 和 `SupervisorDecision`，不接入真实工具、Provider、数据库或 LangGraph。
+
+目标运行链：
+
+```text
+trusted scope -> request safety -> complexity router
+  -> simple: domain agent
+  -> complex: one-shot TaskPlanner -> serial bounded Supervisor -> domain agents
+  -> compose candidate -> final output safety
+```
+
+- Supervisor 不直接调用 Tool、不生成医疗回答、不修改计划目标。
+- 每个 AgentTaskResult 必须回到 Supervisor；Agent 之间不得直接 handoff。
+- 默认 deterministic；真实模型决策失败、越权或 schema 不合法时进入结构化失败或 deterministic fallback。
+- `max_plan_steps=3`、`max_supervisor_steps` 和每角色最大调用次数必须配置并进入 Trace。
+- 领域 Agent 内只允许对相互独立的只读查询使用受控异步并发；写状态仍串行进入 Policy Guard。
+
+已实现：
+
+- `TriageAgent`：只结构化预问诊/安全复核任务；歧义输入返回 `needs_clarification`，不生成诊断事实。
+- `MedicationAgent`：只准备处方、药箱、库存、续方和提醒工作流的结构化草稿要求；关键动作标记需确认，不执行写操作。
+- `ReportAgent`：只结构化报告任务并标记需要来源，不生成无来源医学结论。
+- `DeterministicTaskPlanner`：仅接受复杂路由，一次性按冻结角色顺序生成最多 3 步串行依赖。
+- `DeterministicBoundedSupervisor`：简单路由直达一个 Agent；复杂路由按依赖串行执行，支持有限重试、降级、澄清、失败和超步数终止。
+- `DomainAgentInput`：只传任务摘要、冻结路由、当前步骤、角色工具白名单和结构化前序结果，不传完整聊天历史。
+- `OrchestrationRunResult`：冻结路由、计划、Agent 结果、Supervisor 决策和终止原因，作为后续 Safety/Checkpoint/Trace 接入边界。
+
+实现文件：
+
+- `backend/app/agent/domain_agents.py`
+- `backend/app/agent/orchestration.py`
+- `backend/app/agent/orchestration_schemas.py`
+- `backend/app/agent/__init__.py`
+- `backend/tests/test_domain_orchestration.py`
 
 验收：
 
-- 三条业务线从 UI 发起后均完成 API、Agent、工具、RAG、Agent 安全、人工确认和结果展示的完整闭环。
-- 成员切换不串档案、报告、处方、来源或记忆。
-- 六项 RAG 指标和原有 Agent 指标可从固定数据集重复计算。
-- LLM Judge 不作为唯一评判依据，关键安全与引用指标采用确定性校验。
-- UI、API、Harness、成员隔离、安全回归和浏览器 E2E 全部通过。
-- 无模型 Key、无外部系统时可用 deterministic + mock 完整演示；配置真实能力后无需修改业务代码即可切换。
-- Docker Compose 能启动成熟前后端及依赖，演示流程与文档一致。
-- 本阶段完成即代表当前产品范围全部完成，不再保留待实现的后续产品阶段。
+- 简单请求不创建 `TaskPlan`，不产生 Supervisor 决策；复杂请求只创建一次 Planner 并串行执行。
+- 角色只能来自 Triage/Medication/Report 白名单；角色工具只能来自对应 allowlist。
+- 计划依赖只能指向前序步骤；最大计划步数、Supervisor 总步数和每角色调用次数均有上限。
+- Agent 只能返回 `AgentTaskResult`；重试、降级、澄清和失败都有结构化 `SupervisorDecision` 与终止原因。
+- 任务和 `member_id` 在路由、Agent 输入、前序结果和聚合结果之间保持一致。
+- 本任务没有把 Tool/Provider 查询结果伪装成事实，也没有宣称真实医疗质量或线上性能指标。
 
-## 9. 4B 剩余任务拆分与审计
+验证命令：
 
-本节是 4B 后端收口的唯一子任务清单。任务状态与阶段状态分开管理：
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_domain_orchestration.py backend\tests\test_orchestration_contracts.py backend\tests\test_complexity_router.py -q -p no:cacheprovider --basetemp=var\pytest\4b-task6
+```
 
-| 子任务状态 | 含义 |
-| --- | --- |
-| `DONE` | 代码、测试、文档和必要的运行验证已经完成 |
-| `IN_PROGRESS` | 已开始实现，仍有明确验收项未完成 |
-| `TODO` | 已定义但尚未开始，不能在简历或 README 中写成已完成 |
+### 7.3 任务七：安全和确认
 
-| 任务 | 目标 | 当前审计状态 | 已核对的事实或剩余验收 |
-| --- | --- | --- | --- |
-| 任务一：整理 Git 线性历史 | 保护未提交工作，建立备份点，以 `2571f91` 为旧开发线基线，把 4B 工作线性放在其后 | `DONE` | 当前分支历史从 `2571f91` 线性延伸；已建立 `codex/backup-before-rag-model-gateway`；已有 `refs/stash` 保留早期工作树。当前审计未发现已修改的跟踪文件，`output/` 未跟踪产物保持原样。 |
-| 任务二：解决 Alembic 迁移冲突 | 统一旧 pgvector 与新业务运行表的迁移链，解决向量维度冲突 | `DONE` | 当前链为 `0001 -> 0002 -> 0003 -> 0004 -> 0005 -> 0006`；`0003` 唯一负责向量字段，PostgreSQL 使用 `Vector(512)`，配置与 FastEmbed 契约统一为 512 维，`0006` 增加可回滚的 HNSW 索引。 |
-| 任务三：统一向量 RAG 实现 | 形成 FastEmbed + PostgreSQL pgvector + 关键词降级双模式，补齐真实索引、版本校验、来源引用和降级测试 | `DONE` | 已统一 canonical embedding provider、indexer 和 pgvector backend；FastEmbed 为可选向量模式，关键词检索为安全降级；内容 hash 同时绑定 schema/model/dimension，检索结果保留 provider、模型、维度、schema 和来源 metadata；`0006` 提供 PostgreSQL HNSW 索引，离线回归覆盖降级和契约。真实 PostgreSQL 索引质量仍属于任务七验收。 |
-| 任务四：接通新业务 Model Gateway | 将统一 Model Gateway 接入预问诊、慢病用药、报告解读三条新业务子图，并保留无 Key deterministic fallback | `DONE` | `FamilyHealthProductWorkflow` 三条业务子图均通过统一 Gateway 生成结构化 `WorkflowFinalAnswerDraft`；无 Key 默认 deterministic，支持 primary/fallback trace 和失败降级；SafetyAgent 阻断路径不绕过安全门，业务响应暴露脱敏 `model_call_trace`。真实外部模型质量不在本任务的验收范围内。 |
-| 任务五：完成 Provider 和业务 API 验收 | 补齐超时、重试、权限、输出 schema、成员隔离、错误映射和幂等确认验收 | `TODO` | Provider mock/degraded 契约已有基础测试；任务三、四已稳定，完整 API 回归、异常组合和幂等确认验收是当前下一项工作。 |
-| 任务六：扩展新业务 Harness 评测 | 为三条新业务线增加 fixture，将真实业务 RunTrace 接入 deterministic evaluator | `TODO` | 现有 Harness 主要覆盖旧基线和 mock trace；三条新业务线的来源、确认、安全和成员隔离指标尚未形成固定评测集。 |
-| 任务七：PostgreSQL 与 Docker 全链路验证 | 执行迁移、seed、三条业务 API、RAG 索引和 Docker 启动回归 | `TODO` | 已做过基础 PostgreSQL/Docker smoke，但不能代替任务三、四完成后的全链路验收。 |
-| 任务八：文档和 Git 收口 | 同步开发、API、数据库、RAG、Agent、安全、部署和学习文档，测试通过后打 tag 并合并 main | `TODO` | 任务一至四已有代码、离线测试或历史证据；任务五至七完成并完成文档复核后，才能将 4B 标为 `DONE`。 |
+状态：`DONE`。任务七没有修改 ORM、Alembic、seed 或前端；它在现有业务任务 runtime 上增加了可审计的纯状态机和三层治理接线。旧 `AgentRuntimeService`/旧确认草稿 API 保留兼容行为，最终新业务链路已采用下面的目标语义。
 
-### 4B 当前实施顺序
+首次 run：
 
-1. 执行任务五，补齐 Provider 和业务 API 的异常、权限、schema、隔离和幂等验收。
-2. 执行任务六，把三条新业务子图的真实业务 RunTrace 接入固定 Harness 评测。
-3. 执行任务七，使用 Docker PostgreSQL 完成迁移、seed、RAG 索引和 API 全链路回归。
-4. 执行任务八，更新文档、生成报告、建立回滚 tag，再合并 `main`。
+```text
+request guard -> business execution -> action policy
+-> persist local DRAFT -> Model Gateway candidate -> final output safety
+-> freeze answer/evidence/trace -> deterministic evaluator -> END
+```
 
-在任务五至任务八完成前，不得把 4B 标记为 `DONE`，也不得进入 4C 的前端最终交付工作。
+确认 continuation run：
 
-## 10. 当前唯一下一步
+```text
+reload task checkpoint -> revalidate user/member/draft/version/safety
+-> idempotent DRAFT -> CONFIRMED -> EXECUTED(local only)
+-> final acknowledgement safety -> freeze/evaluate -> END
+```
 
-`4B 完整后端 Agent 能力` 是唯一 `NEXT`。
+新业务任务链路已经删除“用户先确认允许创建草稿”的目标语义；旧 `AgentRuntimeService` 和旧草稿 API 仍作为兼容接口保留，因此 API 文档必须明确两套契约的差异，直到后续统一迁移。
 
-实施时按以下固定规则推进，不把外部接口暂时不可用作为阻塞项：
+已交付：
 
-1. 所有 Provider 先完成统一契约和 mock；仅在已有可用接口时启用 sandbox/real。
-2. 现有工具保持兼容，新业务能力以新增工具和新版本契约扩展。
-3. 知识样例只使用可公开、可版本化、可标注权威等级的内容。
-4. 4B 必须交付完整后端闭环，不能只完成接口定义或单个子系统。
+- `backend/app/agent/safety_confirmation.py` 提供无副作用的 `ThreeLayerSafetyGuard`、`ConfirmationStateMachine`、作用域/版本/幂等契约和输出审计结果。
+- `FamilyHealthProductWorkflow` 在请求入口、动作策略和最终答案冻结前记录独立 Safety decision；高风险请求不会进入业务工具。
+- 新业务任务首轮会把本地草稿投影为 `confirmation_state=DRAFT`，响应携带 `confirmation_draft` 和 `external_action_status=not_submitted`；创建草稿不要求用户先确认。
+- 确认续跑在同一 `task_id` 下重新校验 `user_id`、`member_id`、草稿版本、请求指纹和幂等键，再按 `DRAFT -> CONFIRMED -> EXECUTED` 推进；EXECUTED 仍只代表本地状态，不代表外部提交。
+- `BusinessTaskService.confirm_task` 使用 PostgreSQL 行锁语义串行化确认判断；同一幂等请求回放，作用域、版本、指纹和状态冲突会结构化阻断。
+- 任务七测试覆盖高风险拦截、危险最终答案、自动 DRAFT、确认缺失、重复确认、成员越权、幂等冲突、版本冲突和完整业务 API 回归。
 
-## 11. 完成定义
+验证命令：
 
-产品升级完成必须同时满足：
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_safety_confirmation.py backend\tests\test_business_task_api.py -q -p no:cacheprovider --basetemp=var\pytest\4b-task7
+python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest\4b-task7-full
+```
 
-- 三条业务线从 UI 和 API 均可演示。
-- 无模型 Key、无外部系统时仍能通过 deterministic + mock 完成安全演示。
-- 外部数据模式清晰可见，不伪造真实医院、医生、药店或通知结果。
-- 关键医疗解释有 `SourceRef`，无来源医疗结论率可计算。
-- 关键动作必须有人工确认，确认只执行契约允许的动作。
-- `user_id`、`member_id`、报告、处方和记忆隔离测试通过。
-- Agent 安全与 EvaluatorAgent 职责分离。
-- 六项 RAG 指标与原有 Agent 指标可重复生成。
-- 前后端、数据库、缓存和运行依赖可通过 Docker Compose 一键启动。
-- 仓库不存在为当前产品范围预留但尚未实现的后续阶段；剩余内容只能是明确排除的非目标。
+### 7.4 任务八：状态、缓存和偏好
 
-## 12. 明确非目标
+状态：`DONE`。任务八把两次独立 run 的续跑边界落成可迁移、可审计的持久化契约。
 
-- 疾病诊断、自动开方、修改处方或剂量调整建议。
-- 未经用户确认的复诊提交、购药、提醒或健康档案写入。
-- 伪造医院、医生、药店、物流、支付和通知系统的真实成功结果。
-- 未经审核的互联网医疗内容自动进入知识库。
-- 完整认证、多租户、支付、物流或生产级合规认证。
-- 模型训练、微调和通用多模型调度平台。
+已交付：
 
-## 13. 阶段治理
+- Alembic `0007_task_checkpoint_state` 新增 `task_checkpoints`、`task_confirmation_records` 和 `confirmed_preferences`；`business_tasks` 保存当前 checkpoint/confirmation version，`agent_runs.parent_run_id` 记录 continuation 因果关系。
+- `TaskCheckpointService` 在事务内写入不可变 PostgreSQL checkpoint，冻结 RunSummary、步骤进度、确认状态、最终产物和来源指针；续跑只投影允许恢复的最小状态，重新读取可变业务事实。
+- `TaskCheckpointCache` 的 Redis key 包含 `user_id/member_id/task_id/thread_id/checkpoint_version` 并设置 TTL。miss、过期、作用域/版本不匹配或 Redis 异常都会回源 PostgreSQL；Redis 不保存唯一事实。
+- `/api/business-tasks/{task_id}/confirm` 支持 checkpoint/confirmation version 乐观并发校验；`ConfirmedPreferenceService` 只接受同 task 的已执行确认、匹配 source/version 和显式 `human_confirmation_granted=true`，并保存可撤销的版本化偏好。
 
-1. 同一时间只能有一个 `NEXT`。
-2. 新阶段开始前必须声明目标、允许范围、禁止范围和验收测试。
-3. 每阶段必须有最小测试、自审、文档同步和可追溯变更。
-4. 后续改动只能兼容演进既有契约，不能无迁移地覆盖。
-5. 阶段完成后先标记 `DONE`，再移动唯一 `NEXT`。
-6. 简历、面经和演示只能陈述真实实现、真实数据和真实测试结果。
+实现文件和测试见 [任务八交付报告](task8_state_checkpoint_report.4b.md)。
+
+验证命令：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_business_task_api.py backend\tests\test_task_checkpoint_cache.py -q -p no:cacheprovider --basetemp=var\pytest\4b-task8
+```
+
+任务十一完成后进入任务十二；任务十二现已完成，当前唯一 `NEXT` 是任务十三“4B 文档与 Git 收口”。
+
+### 7.5 任务九：Tool 和 Provider
+
+状态：`DONE`。本任务把 Tool/Provider 的失败语义、有限重试、attempt trace 和来源边界落成可运行代码；没有接入真实医院或药店，也没有执行外部写操作。
+
+重点 Provider：
+
+1. `MedicalDocumentParserProvider`
+2. `PharmacyProvider`
+3. `HospitalOrConsultationProvider`
+
+现有其他 mock adapter 只作为兼容实现，不新增空能力，不作为最终简历重点。统一错误至少覆盖 validation、permission、not-found、timeout、rate-limit、provider-unavailable、business-conflict、schema 和 internal error。任何降级不得伪造预约、库存、通知或外部写入成功。
+
+已交付：
+
+- `backend/app/core/reliability.py` 提供稳定错误分类；旧错误名仍可兼容，但 Trace 使用统一 `error_category`。
+- `ToolRegistry` 对只读工具的 timeout、rate-limit 和临时 provider-unavailable 按固定上限重试；参数、权限、schema、业务冲突、内部错误和写工具不重试。
+- `ProviderRegistry` 记录逐次 `ProviderAttemptTrace`、总耗时、最终降级原因，并在身份、模式或 operation 不匹配时返回结构化 schema failure。
+- `MedicalDocumentParserProvider` 保留文档版本、parser version 和原文区间；`PharmacyProvider` 只返回库存候选；`HospitalOrConsultationProvider` 只返回科室、时段或问诊草稿候选。
+- mock 成功来源明确标记 `simulation=true`；sandbox/real 未配置、重试耗尽或 schema 失败时 `success=false`、`degraded=true`、`source_refs=[]`，且订单、预约、问诊提交始终为 false。
+- Provider attempt/error/source 信息进入 ToolResult、业务响应和现有 `provider_calls.response_payload` 审计 JSON；本任务未新增 ORM 或 Alembic migration。
+
+实现与测试文件：
+
+- `backend/app/providers/reliable.py`
+- `backend/app/providers/registry.py`
+- `backend/app/providers/schemas.py`
+- `backend/app/tools/tool_registry.py`
+- `backend/app/tools/tool_schemas.py`
+- `backend/tests/test_provider_reliability.py`
+- `backend/tests/test_provider_adapters.py`
+- `backend/tests/test_tool_registry.py`
+- `backend/tests/test_business_task_api.py`
+
+验证命令：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_provider_adapters.py backend\tests\test_provider_reliability.py backend\tests\test_tool_registry.py backend\tests\test_business_task_api.py -q -p no:cacheprovider --basetemp=output\pytest-task9
+```
+
+详细边界与结果见 [任务九交付报告](task9_tool_provider_reliability_report.4b.md)。
+
+### 7.6 任务十：RAG、隔离和 Trace
+
+状态：`DONE`。本任务未新增 ORM 表或 Alembic migration，也未引入 OpenTelemetry/Jaeger；它补强现有 RAG、Repository/Tool 作用域和冻结 RunTrace。
+
+- 使用 RRF 融合 keyword/vector rank，不直接比较不同量纲的 raw score。
+- 保存 keyword rank、vector rank、RRF score、文档/分块版本、embedding schema 和 fallback reason。
+- Repository/Tool 在同一 SQL 条件中约束 user/member/resource；测试旧资源 ID、伪造成员、Prompt 注入和缓存残留。
+- RunTrace/Observation 覆盖 request、task、run、node、tool、provider、latency、retry、fallback、source、model/token，并执行敏感字段白名单/脱敏。
+
+实现结果：
+
+- `RetrievedChunk` 同时保存两路原始分数、各自 rank 和最终 RRF score；hybrid 排序只使用 RRF，原始分数只用于审计。
+- `VectorMatch` 冻结文档版本、分块版本和 embedding schema；与 PostgreSQL 当前权威版本不一致时拒绝向量命中并记录明确 fallback reason。
+- 档案、处方和药箱读取在 SQL 中同时约束用户、成员和资源归属；Tool Pydantic 契约拒绝额外 Prompt/身份字段，Redis 跨成员残留被视为 cache miss。
+- `ObservationTrace` 是冻结、`extra=forbid` 的白名单事件；保留 ID、节点、结果、时延、重试、降级、来源、模型和可用 token 计数，不保留请求正文、Tool/Provider payload、Prompt、最终答案正文或凭据。
+- 84 条任务十定向测试和 287 条后端全量测试通过；这些是本地自动化结果，不是线上 RAG 召回率、临床正确率或生产 p95。
+
+验证命令：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+$env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-task10'
+python -m pytest backend\tests -q --basetemp output\pytest-task10-full
+python -m compileall backend\app backend\tests
+```
+
+详细边界与结果见 [任务十交付报告](task10_rag_isolation_observability_report.4b.md)。
+
+### 7.7 任务十一：32 条 Harness
+
+状态：`DONE`。实现位于 `backend/app/agent/ablation_schemas.py`、`backend/app/agent/ablation_harness.py` 和 `backend/tests/fixtures/business_harness_cases.4b.json`。运行器对 32 条固定业务 case 分别生成 Single-Agent、固定路由和 bounded Supervisor 三组冻结 `RunTrace`，共 96 份评测结果；三组共享 `FairnessConfig`，不得更换模型身份、工具目录、RAG 索引、安全/确认策略或 token 上限。
+
+| 类别 | 数量 |
+| --- | ---: |
+| 正常单领域任务 | 6 |
+| 跨领域复杂任务 | 6 |
+| 信息缺失与澄清 | 3 |
+| 高风险医疗请求 | 5 |
+| RAG 与来源 | 4 |
+| Provider/工具异常 | 3 |
+| 成员隔离攻击 | 3 |
+| 确认、重复与并发 | 2 |
+| 合计 | 32 |
+
+公平比较三种架构：
+
+- A：Single-Agent baseline。
+- B：Router + 固定领域子图。
+- C：按需 Planner + bounded Supervisor。
+
+三组必须共享模型、工具、RAG、Safety、确认状态机、知识、上下文限制和 token 上限。分别报告简单任务和复杂任务；Safety 和成员隔离带来的收益不得归因给 Supervisor。
+
+重点指标：任务完成率、工具集合/参数 exact-match、Supervisor 路由顺序、不必要 handoff、重复工具调用、高风险召回/精确率、成员隔离、治理覆盖、RAG Recall@3/@5、引用正确率、P50/P95、token 和成本。32 条是 4B 硬门槛；48 条只根据真实 bad case 自然扩展。
+
+本地 deterministic 报告见 [任务十一消融报告](agent_ablation_report.4b.md)。结果显示：固定路由在 26 条简单任务上完成率为 1.0000，6 条复杂任务为 0.0000；bounded Supervisor 在简单/复杂任务上均为 1.0000，工具集合与参数 exact-match 均为 1.0000；Single-Agent 完成率为 1.0000，但工具 exact-match 为 0.3750 且存在重复调用。三组 Safety、成员隔离、治理覆盖和 RAG 指标一致，因此这些收益不归因给 Supervisor。
+
+以上只属于冻结 deterministic fixture 的架构回归证据。P50/P95 是固定 fixture latency，不是服务 wall-clock；deterministic provider 没有返回 token usage，因此 token 和成本保持 `N/A`。任务十二已经补充真实本机 PostgreSQL/Redis/Docker 和 wall-clock 验收，但这些结果仍不是生产 SLO、临床安全或真实模型质量指标。
+
+验证命令：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m app.agent.ablation_harness
+python -m pytest backend\tests\test_ablation_harness.py -q -p no:cacheprovider --basetemp output\pytest-task11
+```
+
+任务十一专项测试 6 项通过；完整后端回归 293 项通过，伴随 4 条既有依赖/配置弃用 warning。
+
+### 7.8 任务十二：PostgreSQL/Redis/Docker 后端验收
+
+状态：`DONE`。验收使用本机 Docker Compose 的 PostgreSQL、Redis、FastAPI 和 Next.js，不调用 LLM、不访问真实医院/药店 Provider，也不把本机耗时写成生产性能指标。脚本位于 `scripts/task12_acceptance.py`，结果快照见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。
+
+验收结果：
+
+- baseline：19/19 checks 通过；Alembic head 为 `0007_task_checkpoint_state`，seed 数据可读，pgvector 中 4 个 chunk 均为配置的 512 维，三条业务 API、知识检索、422 错误映射和前端 health 通过。
+- 并发确认：4 个相同确认请求只产生 1 次真实执行，另外 3 次返回状态冲突；没有重复写入。
+- Redis 故障：Redis 不可用时检测到故障，业务任务仍从 PostgreSQL 恢复 checkpoint，18/18 checks 通过。
+- wall-clock：baseline 样本 13 个，p95 为 426.67 ms；Redis 故障样本 10 个，p95 为 9407.17 ms。后者包含故障连接等待，只能作为本机回归记录。
+
+验证命令：
+
+```powershell
+$env:RAG_VECTOR_ENABLED='true'
+$env:RAG_EMBEDDING_PROVIDER='deterministic'
+$env:RAG_EMBEDDING_MODEL='deterministic-hash-v1'
+$env:RAG_EMBEDDING_DIMENSIONS='512'
+docker compose up -d --build --wait --wait-timeout 300
+.\.venv\Scripts\python.exe scripts\task12_acceptance.py --require-vector
+```
+
+Redis 故障场景需要临时停止 Redis，运行 `--mode redis-failure` 后立即执行 `docker compose start redis`。该检查验证回源与一致性边界，不代表高可用、压测或生产灾备。
+
+### 7.9 任务十三：4B 文档与 Git 收口
+
+状态：`DONE`。本任务完成了 4B 的文档、测试和 Git 收口。
+
+- 删除并保留删除已确认的竞争路线图/过时审计文档：`NEXT_STEPS.md`、`docs/CURRENT_STATE_AUDIT.md`、`docs/IMPLEMENTATION_PLAN.md` 和旧项目 Prompt。
+- 复核 README、API、DB、Agent、RAG、安全、部署、测试、学习和面试材料；所有阶段状态继续只引用本文档。
+- 记录任务十二真实 Docker 报告、后端/前端最终测试和未实现边界；没有把 deterministic、mock 或本机 wall-clock 写成生产指标。
+- 当前分支已提交并建立 4B 回滚 tag，随后以 fast-forward 方式合并到本地 `main`；未自动推送远端。
+
+最终验证：
+
+```text
+Backend: 297 passed, 4 dependency/config deprecation warnings
+Frontend: 23 passed; TypeScript typecheck passed; Next.js production build passed
+Docker Task 12: baseline 19/19; Redis failure 18/18
+```
+
+## 8. 4C 最终产品交付
+
+4C 只完成最终患者端和交付，不再新增后端架构名词：
+
+- 三条业务线 UI 适配简单/复杂路由、草稿审阅、continuation run、degraded 和完整来源展示。
+- 两条黄金链路各至少 2–3 条浏览器 E2E；预问诊作为第三条回归线。
+- 5 分钟内可完成固定演示；Docker Compose 启动、健康检查、迁移和 seed 与文档一致。
+- 复核 32 条 Harness、浏览器 E2E 和真实 wall-clock 报告。
+- README 达到“30 秒看懂业务、1 分钟看懂架构、3 分钟启动、5 分钟演示”。
+- 4C 验收通过后，当前产品范围完成，不再用新阶段承接必需功能。
+
+## 9. 简历和指标边界
+
+- 设计能力只能写“设计了”；代码和测试完成后才能写“实现了”。
+- deterministic/mock、sandbox、real 数据必须分开。
+- 只有真实生成并复核的报告数值可以写入简历。
+- 不把 fixture 预填 latency 写成服务性能，不把确认提示率写成人工采纳率。
+- 不把 Safety、Tool 权限或成员隔离的提升归因给 Supervisor。
+- 多 Agent 是否优于固定路由由 A/B/C 消融实验决定；若简单任务固定路由更快，应如实保留复杂度分流结论。
+
+## 10. 明确非目标
+
+- 疾病诊断、自动开方、处方修改或剂量调整建议。
+- 未经确认的受保护状态迁移，或真实医院、药店、支付和通知写操作。
+- 完整认证、多租户、生产级合规认证和互联网医疗知识自动抓取。
+- Agent 级并行调度、无限循环、复杂自动重规划。
+- MCP Server、OpenTelemetry/Jaeger 和生产级分布式追踪平台。
+- 长期完整聊天存储、个人健康向量记忆、模型自动写回医疗事实。
+- 七个 Provider 都做成完整外部集成。
+- LLM Judge 进入运行链或成为最终验收硬门槛。
+- 以 48 条用例数量替代 32 条高质量覆盖。
+
+## 11. 当前唯一下一步
+
+`4B` 已完成；当前唯一阶段是 `4C`，唯一下一任务是患者端、浏览器 E2E、黄金演示和最终 MVP 交付。4C 完成后不再新增必要产品阶段。

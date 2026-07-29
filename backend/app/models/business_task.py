@@ -32,6 +32,8 @@ class BusinessTask(IDMixin, TimestampMixin, Base):
     )
     business_domain: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     intent: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    provider_mode: Mapped[str] = mapped_column(String(20), default="mock", nullable=False)
+    thread_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(40), default="created", nullable=False)
     user_input: Mapped[str] = mapped_column(Text, nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -45,6 +47,8 @@ class BusinessTask(IDMixin, TimestampMixin, Base):
     current_run_id: Mapped[str | None] = mapped_column(
         ForeignKey("agent_runs.id"), index=True
     )
+    checkpoint_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    confirmation_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     degraded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_error: Mapped[str | None] = mapped_column(Text)
 

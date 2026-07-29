@@ -15,7 +15,7 @@
 | Docker Desktop 程序 | `C:\Program Files\Docker\Docker` | 已安装的 Docker UI 和 CLI。 | 不适用 |
 | Docker 磁盘数据 | `E:\DockerData` | 镜像、容器和 named volume 所在的 Linux 磁盘。 | 否 |
 | PostgreSQL | Docker 容器 `family-health-postgres` | 完整本地学习和业务演示数据。 | 数据位于 `E:\DockerData`，不进 Git |
-| Redis | Docker 容器 `family-health-redis` | 后续缓存/队列基础设施。 | 数据位于 `E:\DockerData`，不进 Git |
+| Redis | Docker 容器 `family-health-redis` | 4B 最终用于 TTL 短期任务缓存与多实例协调；不是权威存储。 | 数据位于 `E:\DockerData`，不进 Git |
 | SQLite 测试库 | 内存 `sqlite:///:memory:` | pytest 快速隔离测试。 | 否 |
 | 后端代码 | `backend/app` | FastAPI、ORM、Service、Agent Harness。 | 是 |
 | 数据库迁移 | `backend/alembic` | 记录数据库结构演进。 | 是 |
@@ -246,7 +246,7 @@ python -m alembic heads
 
 正常情况下，current 与 heads 指向同一最新 revision。
 
-当前唯一 head 是 `0006_vector_search_index`。如果 `python -m alembic heads` 输出两个或更多 revision，说明迁移链发生分叉，应先停止 seed 和服务启动，修复 migration graph 后再继续。
+当前唯一 head 是 `0007_task_checkpoint_state`。如果 `python -m alembic heads` 输出两个或更多 revision，说明迁移链发生分叉，应先停止 seed 和服务启动，修复 migration graph 后再继续。
 
 ### 4B.4 写入 demo seed
 
@@ -373,6 +373,23 @@ docker compose logs frontend
 
 Compose 为四个服务都配置了 healthcheck：PostgreSQL 使用 `pg_isready`，Redis 使用 `redis-cli ping`，后端请求 `/health`，前端请求首页。前端还会等待后端健康后再启动。`docker compose ps` 中四项都显示 `healthy`，才表示完整本地栈可用。
 
+Redis 健康只表示缓存/协调服务可访问。任务八已在业务 task runtime 中实现 Redis miss、连接失败、TTL 到期、作用域/版本错配时回源 PostgreSQL Task Checkpoint；不得因为 Redis 不可用而丢失确认记录、用户偏好或任务权威状态。Compose 只验证 Redis health，不等同于真实并发、wall-clock 或生产高可用验收。
+
+### 7.1 4B 任务十二真实后端验收
+
+任务十二使用本机 Docker 栈验证 migration、幂等 seed、三条业务任务 API、pgvector 数据、Redis 故障回源和并发确认。下面的变量只对当前 PowerShell 会话生效，不会改写仓库 `.env`；`--require-vector` 会在没有兼容向量数据时明确失败。
+
+```powershell
+$env:RAG_VECTOR_ENABLED='true'
+$env:RAG_EMBEDDING_PROVIDER='deterministic'
+$env:RAG_EMBEDDING_MODEL='deterministic-hash-v1'
+$env:RAG_EMBEDDING_DIMENSIONS='512'
+docker compose up -d --build --wait --wait-timeout 300
+.\.venv\Scripts\python.exe scripts\task12_acceptance.py --require-vector
+```
+
+Redis 故障回归：在一个终端临时执行 `docker compose stop redis`，在另一个终端执行 `.\.venv\Scripts\python.exe scripts\task12_acceptance.py --mode redis-failure --require-vector --skip-index`，完成后必须执行 `docker compose start redis`。该过程只验证 PostgreSQL 权威 checkpoint 的回源，不是生产高可用或容量压测。完整结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。
+
 完整演示顺序、RAG/模型模式和故障处理见 [MVP 演示手册](DEMO_RUNBOOK.md)。
 
 ## 8. 停止、重启和清空
@@ -493,6 +510,7 @@ python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest
 - [ ] seed 已执行。
 - [ ] `/health` 返回 200，Swagger 可打开。
 - [ ] pytest 和 compileall 通过。
+- [ ] 4B 任务十二验收脚本的 baseline 和 Redis 故障回源结果已复核。
 - [ ] 需要页面时再启动前端。
 
 ## 13. 可选轻量向量 RAG

@@ -1,15 +1,42 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Literal
 
+from pydantic import Field, model_validator
+
+from app.agent.context_schemas import ContractModel, NonEmptyStr
 from app.safety.policies import needs_medical_safety_interception
 
 
-class SafetyDecision(BaseModel):
+SafetyStage = Literal["request", "action", "final_output"]
+SafetyOutcome = Literal["allow", "block", "require_human_confirmation"]
+
+
+class SafetyDecision(ContractModel):
+    stage: SafetyStage = "request"
+    outcome: SafetyOutcome | None = None
     blocked: bool = False
-    flags: list[str] = Field(default_factory=list)
+    flags: list[NonEmptyStr] = Field(default_factory=list)
     message: str | None = None
     requires_human_confirmation: bool = False
+    member_id: NonEmptyStr | None = None
+
+    @model_validator(mode="after")
+    def normalize_outcome(self) -> "SafetyDecision":
+        expected: SafetyOutcome = (
+            "block"
+            if self.blocked
+            else "require_human_confirmation"
+            if self.requires_human_confirmation
+            else "allow"
+        )
+        if self.outcome is None:
+            self.outcome = expected
+        elif self.outcome != expected:
+            raise ValueError(
+                "outcome must match blocked and requires_human_confirmation"
+            )
+        return self
 
 
 URGENT_SYMPTOM_PATTERNS = (
@@ -26,12 +53,17 @@ URGENT_SYMPTOM_PATTERNS = (
 )
 
 
-def evaluate_safety(message: str) -> SafetyDecision:
+def evaluate_safety(
+    message: str,
+    *,
+    stage: SafetyStage = "request",
+) -> SafetyDecision:
     """在业务动作和用户可见输出前执行医疗安全检查。"""
 
     normalized = (message or "").casefold()
     if any(pattern.casefold() in normalized for pattern in URGENT_SYMPTOM_PATTERNS):
         return SafetyDecision(
+            stage=stage,
             blocked=True,
             flags=["urgent_symptom", "manual_review_required"],
             message=(
@@ -43,6 +75,7 @@ def evaluate_safety(message: str) -> SafetyDecision:
 
     if needs_medical_safety_interception(message):
         return SafetyDecision(
+            stage=stage,
             blocked=True,
             flags=["medication_adjustment", "doctor_confirmation_required"],
             message=(
@@ -52,4 +85,7 @@ def evaluate_safety(message: str) -> SafetyDecision:
             requires_human_confirmation=True,
         )
 
-    return SafetyDecision()
+    return SafetyDecision(stage=stage)
+
+
+__all__ = ["SafetyDecision", "SafetyOutcome", "SafetyStage", "evaluate_safety"]

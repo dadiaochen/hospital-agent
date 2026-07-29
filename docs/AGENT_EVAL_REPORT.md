@@ -1,5 +1,7 @@
 # Agent Harness 固定用例回放报告
 
+> 这是 16 条 deterministic + mock 固定轨迹的历史基线证据，不是线上、临床或真实模型效果。4B 任务十一的 32 条 A/B/C deterministic 消融已单独生成 [agent_ablation_report.4b.md](agent_ablation_report.4b.md)；两份报告不能混合统计。
+
 ## 1. 报告性质
 
 本报告记录 2026-07-26 在当前工作区执行的离线固定用例回放结果。数据来自：

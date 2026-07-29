@@ -193,7 +193,7 @@ Dify 的价值是快速把节点和分支可视化，验证业务流程；不足
 
 ### 代码证据
 
-- [当前 Agent 工作流](../AGENT_WORKFLOW.md)
+- [当前与目标 Agent 架构](../AGENT_ARCHITECTURE.md)
 - [LangGraph 节点实现](../../backend/app/agent/langgraph_workflow.py)
 - [Tool Registry](../../backend/app/tools/tool_registry.py)
 - [ContextManager](../../backend/app/agent/context_manager.py)

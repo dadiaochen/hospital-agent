@@ -2,7 +2,17 @@ from collections.abc import Callable
 from typing import Any
 
 from app.providers.registry import ProviderRegistry
-from app.providers.schemas import ProviderRequest, ProviderResponse
+from app.providers.reliable import (
+    HospitalOrConsultationProvider,
+    MedicalDocumentParserProvider,
+    PharmacyProvider,
+)
+from app.providers.schemas import (
+    ProviderRequest,
+    ProviderResponse,
+    ProviderRetryPolicy,
+)
+from app.core.reliability import classify_error
 from app.schemas.business import SourceRef
 
 
@@ -31,6 +41,9 @@ def _handler(
                 provider_mode=request.provider_mode,
                 operation=request.operation,
                 success=False,
+                error_type="provider_unavailable",
+                error_category="provider_unavailable",
+                error_message="external provider adapter is not configured",
                 retryable=False,
                 degraded=True,
                 fallback_reason=(
@@ -44,6 +57,9 @@ def _handler(
                 provider_mode="mock",
                 operation=request.operation,
                 success=False,
+                error_type="validation_error",
+                error_category=classify_error("validation_error"),
+                error_message="provider operation is not supported",
                 retryable=False,
                 degraded=True,
                 fallback_reason="unsupported_operation",
@@ -64,71 +80,18 @@ def build_mock_provider_registry() -> ProviderRegistry:
     registry = ProviderRegistry()
     registry.register(
         "hospital",
-        _handler(
-            "hospital",
-            {
-                "list_departments": lambda request: {
-                    "candidates": [
-                        {
-                            "department": "general_medicine",
-                            "reason": "general_review_first",
-                        },
-                        {
-                            "department": "specialist_review",
-                            "reason": "doctor_reviews_submitted_materials",
-                        },
-                    ],
-                    "diagnosis_provided": False,
-                },
-                "list_slots": lambda request: {
-                    "slots": [
-                        {
-                            "date": "demo-next-day",
-                            "period": "morning",
-                            "mode": "online",
-                        }
-                    ],
-                    "realtime": False,
-                },
-            },
-        ),
+        HospitalOrConsultationProvider("hospital"),
+        retry_policy=ProviderRetryPolicy(max_attempts=3, backoff_ms=50),
     )
     registry.register(
         "pharmacy",
-        _handler(
-            "pharmacy",
-            {
-                "search_inventory": lambda request: {
-                    "candidates": [
-                        {
-                            "pharmacy": "demo_pharmacy",
-                            "availability": "recheck_before_order",
-                            "fulfillment": ["delivery", "pickup"],
-                        }
-                    ],
-                    "order_created": False,
-                }
-            },
-        ),
+        PharmacyProvider(),
+        retry_policy=ProviderRetryPolicy(max_attempts=3, backoff_ms=50),
     )
     registry.register(
         "online_consultation",
-        _handler(
-            "online_consultation",
-            {
-                "prepare_draft": lambda request: {
-                    "draft": {
-                        "chief_complaint": request.payload.get(
-                            "chief_complaint",
-                            "",
-                        ),
-                        "materials": request.payload.get("materials", []),
-                    },
-                    "submitted": False,
-                    "doctor_confirmation_required": True,
-                }
-            },
-        ),
+        HospitalOrConsultationProvider("online_consultation"),
+        retry_policy=ProviderRetryPolicy(max_attempts=3, backoff_ms=50),
     )
     registry.register(
         "geo",
@@ -158,21 +121,8 @@ def build_mock_provider_registry() -> ProviderRegistry:
     )
     registry.register(
         "medical_document_parser",
-        _handler(
-            "medical_document_parser",
-            {
-                "parse": lambda request: {
-                    "document_type": request.payload.get(
-                        "document_type",
-                        "medical_report",
-                    ),
-                    "sections": request.payload.get("sections", []),
-                    "raw_text": request.payload.get("text", ""),
-                    "medical_review_required": True,
-                    "diagnosis_provided": False,
-                }
-            },
-        ),
+        MedicalDocumentParserProvider(),
+        retry_policy=ProviderRetryPolicy(max_attempts=3, backoff_ms=50),
     )
     registry.register(
         "medical_vision",

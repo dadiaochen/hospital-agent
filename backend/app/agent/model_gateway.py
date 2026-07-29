@@ -133,11 +133,24 @@ class OpenAICompatibleModelProvider:
         if not isinstance(content, str) or not content.strip():
             raise ModelProviderError("provider_response_invalid")
 
+        usage = payload.get("usage") if isinstance(payload, dict) else None
+        input_tokens = _optional_token_count(usage, "prompt_tokens")
+        output_tokens = _optional_token_count(usage, "completion_tokens")
+        total_tokens = _optional_token_count(usage, "total_tokens")
+        if not all(
+            value is not None
+            for value in (input_tokens, output_tokens, total_tokens)
+        ):
+            input_tokens = output_tokens = total_tokens = None
+
         return ProviderRawResponse(
             provider_name=self.provider_name,
             model_name=self.model_name,
             content=content,
             provider_request_id=request_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
         )
 
     def close(self) -> None:
@@ -186,6 +199,7 @@ class ModelGateway:
 
         final_attempt = attempts[-1]
         success = output is not None
+        token_usage = _aggregate_token_usage(attempts)
         trace = ModelCallTrace(
             run_id=request.run_id,
             task_id=request.task_id,
@@ -199,6 +213,10 @@ class ModelGateway:
             fallback_used=fallback_used,
             fallback_reason=fallback_reason,
             latency_ms=sum(attempt.latency_ms for attempt in attempts),
+            input_tokens=token_usage[0],
+            output_tokens=token_usage[1],
+            total_tokens=token_usage[2],
+            token_usage_available=token_usage[2] is not None,
             attempts=tuple(attempts),
         )
         result_model = ModelCallResult[response_model]  # type: ignore[valid-type]
@@ -240,6 +258,7 @@ class ModelGateway:
                 provider,
                 started,
                 error_type="schema_validation_failed",
+                response=response,
             )
 
         try:
@@ -250,6 +269,7 @@ class ModelGateway:
                 started,
                 error_type=f"safety_check_error:{type(exc).__name__}",
                 schema_valid=True,
+                response=response,
             )
         if not safety.passed:
             return None, _failed_attempt(
@@ -258,6 +278,7 @@ class ModelGateway:
                 error_type="safety_check_failed",
                 schema_valid=True,
                 safety_flags=safety.flags,
+                response=response,
             )
 
         return output, ModelProviderAttemptTrace(
@@ -267,6 +288,9 @@ class ModelGateway:
             schema_valid=True,
             safety_passed=True,
             latency_ms=_elapsed_ms(started),
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            total_tokens=response.total_tokens,
         )
 
     def close(self) -> None:
@@ -328,6 +352,7 @@ def _failed_attempt(
     error_type: str,
     schema_valid: bool = False,
     safety_flags: tuple[str, ...] = (),
+    response: ProviderRawResponse | None = None,
 ) -> ModelProviderAttemptTrace:
     return ModelProviderAttemptTrace(
         provider_name=provider.provider_name,
@@ -338,11 +363,35 @@ def _failed_attempt(
         safety_flags=safety_flags,
         latency_ms=_elapsed_ms(started),
         error_type=error_type,
+        input_tokens=response.input_tokens if response else None,
+        output_tokens=response.output_tokens if response else None,
+        total_tokens=response.total_tokens if response else None,
     )
 
 
 def _elapsed_ms(started: float) -> int:
     return max(0, round((perf_counter() - started) * 1000))
+
+
+def _optional_token_count(usage: Any, key: str) -> int | None:
+    if not isinstance(usage, Mapping):
+        return None
+    value = usage.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
+def _aggregate_token_usage(
+    attempts: list[ModelProviderAttemptTrace],
+) -> tuple[int | None, int | None, int | None]:
+    if not attempts or any(attempt.total_tokens is None for attempt in attempts):
+        return None, None, None
+    return (
+        sum(attempt.input_tokens or 0 for attempt in attempts),
+        sum(attempt.output_tokens or 0 for attempt in attempts),
+        sum(attempt.total_tokens or 0 for attempt in attempts),
+    )
 
 
 __all__ = [

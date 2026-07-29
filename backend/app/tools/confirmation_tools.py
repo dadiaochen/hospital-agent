@@ -86,28 +86,29 @@ def _create_confirmation_draft(
         )
 
     try:
-        result = create_confirmation_draft(
-            db,
-            user_id=parsed.user_id,
-            member_id=parsed.member_id,
-            action_type=parsed.action_type,
-            idempotency_key=parsed.idempotency_key,
-            run_id=context.run_id,
-            summary=parsed.summary,
-            payload=parsed.payload,
-        )
-        validated = ConfirmationDraftOutput.model_validate(result)
-        db.commit()
+        # The business-task service owns the outer transaction.  A savepoint
+        # lets this write tool reject its own work without rolling back the
+        # AgentRun and other audit rows already staged by the workflow.
+        with db.begin_nested():
+            result = create_confirmation_draft(
+                db,
+                user_id=parsed.user_id,
+                member_id=parsed.member_id,
+                action_type=parsed.action_type,
+                idempotency_key=parsed.idempotency_key,
+                run_id=context.run_id,
+                summary=parsed.summary,
+                payload=parsed.payload,
+            )
+            validated = ConfirmationDraftOutput.model_validate(result)
         return validated.model_dump(mode="json")
     except ConfirmationDraftServiceError as exc:
-        db.rollback()
         raise ToolExecutionError(
             str(exc),
             error_type=exc.error_type,
             fallback_action=exc.fallback_action,
         ) from exc
     except ValidationError as exc:
-        db.rollback()
         raise ToolExecutionError(
             "confirmation draft output failed schema validation",
             error_type="output_schema_error",
@@ -115,7 +116,6 @@ def _create_confirmation_draft(
             schema_valid=False,
         ) from exc
     except SQLAlchemyError as exc:
-        db.rollback()
         raise ToolExecutionError(
             "failed to commit confirmation draft",
             error_type="database_write_error",

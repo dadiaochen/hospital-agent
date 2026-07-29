@@ -93,6 +93,8 @@ Alembic 默认将内部 `alembic_version.version_num` 建为 `VARCHAR(32)`，但
 3C Runtime E2E 同样没有修改 ORM、Alembic migration 或 seed。Runner 只通过现有 HTTP API 触发 run 并读取冻结 artifacts；脱敏 JSON/Markdown 报告属于测试产物，不写入业务表。PostgreSQL 集成报告复用现有 seed 数据，pytest 则继续使用隔离 SQLite。
 
 3D 没有新增 ORM 字段或 migration，也没有修改 seed 业务内容。Docker backend 入口只是自动执行现有 `alembic upgrade head` 与幂等 seed；固定四场景通过现有 API 创建 run、tool-call 审计和本地草稿，外部状态始终是 `not_submitted`。
+
+4B 任务七没有新增 ORM 字段；任务八完成了对这些 JSON artifact 的审计和升级。新业务任务仍在 `business_tasks.output_payload` / `agent_runs.raw_state` 保留脱敏冻结产物，但权威任务进度、确认状态迁移和已确认偏好现在分别写入 `task_checkpoints`、`task_confirmation_records` 和 `confirmed_preferences`。`BusinessTaskService.confirm_task` 在 PostgreSQL 上锁定任务行，校验 user/member/task、checkpoint version、confirmation version、指纹和幂等键；Redis 只缓存 checkpoint 投影。
 ## 10. 当前迁移链
 
 当前仓库必须保持一条 Alembic head，完整升级顺序为：
@@ -104,6 +106,7 @@ Alembic 默认将内部 `alembic_version.version_num` 建为 `VARCHAR(32)`，但
   -> 0004_business_task_runtime
   -> 0005_knowledge_metadata
   -> 0006_vector_search_index
+  -> 0007_task_checkpoint_state
 ```
 
 每个 revision 的职责边界如下：
@@ -114,9 +117,37 @@ Alembic 默认将内部 `alembic_version.version_num` 建为 `VARCHAR(32)`，但
 - `0004_business_task_runtime`：增加业务任务、provider 调用、来源引用、医疗文档和健康事件等 runtime 表。
 - `0005_knowledge_metadata`：增加知识文档 `version` 与知识分块 `chunk_version`。它只负责版本元数据，不重复创建 0003 已拥有的向量字段。
 - `0006_vector_search_index`：在 PostgreSQL 为可用向量创建 HNSW cosine index；SQLite 环境跳过原生索引创建，仍可执行迁移链并测试关键词降级。
+- `0007_task_checkpoint_state`：增加业务任务的 checkpoint/confirmation version、Agent continuation 的 `parent_run_id`，以及 PostgreSQL 权威 checkpoint、确认记录和已确认偏好表；SQLite 保留可测试的列和表约束。
 
-禁止再次创建平行的 `0003` revision；新增 schema 变更必须从 `0006_vector_search_index` 继续串联，并同步 ORM、seed、测试和本节说明。验收命令是 `python -m alembic heads`，预期只输出 `0006_vector_search_index`。
+禁止再次创建平行的 `0003` revision；新增 schema 变更必须从 `0007_task_checkpoint_state` 继续串联，并同步 ORM、seed、测试和本节说明。验收命令是 `python -m alembic heads`，预期只输出 `0007_task_checkpoint_state`。
 
 ## 11. 4B 模型接入说明
 
-4B 的模型 provider 配置只来自 backend 环境变量，不新增 provider-specific ORM 字段；当前仓库完整 schema 仍以本节的 `0001` 到 `0006` 迁移链为准。Key、完整 prompt 和 provider 原始文本不写入数据库。既有 `agent_runs.raw_state` 只保存版本化、脱敏的 `ModelCallTrace`。
+4B 的模型 provider 配置只来自 backend 环境变量，不新增 provider-specific ORM 字段；当前仓库完整 schema 以本节的 `0001` 到 `0007` 迁移链为准。Key、完整 prompt 和 provider 原始文本不写入数据库。既有 `agent_runs.raw_state` 只保存版本化、脱敏的 `ModelCallTrace`。
+
+4B 任务五和任务六只新增内存中的 Pydantic 编排契约、deterministic Router、三个领域 Agent 和 bounded Supervisor，没有修改 ORM、Alembic、seed 或数据库连接；任务六的 `OrchestrationRunResult` 不是持久化表。任务八已把状态恢复边界接入业务任务 service，但没有把 Tool/Provider 可靠性或复杂 RAG 编排提前带入本阶段。
+
+## 12. 4B 最终状态存储目标
+
+任务八已落地以下 schema 边界：
+
+- PostgreSQL 是 Task Checkpoint、确认记录、用户偏好、运行审计和业务事实的权威存储；`task_checkpoints` 绑定 `task_id`、`user_id`、`member_id`、`thread_id`、run/parent run、checkpoint version、confirmation version、RunSummary、步骤进度、冻结产物和来源指针。
+- `task_confirmation_records` 记录草稿/确认/执行动作、前后状态、草稿版本、确认版本、幂等键、请求指纹、操作者和人工确认标志。
+- `confirmed_preferences` 只保存同 task 的显式确认结果，绑定成员、source/source version、consent version、偏好版本、幂等键和可撤销状态；模型推断不得进入偏好表。
+- Redis 不属于数据库 schema，也不能保存唯一副本；它只缓存 checkpoint 的短期投影并承担多实例协调，故障时回源 PostgreSQL。
+- 医疗知识使用独立 PostgreSQL schema/database 与 pgvector 索引；个人处方、报告、药箱和聊天不得写入知识向量表。
+
+`backend/app/services/checkpoint_service.py` 负责权威 checkpoint 的事务写入和 allow-list 投影，`backend/app/services/task_checkpoint_cache.py` 负责 Redis TTL/失效回源，`backend/app/services/preference_service.py` 负责确认后偏好写入。Redis miss、过期、作用域/版本不匹配或异常不会改变 PostgreSQL 业务结果。
+
+## 13. 任务九数据库边界
+
+任务九没有新增 ORM、Alembic migration 或 seed。Tool attempts 随 `AgentToolCall.tool_output` 保存；Provider attempts、统一 error category 和降级详情保存在现有 `provider_calls.response_payload` JSON 中，现有 `latency_ms/retryable/degraded/fallback_reason` 列继续保存可查询摘要。失败 Provider 不创建 `source_references` 记录。
+## 4B 任务十：数据作用域与 Trace 存储
+
+任务十没有修改 ORM 或迁移链。处方、购药记录和药箱读取改为在同一 SQL statement 中联结 `family_members`，同时约束 `FamilyMember.user_id`、`FamilyMember.id` 与业务表 `member_id`；即使调用方拿到另一用户的旧成员/资源 ID，数据库查询也不会返回记录。
+
+RRF rank、原始两路分数、版本、fallback 和脱敏 Observation 继续存入现有 JSON 审计边界（`source_references.source_metadata`、`agent_runs.raw_state` 和 checkpoint frozen artifacts），没有为可观测性新增业务表。Redis 仍不是权威存储；缓存 payload 的 user/member/task/thread/version 任一不匹配都按 miss 处理并回源 PostgreSQL。
+
+## 4B 任务十一：无数据库变更
+
+任务十一没有新增 ORM、Alembic migration、seed 或 Redis key。32 条 case 位于测试 fixture，96 份 `RunTrace` 和聚合结果由离线运行器生成；默认 JSON/Markdown 输出到被 Git 忽略的 `output/`。任务十二没有新增 schema；已在真实 Docker PostgreSQL 中验证唯一迁移 head `0007_task_checkpoint_state`、seed 数据、pgvector 向量数据和 Redis 故障时的 PostgreSQL checkpoint 回源。结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。

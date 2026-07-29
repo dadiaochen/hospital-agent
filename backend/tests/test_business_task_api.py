@@ -13,19 +13,38 @@ from app.core.config import settings
 from app.core.database import Base, get_db
 from app.main import app
 from app.models import (
+    AgentRun,
+    BusinessTask,
+    ConfirmedPreference,
     FamilyMember,
     HealthProfile,
     KnowledgeChunk,
     KnowledgeDocument,
     MedicineBoxItem,
     Prescription,
+    SourceReference,
+    TaskCheckpoint,
+    TaskConfirmationRecord,
     User,
 )
+from app.services.checkpoint_service import TaskCheckpointService
+from app.services.task_checkpoint_cache import TaskCheckpointCache
 
 
 USER_ID = "business-api-user"
 FATHER_ID = "business-api-father"
 MOTHER_ID = "business-api-mother"
+
+
+class _RedisMiss:
+    def get(self, name: str):
+        return None
+
+    def set(self, name: str, value: str, *, ex: int):
+        return True
+
+    def delete(self, *names: str):
+        return 0
 
 
 @pytest.fixture()
@@ -77,6 +96,9 @@ def test_chronic_care_task_waits_then_resumes_after_confirmation(
     first = response.json()
     assert first["status"] == "needs_confirmation"
     assert first["need_human_confirmation"] is True
+    assert first["confirmation_state"] == "DRAFT"
+    assert first["confirmation_draft"]["status"] == "DRAFT"
+    assert first["confirmation_draft"]["external_action_status"] == "not_submitted"
     assert first["task"]["member_id"] == FATHER_ID
     assert all(ref["member_id"] == FATHER_ID for ref in first["source_refs"])
     assert first["run_trace"]["run_id"] == first["run_id"]
@@ -85,6 +107,22 @@ def test_chronic_care_task_waits_then_resumes_after_confirmation(
     assert first["model_call_trace"]["requested_provider"] == "deterministic"
     assert first["model_call_trace"]["effective_provider"] == "deterministic"
     assert first["model_call_trace"]["success"] is True
+    observations = first["run_trace"]["observations"]
+    assert {item["event_type"] for item in observations} >= {
+        "request",
+        "node",
+        "tool",
+        "source",
+        "model",
+        "final",
+    }
+    assert all(item["member_id"] == FATHER_ID for item in observations)
+    assert all(item["task_id"] == first["task"]["id"] for item in observations)
+    assert all(item["run_id"] == first["run_id"] for item in observations)
+    serialized_observations = str(observations)
+    assert "medicine_name" not in serialized_observations
+    assert "final_answer" in serialized_observations  # Redacted field name only.
+    assert first["final_answer"] not in serialized_observations
 
     confirmed = client.post(
         f"/api/business-tasks/{first['task']['id']}/confirm",
@@ -98,6 +136,7 @@ def test_chronic_care_task_waits_then_resumes_after_confirmation(
     second = confirmed.json()
     assert second["status"] == "completed"
     assert second["need_human_confirmation"] is False
+    assert second["confirmation_state"] == "EXECUTED"
     assert second["confirmation_result"]["external_action_status"] == "not_submitted"
     assert second["task"]["confirmed_at"] is not None
     assert second["model_call_trace"]["purpose"] == (
@@ -109,6 +148,17 @@ def test_chronic_care_task_waits_then_resumes_after_confirmation(
     assert artifacts.status_code == 200
     assert artifacts.json()["run_trace"]["run_id"] == second["run_id"]
     assert artifacts.json()["evaluation_result"]["run_id"] == second["run_id"]
+
+    replay = client.post(
+        f"/api/business-tasks/{first['task']['id']}/confirm",
+        json={
+            "human_confirmation_granted": True,
+            "idempotency_key": "business-refill-1",
+        },
+    )
+    assert replay.status_code == 200
+    assert replay.json()["idempotent_replay"] is True
+    assert replay.json()["confirmation_state"] == "EXECUTED"
 
 
 def test_preconsultation_uses_mock_provider_without_claiming_real_data(
@@ -136,6 +186,20 @@ def test_preconsultation_uses_mock_provider_without_claiming_real_data(
         "business_preconsultation_final_answer"
     )
     assert all(call["provider_mode"] == "mock" for call in payload["provider_calls"])
+    provider_observation = next(
+        item
+        for item in payload["run_trace"]["observations"]
+        if item["event_type"] == "provider"
+    )
+    assert provider_observation["provider_name"] in {
+        "hospital",
+        "online_consultation",
+    }
+    assert provider_observation["redaction_applied"] is True
+    assert provider_observation["redacted_fields"] == [
+        "request_payload",
+        "response_payload",
+    ]
     provider_refs = [
         ref
         for ref in payload["source_refs"]
@@ -211,6 +275,7 @@ def test_high_risk_request_is_blocked_before_business_tools(
     assert response.status_code == 201
     payload = response.json()
     assert payload["status"] == "blocked"
+    assert payload["confirmation_state"] == "BLOCKED"
     assert {"urgent_symptom", "manual_review_required"}.issubset(
         payload["safety_flags"]
     )
@@ -243,6 +308,12 @@ def test_provider_mode_is_explicitly_degraded_when_no_sandbox_adapter_exists(
         call["fallback_reason"] == "sandbox_adapter_not_configured"
         for call in payload["provider_calls"]
     )
+    degraded_call = next(
+        call for call in payload["provider_calls"] if call["degraded"]
+    )
+    assert degraded_call["error_category"] == "provider_unavailable"
+    assert len(degraded_call["attempts"]) == 1
+    assert degraded_call["response_payload"]["source_refs"] == []
 
 
 def test_confirmation_requires_the_original_idempotency_key(
@@ -297,6 +368,236 @@ def test_initial_business_request_cannot_bypass_confirmation_schema(
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_task8_checkpoint_is_authoritative_for_continuation_and_tracks_versions(
+    business_client: tuple[TestClient, Session],
+) -> None:
+    client, session = business_client
+    first = client.post(
+        "/api/business-tasks",
+        json={
+            "business_domain": "chronic_care",
+            "member_id": FATHER_ID,
+            "user_input": "prepare refill materials",
+            "input_payload": {"action_type": "refill_request", "medicine_name": "amlodipine"},
+            "idempotency_key": "business-task8-checkpoint",
+            "thread_id": "thread-task8-checkpoint",
+        },
+    ).json()
+    task_id = first["task"]["id"]
+    assert first["checkpoint_version"] == 1
+    assert first["confirmation_version"] == 1
+
+    checkpoint = session.scalar(
+        select(TaskCheckpoint).where(TaskCheckpoint.task_id == task_id)
+    )
+    assert checkpoint is not None
+    assert checkpoint.run_id == first["run_id"]
+    assert checkpoint.thread_id == "thread-task8-checkpoint"
+    assert "scratchpad" not in str(checkpoint.frozen_artifacts)
+    assert "candidate_inferences" not in str(checkpoint.frozen_artifacts)
+    restored = TaskCheckpointService(
+        session,
+        cache=TaskCheckpointCache(_RedisMiss(), ttl_seconds=10),
+    ).restore(task=session.get(BusinessTask, task_id))
+    assert restored.source == "postgresql"
+
+    first_run = session.get(AgentRun, first["run_id"])
+    assert first_run is not None
+    first_run.raw_state["scratchpad"] = {"should_not": "cross_run"}
+    session.commit()
+
+    continued = client.post(
+        f"/api/business-tasks/{task_id}/confirm",
+        json={
+            "human_confirmation_granted": True,
+            "idempotency_key": "business-task8-checkpoint",
+            "checkpoint_version": 1,
+            "confirmation_version": 1,
+        },
+    )
+    assert continued.status_code == 200
+    second = continued.json()
+    assert second["status"] == "completed"
+    assert second["checkpoint_version"] == 2
+    assert second["confirmation_version"] == 2
+    assert second["checkpoint_source"] in {"redis", "postgresql"}
+    assert second["resumed_from_run_id"] == first["run_id"]
+    assert second["run_id"] != first["run_id"]
+
+    second_run = session.get(AgentRun, second["run_id"])
+    assert second_run is not None
+    assert second_run.parent_run_id == first["run_id"]
+    assert "scratchpad" not in str(second_run.raw_state)
+    assert session.scalar(
+        select(TaskCheckpoint).where(
+            TaskCheckpoint.task_id == task_id,
+            TaskCheckpoint.checkpoint_version == 2,
+        )
+    ) is not None
+    transitions = list(
+        session.scalars(
+            select(TaskConfirmationRecord)
+            .where(TaskConfirmationRecord.task_id == task_id)
+            .order_by(TaskConfirmationRecord.created_at)
+        )
+    )
+    assert [item.action for item in transitions] == ["create_draft", "confirm", "execute"]
+
+
+def test_task8_rejects_stale_confirmation_checkpoint_version(
+    business_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = business_client
+    first = client.post(
+        "/api/business-tasks",
+        json={
+            "business_domain": "chronic_care",
+            "member_id": FATHER_ID,
+            "user_input": "prepare refill materials",
+            "input_payload": {"action_type": "refill_request", "medicine_name": "amlodipine"},
+            "idempotency_key": "business-task8-stale-version",
+        },
+    ).json()
+
+    response = client.post(
+        f"/api/business-tasks/{first['task']['id']}/confirm",
+        json={
+            "human_confirmation_granted": True,
+            "idempotency_key": "business-task8-stale-version",
+            "checkpoint_version": 2,
+            "confirmation_version": 1,
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "checkpoint_version_conflict"
+
+
+def test_task8_preference_write_requires_confirmed_task_and_source_version(
+    business_client: tuple[TestClient, Session],
+) -> None:
+    client, session = business_client
+    first = client.post(
+        "/api/business-tasks",
+        json={
+            "business_domain": "chronic_care",
+            "member_id": FATHER_ID,
+            "user_input": "prepare refill materials",
+            "input_payload": {"action_type": "refill_request", "medicine_name": "amlodipine"},
+            "idempotency_key": "business-task8-preference",
+        },
+    ).json()
+    task_id = first["task"]["id"]
+    session.add(
+        SourceReference(
+            user_id=USER_ID,
+            task_id=task_id,
+            run_id=first["run_id"],
+            source_id="task8-user-confirmed-source",
+            source_type="user_statement",
+            member_id=FATHER_ID,
+            document_version="user-statement:v1",
+            verified=False,
+            source_metadata={},
+        )
+    )
+    session.commit()
+
+    before_confirmation = client.post(
+        "/api/preferences",
+        json={
+            "task_id": task_id,
+            "member_id": FATHER_ID,
+            "preference_type": "reminder_delivery",
+            "preference_value": {"channel": "sms"},
+            "source_id": "task8-user-confirmed-source",
+            "source_version": "user-statement:v1",
+            "confirmation_version": 1,
+            "idempotency_key": "business-task8-preference-write",
+            "human_confirmation_granted": True,
+        },
+    )
+    assert before_confirmation.status_code == 409
+    assert before_confirmation.json()["error"]["code"] == "confirmation_required"
+
+    confirmed = client.post(
+        f"/api/business-tasks/{task_id}/confirm",
+        json={
+            "human_confirmation_granted": True,
+            "idempotency_key": "business-task8-preference",
+        },
+    )
+    assert confirmed.status_code == 200
+
+    session.add(
+        SourceReference(
+            user_id=USER_ID,
+            task_id=task_id,
+            run_id=first["run_id"],
+            source_id="stale-source-from-other-member",
+            source_type="user_statement",
+            member_id=MOTHER_ID,
+            document_version="user-statement:v1",
+            verified=False,
+            source_metadata={},
+        )
+    )
+    session.commit()
+    stale_cross_member_source = client.post(
+        "/api/preferences",
+        json={
+            "task_id": task_id,
+            "member_id": FATHER_ID,
+            "preference_type": "reminder_delivery",
+            "preference_value": {"channel": "sms"},
+            "source_id": "stale-source-from-other-member",
+            "source_version": "user-statement:v1",
+            "confirmation_version": 2,
+            "idempotency_key": "business-task10-stale-cross-member-source",
+            "human_confirmation_granted": True,
+        },
+    )
+    assert stale_cross_member_source.status_code == 409
+    assert stale_cross_member_source.json()["error"]["code"] == (
+        "preference_source_conflict"
+    )
+
+    preference = client.post(
+        "/api/preferences",
+        json={
+            "task_id": task_id,
+            "member_id": FATHER_ID,
+            "preference_type": "reminder_delivery",
+            "preference_value": {"channel": "sms"},
+            "source_id": "task8-user-confirmed-source",
+            "source_version": "user-statement:v1",
+            "confirmation_version": 2,
+            "idempotency_key": "business-task8-preference-write",
+            "human_confirmation_granted": True,
+        },
+    )
+    assert preference.status_code == 201
+    assert preference.json()["preference_version"] == 1
+    assert preference.json()["revocable"] is True
+    assert session.scalar(select(ConfirmedPreference).where(ConfirmedPreference.task_id == task_id))
+
+    replay = client.post(
+        "/api/preferences",
+        json={
+            "task_id": task_id,
+            "member_id": FATHER_ID,
+            "preference_type": "reminder_delivery",
+            "preference_value": {"channel": "sms"},
+            "source_id": "task8-user-confirmed-source",
+            "source_version": "user-statement:v1",
+            "confirmation_version": 2,
+            "idempotency_key": "business-task8-preference-write",
+            "human_confirmation_granted": True,
+        },
+    )
+    assert replay.status_code == 201
+    assert replay.json()["idempotent_replay"] is True
 
 
 def _seed_business_data(session: Session) -> None:

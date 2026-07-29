@@ -11,12 +11,16 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import KnowledgeChunk, KnowledgeDocument
+from app.rag.embedding_provider import EMBEDDING_SCHEMA_VERSION
 from app.rag.retrieval_schemas import (
     RetrievedChunk,
     RetrievalRequest,
     RetrievalResult,
     VectorMatch,
 )
+
+
+RRF_K = 60
 
 
 @dataclass(frozen=True)
@@ -119,8 +123,16 @@ class KeywordRetriever:
                 )
             )
 
-        ranked.sort(key=_ranking_key)
-        sources = ranked[: request.limit]
+        ranked.sort(key=_raw_score_ranking_key)
+        sources = [
+            source.model_copy(
+                update={
+                    "keyword_rank": rank,
+                    "rrf_score": _rrf_contribution(rank),
+                }
+            )
+            for rank, source in enumerate(ranked[: request.limit], start=1)
+        ]
         return RetrievalResult(
             query=request.query,
             purpose=request.purpose,
@@ -163,9 +175,17 @@ class HybridRetriever:
                 f"vector_backend_error:{type(exc).__name__}",
             )
 
-        vector_sources = self._hydrate_vector_sources(request, vector_matches)
+        vector_sources, stale_count = self._hydrate_vector_sources(
+            request,
+            vector_matches,
+        )
         if vector_matches and not vector_sources:
-            return _with_fallback(keyword_result, "vector_sources_not_found")
+            reason = (
+                "vector_source_version_mismatch"
+                if stale_count
+                else "vector_sources_not_found"
+            )
+            return _with_fallback(keyword_result, reason)
         if not vector_sources:
             return _with_fallback(keyword_result, "vector_no_matches")
 
@@ -178,6 +198,10 @@ class HybridRetriever:
                 requested_mode=request.mode,
                 effective_mode="vector",
                 **metadata,
+                fallback_used=bool(stale_count),
+                fallback_reason=(
+                    "stale_vector_sources_ignored" if stale_count else None
+                ),
                 evidence_present=bool(sources),
                 sources=sources,
             )
@@ -191,6 +215,8 @@ class HybridRetriever:
             requested_mode=request.mode,
             effective_mode="hybrid",
             **metadata,
+            fallback_used=bool(stale_count),
+            fallback_reason=("stale_vector_sources_ignored" if stale_count else None),
             evidence_present=bool(sources),
             sources=sources,
         )
@@ -199,7 +225,7 @@ class HybridRetriever:
         self,
         request: RetrievalRequest,
         matches: Sequence[VectorMatch],
-    ) -> list[RetrievedChunk]:
+    ) -> tuple[list[RetrievedChunk], int]:
         best_matches: dict[str, VectorMatch] = {}
         for match in matches:
             current = best_matches.get(match.chunk_id)
@@ -207,21 +233,35 @@ class HybridRetriever:
                 best_matches[match.chunk_id] = match
 
         records = self._store.records_by_chunk_ids(list(best_matches))
-        sources: list[RetrievedChunk] = []
+        candidates: list[tuple[KnowledgeRecord, VectorMatch]] = []
+        stale_count = 0
         for chunk_id, match in best_matches.items():
             record = records.get(chunk_id)
             if record is None or record.document_id != match.document_id:
                 continue
+            if (
+                record.document_version != match.document_version
+                or record.chunk_version != match.chunk_version
+                or match.embedding_schema_version != EMBEDDING_SCHEMA_VERSION
+            ):
+                stale_count += 1
+                continue
+            candidates.append((record, match))
+
+        candidates.sort(key=lambda item: (-item[1].score, item[1].chunk_id))
+        sources: list[RetrievedChunk] = []
+        for rank, (record, match) in enumerate(candidates, start=1):
             sources.append(
                 _to_retrieved_chunk(
                     record,
                     request=request,
                     score=match.score,
                     matched_by=("vector",),
+                    vector_rank=rank,
+                    embedding_schema_version=match.embedding_schema_version,
                 )
             )
-        sources.sort(key=_ranking_key)
-        return sources
+        return sources, stale_count
 
 
 def create_knowledge_retriever(
@@ -303,7 +343,11 @@ def _to_retrieved_chunk(
     request: RetrievalRequest,
     score: float,
     matched_by: tuple[str, ...],
+    vector_rank: int | None = None,
+    embedding_schema_version: str | None = None,
 ) -> RetrievedChunk:
+    keyword_match = "keyword" in matched_by
+    vector_match = "vector" in matched_by
     return RetrievedChunk(
         source_id=f"knowledge:{record.document_id}:{record.chunk_id}",
         document_id=record.document_id,
@@ -318,6 +362,15 @@ def _to_retrieved_chunk(
         content=record.chunk_content,
         keywords=list(record.keywords),
         score=score,
+        keyword_score=score if keyword_match else None,
+        vector_score=score if vector_match else None,
+        vector_rank=vector_rank,
+        rrf_score=(
+            _rrf_contribution(vector_rank)
+            if vector_match and vector_rank is not None
+            else 0.0
+        ),
+        embedding_schema_version=embedding_schema_version,
         purpose=request.purpose,
         matched_by=matched_by,
     )
@@ -353,31 +406,77 @@ def _merge_sources(
     keyword_sources: Sequence[RetrievedChunk],
     vector_sources: Sequence[RetrievedChunk],
 ) -> list[RetrievedChunk]:
-    merged = {source.chunk_id: source for source in keyword_sources}
-    for vector_source in vector_sources:
-        keyword_source = merged.get(vector_source.chunk_id)
-        if keyword_source is None:
-            merged[vector_source.chunk_id] = vector_source
-            continue
-        merged[vector_source.chunk_id] = keyword_source.model_copy(
-            update={
-                "score": max(keyword_source.score, vector_source.score),
-                "matched_by": ("keyword", "vector"),
-            }
+    by_chunk: dict[str, dict[str, RetrievedChunk]] = {}
+    for source in keyword_sources:
+        by_chunk.setdefault(source.chunk_id, {})["keyword"] = source
+    for source in vector_sources:
+        by_chunk.setdefault(source.chunk_id, {})["vector"] = source
+
+    ranked: list[RetrievedChunk] = []
+    for modes in by_chunk.values():
+        keyword_source = modes.get("keyword")
+        vector_source = modes.get("vector")
+        base = keyword_source or vector_source
+        assert base is not None
+        keyword_rank = keyword_source.keyword_rank if keyword_source else None
+        vector_rank = vector_source.vector_rank if vector_source else None
+        rrf_score = round(
+            sum(
+                _rrf_contribution(rank)
+                for rank in (keyword_rank, vector_rank)
+                if rank is not None
+            ),
+            8,
         )
-    ranked = list(merged.values())
-    ranked.sort(key=_ranking_key)
+        ranked.append(
+            base.model_copy(
+                update={
+                    "score": rrf_score,
+                    "keyword_score": (
+                        keyword_source.keyword_score if keyword_source else None
+                    ),
+                    "vector_score": (
+                        vector_source.vector_score if vector_source else None
+                    ),
+                    "keyword_rank": keyword_rank,
+                    "vector_rank": vector_rank,
+                    "rrf_score": rrf_score,
+                    "embedding_schema_version": (
+                        vector_source.embedding_schema_version
+                        if vector_source
+                        else None
+                    ),
+                    "matched_by": (
+                        ("keyword", "vector")
+                        if keyword_source and vector_source
+                        else ("keyword",)
+                        if keyword_source
+                        else ("vector",)
+                    ),
+                }
+            )
+        )
+    ranked.sort(key=_rrf_ranking_key)
     return ranked
 
 
-def _ranking_key(source: RetrievedChunk) -> tuple[float, str, int, str]:
+def _raw_score_ranking_key(source: RetrievedChunk) -> tuple[float, str, int, str]:
     return (-source.score, source.category, source.chunk_index, source.chunk_id)
+
+
+def _rrf_ranking_key(source: RetrievedChunk) -> tuple[float, str, int, str]:
+    return (-source.rrf_score, source.category, source.chunk_index, source.chunk_id)
+
+
+def _rrf_contribution(rank: int) -> float:
+    return round(1.0 / (RRF_K + rank), 8)
 
 
 __all__ = [
     "HybridRetriever",
     "KeywordRetriever",
     "KnowledgeRecord",
+    "RRF_K",
     "Retriever",
     "SQLAlchemyKnowledgeStore",
     "VectorSearchBackend",

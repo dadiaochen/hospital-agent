@@ -1,5 +1,7 @@
 # Runtime E2E 与真实 Trace Harness
 
+> 本文与 3C 报告记录当前兼容运行时的真实本地验证，其中 `human_confirmation_granted` 和确认后创建草稿属于历史接口。4B 任务七的新业务任务链路已经实现单确认状态机；本文件不替代新 `/api/business-tasks` 契约，完整 32 条 Harness 仍以总路线图为准。
+
 ## 1. 为什么需要第二层 Harness
 
 阶段 2B-2 的 `HarnessRunner` 读取手写 `ExpectedCase` 和 mock `RunTrace`，适合验证评估公式是否稳定；阶段 2C-2 的 `AgentHarnessRuntime` 会执行 mock tools，适合验证 Context、Tool Registry 与 Trace 契约。但二者都不能证明 FastAPI、数据库工具、LangGraph、持久化和确认续跑已经连通。

@@ -46,6 +46,8 @@ def _execution_response(
         ),
         confirmation_request=state.get("confirmation_request") or {},
         confirmation_result=state.get("confirmation_result") or {},
+        confirmation_state=str(state.get("confirmation_state") or "NONE"),
+        confirmation_draft=state.get("confirmation_draft") or {},
         safety_flags=[str(item) for item in state.get("safety_flags", [])],
         source_refs=source_refs,
         tool_calls=[item for item in state.get("tool_calls", []) if isinstance(item, dict)],
@@ -75,6 +77,11 @@ def _execution_response(
             else None
         ),
         idempotent_replay=execution.idempotent_replay,
+        checkpoint_version=execution.checkpoint_version,
+        confirmation_version=execution.confirmation_version,
+        checkpoint_source=execution.checkpoint_source,
+        resumed_from_run_id=execution.resumed_from_run_id,
+        restored_source_ids=execution.restored_source_ids,
     )
 
 
@@ -101,6 +108,7 @@ def create_business_task(
         input_payload=request.input_payload,
         idempotency_key=request.idempotency_key,
         provider_mode=request.provider_mode,
+        thread_id=request.thread_id,
         human_confirmation_granted=request.human_confirmation_granted,
     )
     return _execution_response(execution)
@@ -172,6 +180,8 @@ def confirm_business_task(
     execution = BusinessTaskService(db, user_id=demo_user.id).confirm_task(
         task_id=task_id,
         idempotency_key=request.idempotency_key,
+        checkpoint_version=request.checkpoint_version,
+        confirmation_version=request.confirmation_version,
     )
     return _execution_response(execution)
 

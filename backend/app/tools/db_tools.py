@@ -191,7 +191,8 @@ def _query_prescriptions(
 ) -> dict[str, Any]:
     parsed = cast(PrescriptionsInput, tool_input)
     _ensure_member_scope(parsed.member_id, context)
-    result = get_prescription_context(db, parsed.member_id)
+    user_id = _require_user_scope(context)
+    result = get_prescription_context(db, user_id, parsed.member_id)
     return _require_evidence(result, "prescription context not found")
 
 
@@ -202,7 +203,8 @@ def _query_medicine_box(
 ) -> dict[str, Any]:
     parsed = cast(MedicineBoxInput, tool_input)
     _ensure_member_scope(parsed.member_id, context)
-    result = get_medicine_box_context(db, parsed.member_id)
+    user_id = _require_user_scope(context)
+    result = get_medicine_box_context(db, user_id, parsed.member_id)
     return _require_evidence(result, "medicine box context not found")
 
 
@@ -241,6 +243,16 @@ def _ensure_member_scope(member_id: str, context: ToolExecutionContext) -> None:
             error_type="context_isolation_violation",
             fallback_action="manual_review",
         )
+
+
+def _require_user_scope(context: ToolExecutionContext) -> str:
+    if not context.user_id:
+        raise ToolExecutionError(
+            "user_id is required for member resource access",
+            error_type="context_isolation_violation",
+            fallback_action="manual_review",
+        )
+    return context.user_id
 
 
 def _require_evidence(

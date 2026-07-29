@@ -186,9 +186,13 @@ class PgVectorSearchBackend:
         score = (1.0 - distance).label("score")
         rows = self._db.execute(
             select(
-                KnowledgeChunk.document_id,
-                KnowledgeChunk.id,
+                KnowledgeChunk,
+                KnowledgeDocument,
                 score,
+            )
+            .join(
+                KnowledgeDocument,
+                KnowledgeChunk.document_id == KnowledgeDocument.id,
             )
             .where(
                 KnowledgeChunk.embedding.is_not(None),
@@ -200,14 +204,34 @@ class PgVectorSearchBackend:
             .order_by(distance, KnowledgeChunk.id)
             .limit(request.limit)
         )
-        return [
-            VectorMatch(
-                document_id=document_id,
-                chunk_id=chunk_id,
-                score=max(0.0, min(1.0, float(raw_score))),
+        matches: list[VectorMatch] = []
+        for chunk, document, raw_score in rows:
+            expected_hash = embedding_content_hash(
+                embedding_text(document, chunk),
+                self._provider.model_name,
+                dimension=self._provider.dimension,
             )
-            for document_id, chunk_id, raw_score in rows
-        ]
+            if chunk.embedding_content_hash != expected_hash:
+                continue
+            matches.append(
+                VectorMatch(
+                    document_id=document.id,
+                    chunk_id=chunk.id,
+                    document_version=document.version
+                    or _timestamp_version(document.updated_at),
+                    chunk_version=chunk.chunk_version
+                    or _timestamp_version(chunk.updated_at),
+                    embedding_schema_version=EMBEDDING_SCHEMA_VERSION,
+                    score=max(0.0, min(1.0, float(raw_score))),
+                )
+            )
+        return matches
+
+
+def _timestamp_version(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
 
 
 def create_configured_embedding_provider() -> EmbeddingProvider:

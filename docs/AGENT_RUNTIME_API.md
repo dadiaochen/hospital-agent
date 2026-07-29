@@ -1,5 +1,7 @@
 # Agent Runtime 与运行 API
 
+> 本文主要记录当前 2G-2 可运行兼容实现。它仍保留“确认后创建草稿”的旧接口语义；4B 任务七的“首次 run 自动创建本地 DRAFT，确认 run 执行动作”已经接入新 `/api/business-tasks` 链路，任务八的 PostgreSQL Task Checkpoint 与 Redis TTL 回源也已接入新链路。最终状态以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
+
 ## 1. 定位
 
 2G-1 的 `LangGraphAgentWorkflow` 负责纯编排：输入 `WorkflowRunRequest`，输出 `WorkflowRunResult`。2G-2 增加的 `AgentRuntimeService` 是应用层适配器，负责把 HTTP、当前用户、数据库会话、真实工具、事务和冻结审计产物连接起来。
@@ -134,3 +136,31 @@ python -m compileall backend\app backend\tests
 ```
 
 测试覆盖真实 DB evidence、冻结回放、ToolEvidence 到数据库 tool-call 行的引用、幂等冲突、重复确认防护、跨成员/跨用户隔离、高风险阻断和失败 run 审计。测试模型仍是 deterministic provider，不能据此声称真实 LLM 质量指标。
+
+## 9. 最终两次运行语义
+
+最终确认不是恢复旧 Python state：
+
+1. 首次 run 生成并冻结本地 DRAFT、FinalAnswer、RunTrace、RunSummary 和来源引用，然后清理 Working State。
+2. PostgreSQL 保存 Task Checkpoint 和草稿版本；Redis 可缓存短期投影，但 miss 或故障时必须回源 PostgreSQL。
+3. 用户确认创建新的 `run_id`，并用 `parent_run_id` 指向首次 run。
+4. continuation run 校验 task/user/member、草稿版本、幂等键和状态，再重新读取处方、库存等可变事实。
+5. 动作 Policy Guard 通过后才执行受保护动作；最终状态由 PostgreSQL 事务和条件更新提交。
+
+当前接口字段与目标状态机并存期间，文档和 API 必须明确版本，不能让客户端同时执行两套确认语义。
+
+## 10. Tool/Provider 可靠性字段
+
+新业务任务的 `tool_calls` 和 `provider_calls` 已携带逐次 attempts、统一 error category、latency、retryable 与 fallback。Provider 降级会保留审计输出并令对应 ToolResult 失败，但不会产生 SourceRef。当前外部 adapter 仍未配置，sandbox/real 的 provider-unavailable 是可解释降级，不是 HTTP 层或外部系统成功。
+
+## 11. 任务十 RunTrace Observation
+
+新业务任务的冻结 `RunTrace` 增加 `observations`，按 sequence 记录 request、实际访问节点、Tool、Provider、RAG source、Model 和 final 事件。每项绑定 task/run/member，不包含 raw conversation、Tool/Provider payload、Prompt 或 FinalAnswer 正文；因此 Observation 可用于排障和任务十一 Harness，但不能替代业务证据，也不能用于重放写操作。
+
+`model_call_trace` 同时暴露 Provider 返回的可选 token usage。`token_usage_available=false` 表示 Provider 未给出完整 usage，不是调用了零 token。
+
+任务十一没有新增运行时 API 字段。`AblationRunTrace` 是离线评测包装，内部持有既有冻结 `RunTrace`，并追加策略、角色顺序、规范化工具调用、RAG 排名/引用和治理阶段；它不进入 `/api/business-tasks` 响应，也不能通过 API 恢复或修改业务状态。
+
+## 4B 任务十二：API 运行验收
+
+任务十二没有新增运行时 API 路径；`scripts/task12_acceptance.py` 通过 HTTP 边界验证健康检查、家庭成员、三类业务任务、知识搜索和缺少查询参数的 422 映射。确认并发由 PostgreSQL 状态条件更新保证单次执行，Redis 不可用时由 checkpoint service 回源 PostgreSQL。验收脚本不调用 LLM 或真实 Provider。

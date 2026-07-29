@@ -18,9 +18,9 @@ def _alembic_config() -> Config:
 def test_alembic_has_one_linear_head() -> None:
     script = ScriptDirectory.from_config(_alembic_config())
 
-    assert script.get_heads() == ["0006_vector_search_index"]
-    assert script.get_revision("0006_vector_search_index").down_revision == (
-        "0005_knowledge_metadata"
+    assert script.get_heads() == ["0007_task_checkpoint_state"]
+    assert script.get_revision("0007_task_checkpoint_state").down_revision == (
+        "0006_vector_search_index"
     )
     assert script.get_revision("0005_knowledge_metadata").down_revision == (
         "0004_business_task_runtime"
@@ -63,8 +63,13 @@ def test_alembic_upgrade_head_creates_unified_schema(tmp_path, monkeypatch) -> N
         "medical_documents",
         "health_record_events",
     }.issubset(set(inspector.get_table_names()))
+    assert {
+        "task_checkpoints",
+        "task_confirmation_records",
+        "confirmed_preferences",
+    }.issubset(set(inspector.get_table_names()))
 
     with engine.connect() as connection:
         revision = connection.scalar(text("SELECT version_num FROM alembic_version"))
 
-    assert revision == "0006_vector_search_index"
+    assert revision == "0007_task_checkpoint_state"

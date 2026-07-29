@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from hashlib import sha256
 import json
+import logging
 from typing import Any
 from uuid import uuid4
 
@@ -30,7 +31,12 @@ from app.models import (
     SourceReference,
 )
 from app.models.base import utc_now
+from app.schemas.checkpoint import TaskCheckpointPayload
 from app.schemas.business import BusinessDomain, ProviderMode
+from app.services.checkpoint_service import TaskCheckpointService
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -41,14 +47,26 @@ class BusinessTaskExecution:
     run: AgentRun | None
     state: dict[str, Any]
     idempotent_replay: bool = False
+    checkpoint_version: int = 0
+    confirmation_version: int = 0
+    checkpoint_source: str = "postgresql"
+    resumed_from_run_id: str | None = None
+    restored_source_ids: tuple[str, ...] = ()
 
 
 class BusinessTaskService:
     """Coordinate a business task without leaking ORM details into the API."""
 
-    def __init__(self, db: Session, *, user_id: str) -> None:
+    def __init__(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        checkpoint_service: TaskCheckpointService | None = None,
+    ) -> None:
         self.db = db
         self.user_id = user_id
+        self.checkpoints = checkpoint_service or TaskCheckpointService(db)
 
     def create_task(
         self,
@@ -59,6 +77,7 @@ class BusinessTaskService:
         input_payload: dict[str, Any] | None,
         idempotency_key: str,
         provider_mode: ProviderMode,
+        thread_id: str | None = None,
         human_confirmation_granted: bool = False,
     ) -> BusinessTaskExecution:
         """Create and execute a task, or replay the same idempotent request."""
@@ -71,6 +90,7 @@ class BusinessTaskService:
             user_input=user_input,
             input_payload=payload,
             provider_mode=provider_mode,
+            thread_id=thread_id or "",
         )
 
         existing = self.db.scalar(
@@ -90,12 +110,15 @@ class BusinessTaskService:
 
         task_id = str(uuid4())
         run_id = str(uuid4())
+        effective_thread_id = thread_id or f"task:{task_id}"
         task = BusinessTask(
             id=task_id,
             user_id=self.user_id,
             member_id=member_id,
             business_domain=business_domain,
             intent="pending",
+            provider_mode=provider_mode,
+            thread_id=effective_thread_id,
             status="running",
             user_input=user_input,
             idempotency_key=idempotency_key,
@@ -134,16 +157,28 @@ class BusinessTaskService:
                 human_confirmation_granted=human_confirmation_granted,
                 idempotency_key=idempotency_key,
             )
-            self._persist_state(task, run, state)
+            checkpoint = self._persist_state(task, run, state)
             self.db.commit()
             self.db.refresh(task)
             self.db.refresh(run)
-            return BusinessTaskExecution(task=task, run=run, state=state)
+            self.checkpoints.publish(checkpoint)
+            return BusinessTaskExecution(
+                task=task,
+                run=run,
+                state=state,
+                checkpoint_version=task.checkpoint_version,
+                confirmation_version=task.confirmation_version,
+            )
         except ApiError:
             self.db.rollback()
             raise
         except SQLAlchemyError as exc:
             self.db.rollback()
+            logger.exception(
+                "business task persistence failed: task_id=%s run_id=%s",
+                task.id,
+                run.id,
+            )
             raise ApiError(
                 status_code=503,
                 code="persistence_error",
@@ -171,10 +206,15 @@ class BusinessTaskService:
         *,
         task_id: str,
         idempotency_key: str,
+        checkpoint_version: int | None = None,
+        confirmation_version: int | None = None,
     ) -> BusinessTaskExecution:
         """Resume a confirmation-gated task after explicit user confirmation."""
 
-        task = self._get_task(task_id)
+        # PostgreSQL serializes this row while the continuation is decided.
+        # SQLite ignores FOR UPDATE, but the same status checks remain useful
+        # in local tests and development.
+        task = self._get_task(task_id, for_update=True)
         if task.idempotency_key != idempotency_key:
             raise ApiError(
                 status_code=409,
@@ -182,9 +222,28 @@ class BusinessTaskService:
                 message="confirmation idempotency_key does not match the task",
             )
         if task.status == "completed":
+            self._validate_replay_versions(
+                task,
+                checkpoint_version=checkpoint_version,
+                confirmation_version=confirmation_version,
+            )
             return self._replay(task)
         if task.status != "needs_confirmation" or not task.need_human_confirmation:
             raise InvalidRequestError("task is not waiting for human confirmation")
+
+        self._validate_confirmation_versions(
+            task,
+            checkpoint_version=checkpoint_version,
+            confirmation_version=confirmation_version,
+        )
+        restored = self.checkpoints.restore(task=task)
+        checkpoint = restored.payload
+        if checkpoint.confirmation_state != "DRAFT":
+            raise ApiError(
+                status_code=409,
+                code="confirmation_state_conflict",
+                message="authoritative checkpoint is not waiting for confirmation",
+            )
 
         previous_run = self.db.scalar(
             select(AgentRun).where(
@@ -192,11 +251,26 @@ class BusinessTaskService:
                 AgentRun.user_id == self.user_id,
             )
         )
-        if previous_run is None or not isinstance(previous_run.raw_state, dict):
+        if previous_run is None:
             raise ApiError(
                 status_code=409,
                 code="missing_runtime_state",
                 message="task cannot be resumed because its runtime state is unavailable",
+            )
+        confirmation = checkpoint.frozen_artifacts.get("confirmation", {})
+        raw_scope = confirmation.get("scope") if isinstance(confirmation, dict) else None
+        if not isinstance(raw_scope, dict) or any(
+            (
+                raw_scope.get("task_id") != task.id,
+                raw_scope.get("user_id") != self.user_id,
+                raw_scope.get("member_id") != task.member_id,
+                raw_scope.get("idempotency_key") != task.idempotency_key,
+            )
+        ):
+            raise ApiError(
+                status_code=409,
+                code="confirmation_scope_conflict",
+                message="confirmation draft scope no longer matches the task",
             )
 
         run_id = str(uuid4())
@@ -206,6 +280,7 @@ class BusinessTaskService:
             member_id=task.member_id,
             user_goal=task.user_input,
             intent=task.intent,
+            parent_run_id=previous_run.id,
             status="running",
             safety_result={},
             raw_state={},
@@ -218,21 +293,49 @@ class BusinessTaskService:
         try:
             workflow = FamilyHealthProductWorkflow(self.db)
             self.db.flush()
+            resume_state = self.checkpoints.restore_state_for_continuation(
+                task=task,
+                payload=checkpoint,
+            )
             state = workflow.resume_confirmation(
-                previous_run.raw_state,
+                resume_state,
                 run_id=run_id,
                 human_confirmation_granted=True,
             )
-            self._persist_state(task, run, state, confirmed_at=utc_now())
+            checkpoint_payload = self._persist_state(
+                task,
+                run,
+                state,
+                confirmed_at=(
+                    utc_now() if state.get("confirmation_state") == "EXECUTED" else None
+                ),
+                parent_run_id=previous_run.id,
+                previous_confirmation_state=checkpoint.confirmation_state,
+            )
             self.db.commit()
             self.db.refresh(task)
             self.db.refresh(run)
-            return BusinessTaskExecution(task=task, run=run, state=state)
+            self.checkpoints.publish(checkpoint_payload)
+            return BusinessTaskExecution(
+                task=task,
+                run=run,
+                state=state,
+                checkpoint_version=task.checkpoint_version,
+                confirmation_version=task.confirmation_version,
+                checkpoint_source=restored.source,
+                resumed_from_run_id=previous_run.id,
+                restored_source_ids=tuple(item.source_id for item in checkpoint.source_refs),
+            )
         except ApiError:
             self.db.rollback()
             raise
         except SQLAlchemyError as exc:
             self.db.rollback()
+            logger.exception(
+                "business task confirmation persistence failed: task_id=%s run_id=%s",
+                task.id,
+                run.id,
+            )
             raise ApiError(
                 status_code=503,
                 code="persistence_error",
@@ -307,16 +410,62 @@ class BusinessTaskService:
             raise ResourceNotFoundError("family member not found")
         return member
 
-    def _get_task(self, task_id: str) -> BusinessTask:
-        task = self.db.scalar(
-            select(BusinessTask).where(
-                BusinessTask.id == task_id,
-                BusinessTask.user_id == self.user_id,
-            )
+    def _get_task(
+        self,
+        task_id: str,
+        *,
+        for_update: bool = False,
+    ) -> BusinessTask:
+        statement = select(BusinessTask).where(
+            BusinessTask.id == task_id,
+            BusinessTask.user_id == self.user_id,
         )
+        if for_update:
+            statement = statement.with_for_update()
+        task = self.db.scalar(statement)
         if task is None:
             raise ResourceNotFoundError("business task not found")
         return task
+
+    @staticmethod
+    def _validate_confirmation_versions(
+        task: BusinessTask,
+        *,
+        checkpoint_version: int | None,
+        confirmation_version: int | None,
+    ) -> None:
+        if checkpoint_version is not None and checkpoint_version != task.checkpoint_version:
+            raise ApiError(
+                status_code=409,
+                code="checkpoint_version_conflict",
+                message="confirmation checkpoint version is stale",
+            )
+        if confirmation_version is not None and confirmation_version != task.confirmation_version:
+            raise ApiError(
+                status_code=409,
+                code="confirmation_version_conflict",
+                message="confirmation version is stale",
+            )
+
+    @staticmethod
+    def _validate_replay_versions(
+        task: BusinessTask,
+        *,
+        checkpoint_version: int | None,
+        confirmation_version: int | None,
+    ) -> None:
+        if checkpoint_version is not None and checkpoint_version != task.checkpoint_version:
+            raise ApiError(
+                status_code=409,
+                code="checkpoint_version_conflict",
+                message="confirmation checkpoint version is stale",
+            )
+        if confirmation_version is not None and confirmation_version != task.confirmation_version:
+            raise ApiError(
+                status_code=409,
+                code="confirmation_version_conflict",
+                message="confirmation version is stale",
+            )
 
     def _replay(self, task: BusinessTask) -> BusinessTaskExecution:
         run = None
@@ -327,12 +476,25 @@ class BusinessTaskService:
                     AgentRun.user_id == self.user_id,
                 )
             )
-        state = self._state_for_replay(task, run)
+        checkpoint_source = "legacy"
+        if int(task.checkpoint_version or 0) > 0:
+            restored = self.checkpoints.restore(task=task)
+            state = self.checkpoints.restore_state_for_replay(
+                task=task,
+                run=run,
+                payload=restored.payload,
+            )
+            checkpoint_source = restored.source
+        else:
+            state = self._state_for_replay(task, run)
         return BusinessTaskExecution(
             task=task,
             run=run,
             state=state,
             idempotent_replay=True,
+            checkpoint_version=int(task.checkpoint_version or 0),
+            confirmation_version=int(task.confirmation_version or 0),
+            checkpoint_source=checkpoint_source,
         )
 
     def _persist_state(
@@ -342,7 +504,9 @@ class BusinessTaskService:
         state: dict[str, Any],
         *,
         confirmed_at: datetime | None = None,
-    ) -> None:
+        parent_run_id: str | None = None,
+        previous_confirmation_state: str | None = None,
+    ) -> TaskCheckpointPayload:
         state.setdefault("latency_ms", self._duration_ms(run.started_at, utc_now()))
         add_product_artifacts(state)
         safe_state = self._json_safe(state)
@@ -362,14 +526,17 @@ class BusinessTaskService:
             task.confirmed_at = confirmed_at
 
         run.intent = task.intent
+        run.parent_run_id = parent_run_id
         run.status = status
         run.final_answer = self._optional_text(state.get("final_answer"))
         run.need_human_confirmation = task.need_human_confirmation
         run.safety_result = {
             "flags": self._json_safe(state.get("safety_flags", [])),
             "errors": self._json_safe(state.get("errors", [])),
+            "decisions": self._json_safe(state.get("safety_decisions", [])),
+            "final_output": self._json_safe(state.get("final_output_safety", {})),
         }
-        run.raw_state = safe_state
+        run.raw_state = self._freeze_runtime_state(safe_state)
         run.ended_at = now
         run.duration_ms = self._duration_ms(run.started_at, now)
         run.step_count = self._step_count(state)
@@ -478,6 +645,21 @@ class BusinessTaskService:
                 )
             )
 
+        _, checkpoint = self.checkpoints.persist(
+            task=task,
+            run=run,
+            state=state,
+            parent_run_id=parent_run_id,
+            previous_confirmation_state=previous_confirmation_state,
+        )
+        state["checkpoint_version"] = checkpoint.checkpoint_version
+        state["confirmation_version"] = checkpoint.confirmation_version
+        state["checkpoint_source"] = "postgresql"
+        task.output_payload["checkpoint_version"] = checkpoint.checkpoint_version
+        task.output_payload["confirmation_version"] = checkpoint.confirmation_version
+        run.raw_state = self._freeze_runtime_state(self._json_safe(state))
+        return checkpoint
+
     def _mark_failed(self, task: BusinessTask, run: AgentRun, exc: Exception) -> None:
         task.status = "failed"
         task.last_error = "business task execution failed"
@@ -507,10 +689,17 @@ class BusinessTaskService:
             "member_id": task.member_id,
             "business_domain": task.business_domain,
             "intent": task.intent,
+            "provider_mode": task.provider_mode,
+            "thread_id": task.thread_id,
             "user_input": task.user_input,
             "status": "failed",
             "final_answer": task.output_payload.get("final_answer", ""),
             "need_human_confirmation": False,
+            "confirmation_state": "FAILED",
+            "confirmation_draft": {},
+            "confirmation_scope": {},
+            "safety_decisions": [],
+            "final_output_safety": {},
             "safety_flags": [],
             "source_refs": [],
             "tool_calls": [],
@@ -540,6 +729,11 @@ class BusinessTaskService:
             "status": task.status,
             "final_answer": payload.get("final_answer", ""),
             "need_human_confirmation": task.need_human_confirmation,
+            "confirmation_state": payload.get("confirmation_state", "NONE"),
+            "confirmation_draft": payload.get("confirmation_draft", {}),
+            "confirmation_scope": payload.get("confirmation_scope", {}),
+            "safety_decisions": payload.get("safety_decisions", []),
+            "final_output_safety": payload.get("final_output_safety", {}),
             "confirmation_request": payload.get("confirmation_request"),
             "confirmation_result": payload.get("confirmation_result"),
             "safety_flags": payload.get("safety_flags", []),
@@ -549,6 +743,8 @@ class BusinessTaskService:
             "model_call_trace": payload.get("model_call_trace", {}),
             "degraded": task.degraded,
             "errors": payload.get("errors", []),
+            "checkpoint_version": task.checkpoint_version,
+            "confirmation_version": task.confirmation_version,
         }
 
     @staticmethod
@@ -557,10 +753,17 @@ class BusinessTaskService:
             "final_answer": state.get("final_answer"),
             "confirmation_request": state.get("confirmation_request"),
             "confirmation_result": state.get("confirmation_result"),
+            "confirmation_state": state.get("confirmation_state", "NONE"),
+            "confirmation_draft": state.get("confirmation_draft", {}),
+            "confirmation_scope": state.get("confirmation_scope", {}),
+            "safety_decisions": state.get("safety_decisions", []),
+            "final_output_safety": state.get("final_output_safety", {}),
             "safety_flags": state.get("safety_flags", []),
             "source_refs": state.get("source_refs", []),
             "errors": state.get("errors", []),
             "model_call_trace": state.get("model_call_trace", {}),
+            "checkpoint_version": state.get("checkpoint_version", 0),
+            "confirmation_version": state.get("confirmation_version", 0),
         }
 
     @staticmethod
@@ -582,6 +785,7 @@ class BusinessTaskService:
         user_input: str,
         input_payload: dict[str, Any],
         provider_mode: str,
+        thread_id: str | None,
     ) -> str:
         normalized = json.dumps(
             {
@@ -590,6 +794,7 @@ class BusinessTaskService:
                 "user_input": user_input,
                 "input_payload": input_payload,
                 "provider_mode": provider_mode,
+                "thread_id": thread_id,
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -611,6 +816,30 @@ class BusinessTaskService:
         if value is None or isinstance(value, (str, int, float, bool)):
             return value
         return str(value)
+
+    @classmethod
+    def _freeze_runtime_state(cls, value: Any) -> Any:
+        """Drop working-only context before storing a run artifact."""
+
+        forbidden = {
+            "raw_conversation",
+            "conversation_history",
+            "scratchpad",
+            "candidate_inferences",
+            "role_views",
+            "working_state",
+            "provider_raw_response",
+            "api_key",
+        }
+        if isinstance(value, dict):
+            return {
+                str(key): cls._freeze_runtime_state(item)
+                for key, item in value.items()
+                if str(key).casefold() not in forbidden
+            }
+        if isinstance(value, list):
+            return [cls._freeze_runtime_state(item) for item in value]
+        return value
 
     @staticmethod
     def _optional_text(value: Any) -> str | None:

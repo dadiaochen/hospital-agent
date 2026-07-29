@@ -23,6 +23,9 @@ class RetrievalRequest(RetrievalContract):
 class VectorMatch(RetrievalContract):
     document_id: NonEmptyStr
     chunk_id: NonEmptyStr
+    document_version: NonEmptyStr
+    chunk_version: NonEmptyStr
+    embedding_schema_version: NonEmptyStr
     score: float = Field(ge=0.0, le=1.0)
 
 
@@ -40,8 +43,25 @@ class RetrievedChunk(RetrievalContract):
     content: NonEmptyStr
     keywords: list[str] = Field(default_factory=list)
     score: float = Field(ge=0.0, le=1.0)
+    keyword_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    vector_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    keyword_rank: int | None = Field(default=None, ge=1)
+    vector_rank: int | None = Field(default=None, ge=1)
+    rrf_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    embedding_schema_version: NonEmptyStr | None = None
     purpose: NonEmptyStr
     matched_by: tuple[MatchMode, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_rank_provenance(self) -> "RetrievedChunk":
+        if "keyword" in self.matched_by and self.keyword_score is None:
+            raise ValueError("keyword matches require score provenance")
+        if "vector" in self.matched_by and (
+            self.vector_score is None
+            or self.embedding_schema_version is None
+        ):
+            raise ValueError("vector matches require score and embedding schema")
+        return self
 
 
 class RetrievalResult(RetrievalContract):

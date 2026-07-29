@@ -163,6 +163,7 @@ def test_trace_adapter_redacts_secrets_and_rejects_member_tampering(
     assert response.status_code == 201
     artifacts = response.json()["artifacts"]
     artifacts["api_key"] = "should-never-survive"
+    artifacts["token"] = "should-also-never-survive"
     artifacts["debug"] = {
         "raw_conversation": "private conversation",
         "nested": {"provider_raw_response": "private provider output"},
@@ -173,11 +174,13 @@ def test_trace_adapter_redacts_secrets_and_rejects_member_tampering(
 
     assert set(adapted.redacted_paths) == {
         "api_key",
+        "token",
         "debug.raw_conversation",
         "debug.nested.provider_raw_response",
     }
     serialized = adapted.model_dump_json()
     assert "should-never-survive" not in serialized
+    assert "should-also-never-survive" not in serialized
     assert "private conversation" not in serialized
     with pytest.raises(ValidationError):
         adapted.trace.final_answer.content = "mutated by evaluator"

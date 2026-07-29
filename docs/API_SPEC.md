@@ -122,7 +122,11 @@ draft -> rejected
 
 Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider 的未校验原始文本。2G-2 Agent Runtime 只通过 Gateway 获得结构化结果，并持久化脱敏 Trace；Router 不能直接调用模型 HTTP endpoint。
 
+4B 任务五新增的 `ComplexityRoute`、`TaskPlan`、`AgentTaskResult`、`SupervisorDecision` 和三阶段 `SafetyDecision`，以及任务六的 `OrchestrationRunResult`，都是内部 Python 契约，不新增 HTTP endpoint。任务六的 deterministic 编排内核目前由测试直接调用；业务 API 暂不暴露其内部 Planner/Supervisor 决策，后续要在安全、checkpoint 和错误映射验收后再公开稳定的路由/冻结产物字段。
+
 ## 8. 2G-2 Agent Runtime API
+
+> **当前兼容实现：** 本节记录已经可调用的 2G-2 旧契约，即首次 run 返回 `needs_confirmation`，确认后才创建本地草稿。任务七没有改写这条旧 API；“首次 run 自动创建本地 `DRAFT`，用户确认执行”的单确认语义已接入下一节的新 `/api/business-tasks`，因此两套字段不能混用。
 
 2G-1 的 `LangGraphAgentWorkflow.run()` 仍是内部 Python 入口。2G-2 通过 `AgentRuntimeService` 注入真实 DB Tool Registry，并新增以下 HTTP 边界：
 
@@ -140,7 +144,7 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 
 ## 9. 4B 业务任务 API
 
-4B 把三条业务线统一为一个任务入口，业务域由请求字段区分；上层 API 不直接调用 LangGraph、Provider 或数据库。
+4B 把三条业务线统一为一个任务入口，业务域由请求字段区分；上层 API 不直接调用 LangGraph、Provider 或数据库。任务七已经把新业务任务链路接入 `confirmation_state` 状态机；请求体仍保留 `human_confirmation_granted` 作为兼容确认字段，旧 `/api/agent-runs` 也继续保持原契约。
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
@@ -149,7 +153,8 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 | `GET` | `/api/business-tasks/{task_id}` | 查询任务摘要。 |
 | `GET` | `/api/business-tasks/{task_id}/sources` | 查询该任务保留的 Provider/RAG/工具来源引用。 |
 | `GET` | `/api/business-tasks/{task_id}/artifacts` | 查询最新冻结的 `RunTrace`、`RunSummary`、`EvaluationResult` 和工具/Provider 产物。 |
-| `POST` | `/api/business-tasks/{task_id}/confirm` | 对 `needs_confirmation` 任务显式确认并续跑；只创建本地 draft。 |
+| `POST` | `/api/business-tasks/{task_id}/confirm` | 对已有本地 `DRAFT` 确认执行，创建同一 task 的独立 continuation run。 |
+| `POST` | `/api/preferences` | 在同 task 的已执行人工确认和 source version 校验通过后写入可撤销偏好。 |
 
 首次创建示例：
 
@@ -170,23 +175,53 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 
 `business_domain` 当前支持 `preconsultation`、`chronic_care`、`health_record`；Provider 模式支持 `mock`、`sandbox`、`real`。当前仓库只实现 mock adapter，未配置的 sandbox/real 会返回 `degraded=true` 和明确 fallback reason，不会返回伪造的实时医院、药店或通知结果。
 
-首次成功的关键返回状态是 `needs_confirmation`，响应同时携带：
+任务九后，`provider_calls` 中每项还包含统一 `error_category`、`latency_ms` 和 `attempts`。可恢复的只读 timeout/rate-limit/provider-unavailable 只在服务端固定上限内重试；请求参数、权限、成员作用域、schema 和 business conflict 不重试。Provider 降级属于业务执行结果，HTTP 请求本身仍可返回业务任务 DTO；客户端必须同时检查顶层 `status/degraded` 和每个 Provider call，不能把 HTTP 201 等同于外部服务成功。
+
+失败 Provider call 的 `response_payload.data` 与 `source_refs` 必须为空。mock 药房的 `order_created`、医院的 `appointment_created` 和问诊的 `submitted` 始终为 false；当前 API 不提供真实外部写入成功语义。
+
+新业务任务首次成功的 HTTP 状态仍是 `needs_confirmation`，但语义已经是“草稿自动生成，等待执行确认”。响应同时返回 `confirmation_state="DRAFT"` 和无外部副作用的 `confirmation_draft`；确认续跑成功后返回 `confirmation_state="EXECUTED"`。`EXECUTED` 只表示本地状态迁移完成，外部状态仍为 `not_submitted`。响应必须携带：
 
 - `confirmation_request`：将要写入的本地草稿类型和摘要；
+- `confirmation_state` / `confirmation_draft`：草稿状态、版本、成员、动作类型和本地/外部边界；
 - `source_refs`：带 `member_id`、文档版本或 Provider 模拟标记的来源；
 - `run_trace`、`run_summary`、`evaluation_result`：只读冻结产物；
 - `model_call_trace`：最终答案 Gateway 调用的 provider、schema、安全、fallback 和耗时信息，不包含 Key、完整 prompt 或 provider 原始文本。
+- `checkpoint_version` / `confirmation_version`：当前权威 checkpoint 和确认状态版本；客户端确认时应原样回传以启用乐观并发校验；
+- `checkpoint_source`、`resumed_from_run_id`、`restored_source_ids`：说明本次结果是否从 Redis/PostgreSQL checkpoint 恢复以及恢复的来源指针。
 
-确认请求必须使用原任务幂等键：
+当前确认请求使用兼容字段：
 
 ```json
 {
   "human_confirmation_granted": true,
-  "idempotency_key": "demo-refill-001"
+  "idempotency_key": "demo-refill-001",
+  "checkpoint_version": 1,
+  "confirmation_version": 1
 }
 ```
 
 `GET /artifacts` 适合详情页、审计和回放；前端不得修改返回的 Trace 或 Evaluation。高风险请求在业务工具前由 Agent 安全阻断，不能通过确认接口绕过。
+
+最终确认流程是同一 `task_id` 下的两个独立 run：首次 run 冻结草稿、答案与来源；确认 run 从 PostgreSQL Task Checkpoint 恢复，重新读取可变业务事实，再通过动作策略检查、事务和幂等键执行。Redis 只做 TTL 缓存与多实例协调，缓存故障必须回源 PostgreSQL。
+
+任务八已补充并冻结以下 checkpoint 相关字段：
+
+- `confirmation_state`：草稿、已确认、已执行或终止状态；
+- `checkpoint_version`：续跑时用于乐观并发控制；
+- `run_id` 与 `parent_run_id`：明确两个 run 的因果关系；
+- `source_refs`：保留业务 DB、Provider 和 RAG 来源，不接受个人健康向量记忆作为事实来源。
+
+### 9.1 已确认偏好写入
+
+`POST /api/preferences` 的请求必须包含 `task_id`、`member_id`、`preference_type`、`preference_value`、`source_id`、`source_version`、`confirmation_version`、`idempotency_key`，并且 `human_confirmation_granted` 只能为 `true`。服务端会校验：
+
+- task 属于当前用户和成员，且已完成 `DRAFT -> CONFIRMED -> EXECUTED`；
+- confirmation version 与权威 task/checkpoint 一致，存在同 task 的人工确认记录；
+- source 属于同一 task/member，source version 与数据库来源版本一致；
+- 偏好不是处方、诊断、剂量、过敏、报告、库存或症状等医疗事实；
+- 同一幂等键只 replay，不会重复创建版本。
+
+返回的偏好带 `preference_version`、`consent_version`、来源版本和 `revocable`；它不是模型长期记忆，也不会替代权威处方、报告或药箱数据。
 
 ## 10. 当前前端 API 消费约定
 
@@ -217,4 +252,19 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 4. 不存在、越权、schema 失败和状态冲突要有可预测的错误格式。
 5. 含有医疗敏感内容的写操作在 API 层之外还必须经过 safety 与 confirmation 规则。
 
-2E-1、2E-2、2F、2G 和 3B 已进入当前线性工作区；4B 的业务任务 API 与 artifacts 契约正在本分支继续完善。阶段状态只以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
+2E-1、2E-2、2F、2G、3B 和 4B 任务一至十二已进入当前线性工作区；任务十二已用真实 Docker 栈验收现有业务 API、知识搜索、错误映射、确认并发和 Redis checkpoint 回源。阶段状态只以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
+## 4B 任务十：Trace 响应补强
+
+任务十没有新增 HTTP 路径，也没有改变业务任务的确认语义。现有 `/api/business-tasks` 和 artifacts 响应中的 `run_trace` 新增 `observations`；`model_call_trace` 新增可选 `input_tokens/output_tokens/total_tokens` 与 `token_usage_available`。
+
+每条 Observation 只包含 request/task/run/member 标识、事件类型、node、序号、工具/Provider/模型名、结果、时延、重试、fallback、source ID 和可用 token 计数。请求正文、`input_payload`、Tool 输入输出、Provider 请求响应、模型 messages、最终答案正文和凭据不进入该数组。Provider 未返回完整 usage 时三个 token 字段均为 `null`，`token_usage_available=false`，服务端不估造数值。
+
+这是兼容性扩展：旧客户端可以忽略新增字段。`RunTrace` 和 Observation 均为只读审计产物，不能通过 API 回写业务状态。
+
+## 4B 任务十一：Harness 入口边界
+
+任务十一没有新增 HTTP API，也没有让客户端选择 A/B/C 策略。消融只通过 `python -m app.agent.ablation_harness` 离线执行，读取固定 fixture 并把 JSON/Markdown 报告写到 `output/`；提交到仓库的 Markdown 是复核后的确定性快照。生产业务 API 的模型、工具或安全配置仍不能由请求覆盖。
+
+## 4B 任务十二：API 真实运行边界
+
+任务十二没有新增 HTTP 路径，而是通过 `scripts/task12_acceptance.py` 对现有 `/health`、`/api/family-members`、三类 `/api/business-tasks` 操作和 `/api/knowledge/search` 做 Docker smoke。验收确认业务接口仍返回结构化 DTO、缺少知识查询参数映射为 422、重复确认只执行一次；Redis 不可用时，业务 API 从 PostgreSQL 恢复权威 checkpoint。该脚本不调用 LLM 或真实外部 Provider。

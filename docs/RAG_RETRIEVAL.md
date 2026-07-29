@@ -102,7 +102,9 @@ RetrievalRequest
   -> ToolEvidence / ContextEnvelope / FinalAnswer
 ```
 
-当前 `HybridRetriever` 已支持三种模式：`keyword` 直接精确检索，`vector` 只返回向量命中的来源指针，`hybrid` 合并两路结果并按稳定规则去重排序。默认确定性 provider 不是语义模型，只用于离线契约、索引和降级测试；配置 FastEmbed 后，向量分数才具有语义相似度含义。无论使用哪种 provider，正文都必须从权威知识表回填。
+当前 `HybridRetriever` 已支持三种模式：`keyword` 直接精确检索，`vector` 只返回向量命中的来源指针，`hybrid` 使用 Reciprocal Rank Fusion（RRF）合并两路 rank。默认确定性 provider 不是语义模型，只用于离线契约、索引和降级测试；配置 FastEmbed 后，向量分数才具有语义相似度含义。无论使用哪种 provider，正文都必须从权威知识表回填。
+
+RRF 使用 `1 / (60 + rank)` 累加两路贡献。`keyword_score` 和 `vector_score` 被保留用于排障，但不跨量纲比较；最终 hybrid 排序只读取 `rrf_score`，相同分数再使用分类、chunk index 和 chunk ID 稳定排序。每条来源同时保留 `keyword_rank`、`vector_rank`、文档版本、分块版本和 embedding schema。
 
 关键词检索读取标题、分类、来源、正文和关键词，按 query token 命中位置计算归一化分数。连续中文保留完整片段并补充双字词，使安全关键词不依赖外部分词服务。最终排序结合向量相似度、关键词相关性、文档权威级别、版本状态和业务目的，并使用 chunk index 与 chunk ID 作为稳定 tie-breaker。
 
@@ -146,6 +148,8 @@ FASTEMBED_CACHE_PATH=E:\\project_code\\hospital\\var\\fastembed
 | 开关开启但没有后端 | `keyword` | `vector_backend_unavailable`。 |
 | 向量后端异常 | `keyword` | `vector_backend_error:<type>`。 |
 | 向量指针无法从数据库回填 | `keyword` | `vector_sources_not_found`。 |
+| 向量指针版本或 embedding schema 过期 | `keyword` | `vector_source_version_mismatch`。 |
+| 部分向量来源过期 | `hybrid`/`vector` | 忽略旧来源并记录 `stale_vector_sources_ignored`。 |
 | embedding provider 未安装或模型下载失败 | `keyword` | `vector_backend_error:RuntimeError` 或对应异常类型。 |
 
 降级必须显式进入检索结果、ToolResult 和 RunTrace。关键词结果可以继续服务当前任务，但医疗安全规则没有命中时不得用模型记忆兜底。
@@ -178,6 +182,12 @@ python -m app.rag.indexer
 
 评测需要同时读取 `ExpectedCase`、`RetrievalResult`、`SourceRef`、`FinalAnswer` 和 `RunTrace`。`LLM-as-a-Judge` 只能作为辅助评审，引用正确性和无来源医疗结论必须优先采用规则、标注与人工抽查。
 
+医疗知识 RAG 与个人状态严格隔离：系统不建立个人健康向量记忆，不把完整聊天、处方、报告原值、过敏史或药箱库存嵌入知识库。此类事实每次 run 从业务数据库或 Provider 重新读取；RAG 只检索经过版本管理的通用医疗规则、流程和解释资料。
+
+4B 任务五的 Router 和任务六的 deterministic 领域编排只输出固定领域、步骤和来源需求契约，不执行检索；真实 RAG 来源仍由后续 Tool/Provider 接线后的领域 Agent 获取。任务六不会把没有 `SourceRef` 的工作流占位结果当作医学事实。
+
+4B 任务七不改变 RAG 的召回和 embedding 规则。它只把已有 `SourceRef`、RAG source pointer 和安全决策带入 Action Policy/Final Output Safety 边界；没有有效来源时，最终答案仍不能把模型解释升级为医疗事实。任务八已将 `SourceRef` 的 source id、member 和版本指针纳入 PostgreSQL 权威 checkpoint；Redis 只缓存这些指针的短期投影，恢复后仍需按当前成员和来源版本校验，不能把个人健康数据写入知识 namespace。
+
 ## 10. 验证
 
 ```powershell
@@ -185,3 +195,19 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_hybrid_rag.py backend\tests\test_db_backed_tools.py -q -p no:cacheprovider --basetemp=.tmp\pytest-rag
 python -m pytest backend\tests\test_provider_and_embedding.py -q -p no:cacheprovider --basetemp=$env:TEMP\hospital-pytest-rag-provider
 ```
+
+任务十已经实现 RRF、向量版本三元组校验和来源决策字段。定向测试证明高 raw vector score 不会压过多路一致命中，旧文档/分块版本不会被当前 PostgreSQL 正文重新包装为有效来源。该结果是排序与版本契约回归，不代表真实语义模型 Recall@K 已达到某个数值。
+
+任务十一在 4 条固定 RAG case 上复用同一 ranked source list，三种策略的 Recall@3 为 0.7500、Recall@5 为 1.0000、引用正确率为 1.0000。它证明指标计算、引用集合和公平性约束可重复，不代表真实 FastEmbed/pgvector 语义召回率。任务十二已在 Docker PostgreSQL 中验证 4 个知识 chunk 的 512 维 deterministic 向量、pgvector 扩展和索引数据；这证明数据链路可用，不代表语义质量。
+
+任务十二验收使用：
+
+```powershell
+$env:RAG_VECTOR_ENABLED='true'
+$env:RAG_EMBEDDING_PROVIDER='deterministic'
+$env:RAG_EMBEDDING_MODEL='deterministic-hash-v1'
+$env:RAG_EMBEDDING_DIMENSIONS='512'
+.\.venv\Scripts\python.exe scripts\task12_acceptance.py --require-vector
+```
+
+完整结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。

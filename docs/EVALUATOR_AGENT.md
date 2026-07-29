@@ -42,7 +42,9 @@ SafetyAgent 与它不能互相替代：前者在风险动作前拦截，后者�
 
 `EvaluationResult` 包含：`task_success`、`tool_call_accuracy`、`groundedness`、`schema_valid`、`hallucination_detected`、`safety_recall`、确认要求与呈现、成员隔离、`latency_ms` 和 `failure_reasons`。
 
-HarnessRunner 批量加载 16 个固定 ExpectedCase 和对应 mock RunTrace，并聚合：任务成功率、工具准确度平均、groundedness、schema 有效率、幻觉率、安全召回、确认提示率、隔离通过率和 p95 延迟。
+当前 HarnessRunner 批量加载 16 个固定 ExpectedCase 和对应 mock RunTrace，并聚合：任务成功率、工具准确度平均、groundedness、schema 有效率、幻觉率、安全召回、确认提示率、隔离通过率和 p95 延迟。
+
+4B 任务六新增的 `OrchestrationRunResult` 只记录 deterministic Planner/Supervisor 的路由、步骤、Agent 结果和终止原因；它不是 `EvaluationResult`，也不会替代冻结后的 RunTrace、FinalAnswer 和 Safety 产物。后续 Harness 可以把这些结构化结果适配为 RunTrace，但当前不把任务六的占位结果写成真实业务质量指标。
 
 产品升级后的 Agent Harness 还需要增加六项 RAG 指标：
 
@@ -69,6 +71,57 @@ HarnessRunner 批量加载 16 个固定 ExpectedCase 和对应 mock RunTrace，�
 
 现有运行时已经把 EvaluationResult 与冻结 RunTrace 一起持久化和查询。Evaluator 没有数据库 Session、Tool Registry 或 state writer；持久化由 AgentRuntimeService 在评估返回后完成，因此评估器不能修改答案和业务状态。
 
-最终阶段 4C 将扩展 `ExpectedCase`、`RAGTrace` 和报告聚合并真实计算六项新增指标。当前仍不是临床质量评估；LLM-as-a-Judge 即使加入，也只能作为辅助评审，不能替代引用、成员隔离、Agent 安全和人工确认的确定性校验。
+4B 最终验收会扩展 `ExpectedCase`、`RAGTrace` 和报告聚合并真实计算新增指标。当前仍不是临床质量评估；LLM Judge 即使加入，也只能作为离线辅助实验，不能进入运行链路，不能替代引用、成员隔离、Agent 安全和人工确认的确定性校验，也不是验收硬门槛。
 
-4B 新业务运行还会保存脱敏的 `ModelCallTrace`，其中的 provider、schema、safety、fallback 和耗时可作为评测输入；Evaluator 仍只读冻结的最终答案和运行产物，不读取 Key、完整 prompt 或 provider 原始文本，也不负责判断真实模型的临床质量。
+4B 新业务运行还会保存脱敏的 `ModelCallTrace`，其中的 provider、schema、safety、fallback 和耗时可作为评测输入；任务八另外冻结 `checkpoint_version`、`confirmation_version`、`checkpoint_source`、`parent_run_id` 和恢复来源指针，Evaluator 可以读取这些字段判断两次 run 和成员隔离是否成立。Evaluator 仍只读冻结的最终答案和运行产物，不读取 Key、完整 prompt 或 provider 原始文本，也不负责判断真实模型的临床质量。
+
+## 5.1 任务七后的治理边界
+
+任务七新增的三层 Safety Guard 和确认状态机发生在 Evaluator 之前：
+
+```text
+Request Safety -> Action Policy / Confirmation State Machine
+-> Model Gateway candidate -> Final Output Safety
+-> freeze RunTrace / RunSummary -> DeterministicEvaluator
+```
+
+Evaluator 可以读取冻结的 SafetyTrace、`confirmation_state`、最终答案和失败原因来评估安全召回、确认呈现、成员隔离和任务成功；它不能把失败答案改成安全答案，也不能重放确认或推进 `DRAFT -> EXECUTED`。SafetyAgent/Guard 负责运行时阻断，Evaluator 只负责事后质量证据。
+
+任务八的 checkpoint/cache 恢复由业务 service 在 Evaluator 之前完成。Evaluator 只能读取 PostgreSQL 已冻结的 `RunTrace`、`RunSummary`、`TaskCheckpoint` 投影和 `EvaluationResult` 引用；它不能从 Redis 取唯一事实、刷新缓存、写确认记录或写偏好。Redis miss/回源本身是运行时 trace 证据，不是 Evaluator 的业务动作。
+
+## 6. 4B 最终 Harness 硬门槛
+
+最终固定集至少 32 条高质量用例，分组如下：
+
+| 类别 | 数量 | 重点 |
+| --- | ---: | --- |
+| 单领域正常任务 | 6 | 三个领域 Agent 的直接路由与来源 |
+| 复杂跨领域任务 | 6 | 一次性 Planner、bounded Supervisor、依赖和终止 |
+| 缺失信息与澄清 | 3 | 不猜槽位、不执行无依据动作 |
+| 高风险医疗 | 5 | 三层安全治理与阻断 |
+| RAG 与来源 | 4 | 检索、引用支持、降级和版本 |
+| Provider/Tool 异常 | 3 | timeout、schema、retry 和 fallback |
+| 成员攻击与串扰 | 3 | user/member/trace/source 全链路隔离 |
+| 确认、重复与并发 | 2 | 两次独立 run、幂等和状态条件更新 |
+
+32 条通过后，新增用例只来自真实联调失败、review 发现和回归缺陷；不为凑数字盲目扩到 48 条。
+
+为回答“多 Agent 是否真的有价值”，同一批 ExpectedCase、工具、知识版本、模型配置和超时预算要运行三组消融：
+
+- A：单 Agent 基线。
+- B：固定规则路由到领域 Agent。
+- C：简单请求直达、复杂请求使用 bounded Supervisor 的最终方案。
+
+比较任务成功、工具调用、groundedness、安全召回、隔离、确认正确性、延迟、token/调用次数和失败原因分布。只有真实报告可以支撑“C 优于 A/B”的结论；设计文档本身不能。
+
+任务九已经为后续 32 条 Harness 冻结 Tool/Provider 的 `attempts`、`error_type`、`error_category`、`retryable`、`degraded`、`fallback_reason` 和来源字段。Evaluator 只能读取这些最终产物判断重试是否超界、失败是否错误地产生来源、写工具是否重复；它不能重新调用 Provider 或改变降级结果。当前 45 条定向测试是可靠性契约回归，不是任务十一的完整 Harness 指标。
+
+任务十进一步把 RRF rank、版本拒绝、成员攻击结果和白名单 Observation 放入冻结 `RunTrace`。Deterministic Evaluator 在任务十一可以读取这些字段判断来源、隔离和治理覆盖，但仍不能读取被删去的 Prompt/业务 payload、修改 FinalAnswer、重新执行 Tool/Provider 或写业务状态。任务十 84 条定向与 287 条全量测试是代码回归证据，不是 32 条新业务 Harness 指标，也不提前给出 A/B/C 架构优劣结论。
+
+任务十一现已完成。`business_harness_cases.4b.json` 固定 32 条 case，`AblationHarnessRunner` 为三种策略生成 96 份冻结 `RunTrace` 并继续调用既有 `DeterministicEvaluator`。额外的消融投影只计算角色覆盖/顺序、工具集合与参数 exact-match、不必要 handoff、重复调用、治理覆盖、RAG Recall@3/@5、引用正确率和 fixture latency；它不能修改 `FinalAnswerTrace`，也不会重新调用业务系统。
+
+[任务十一消融报告](agent_ablation_report.4b.md) 是 deterministic/mock 架构回归证据。报告中固定路由的复杂任务完成率为 0.0000，bounded Supervisor 为 1.0000，但这只说明该固定集中的跨域覆盖差异；Safety、成员隔离和 RAG 三组保持一致，不能归因给 Supervisor。真实模型 token/cost 没有 usage，因此保持 `N/A`。
+
+## 4B 任务十二：Evaluator 的边界
+
+任务十二的 `scripts/task12_acceptance.py` 是操作员级 Docker/HTTP/数据库验收，不是新的 LLM Judge，也不改变 Deterministic Evaluator 的只读约束。它检查 migration、seed、RAG 数据、API、Redis 回源和确认并发；不会修改 FinalAnswer，不会调用业务 Tool，不会生成医疗建议。任务十二的本机 wall-clock 不能替代 Harness 的固定指标，也不能作为临床或生产质量结论。

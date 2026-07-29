@@ -13,6 +13,17 @@ from app.agent.context_schemas import (
 )
 from app.agent.eval_schemas import EvaluationResult, ExpectedCase, HarnessCaseCategory
 from app.agent.model_gateway_schemas import ModelCallResult
+from app.agent.orchestration_schemas import (
+    AgentTaskResult,
+    ComplexityRoute,
+    ComplexityRoutingRequest,
+    PlanStep,
+    OrchestrationRunResult,
+    SafetyDecisionBundle,
+    SupervisorDecision,
+    TaskPlan,
+    TaskStep,
+)
 from app.agent.run_trace_schemas import ActionTraceStatus, RunTrace
 from app.tools.tool_schemas import ToolResult
 
@@ -112,6 +123,15 @@ class WorkflowRunResult(ContractModel):
 
 __all__ = [
     "DraftActionType",
+    "AgentTaskResult",
+    "ComplexityRoute",
+    "ComplexityRoutingRequest",
+    "PlanStep",
+    "SafetyDecisionBundle",
+    "SupervisorDecision",
+    "TaskPlan",
+    "TaskStep",
+    "OrchestrationRunResult",
     "WorkflowFinalAnswerDraft",
     "WorkflowPlan",
     "WorkflowResumeContext",

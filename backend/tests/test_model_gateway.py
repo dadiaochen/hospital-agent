@@ -137,6 +137,33 @@ def test_provider_error_records_type_and_uses_fallback(
     assert result.trace.attempts[0].error_type == "provider_http_error"
 
 
+def test_failed_schema_attempt_preserves_usage_without_claiming_partial_total(
+    model_request: ModelCallRequest,
+    safe_fallback: DeterministicModelProvider,
+) -> None:
+    class InvalidUsageProvider(StaticProvider):
+        def invoke(self, request: ModelCallRequest) -> ProviderRawResponse:
+            return ProviderRawResponse(
+                provider_name=self.provider_name,
+                model_name=self.model_name,
+                content="not-json",
+                input_tokens=9,
+                output_tokens=2,
+                total_tokens=11,
+            )
+
+    result = ModelGateway(
+        InvalidUsageProvider("not-json"),
+        fallback_provider=safe_fallback,
+    ).invoke(model_request, StructuredAnswer)
+
+    assert result.trace.attempts[0].total_tokens == 11
+    assert result.trace.attempts[0].error_type == "schema_validation_failed"
+    assert result.trace.success is True
+    assert result.trace.token_usage_available is False
+    assert result.trace.total_tokens is None
+
+
 @pytest.mark.parametrize(
     "primary_content",
     [
@@ -265,6 +292,11 @@ def test_openai_compatible_provider_uses_structured_http_contract(
                         }
                     }
                 ],
+                "usage": {
+                    "prompt_tokens": 11,
+                    "completion_tokens": 7,
+                    "total_tokens": 18,
+                },
             },
         )
 
@@ -281,6 +313,10 @@ def test_openai_compatible_provider_uses_structured_http_contract(
 
     assert result.trace.success is True
     assert result.trace.requested_provider == "openai_compatible"
+    assert result.trace.token_usage_available is True
+    assert result.trace.input_tokens == 11
+    assert result.trace.output_tokens == 7
+    assert result.trace.total_tokens == 18
     assert "secret-from-env" not in repr(provider)
     client.close()
 

@@ -1,6 +1,6 @@
 # 项目亮点与简历表达
 
-> 本文统一使用面试中常见的说法。FastAPI、LangGraph、RAG、MCP 等标准技术名可以保留；代码内部的类名、字段名和缩写不作为简历或口述用语。准备时可以按“背景、目标、行动、结果”检查结构，面试现场不念 STAR 字母。
+> 本文统一使用面试中常见的说法。FastAPI、LangGraph、RAG 等标准技术名可以保留；代码内部的类名、字段名和缩写不作为简历或口述用语。准备时可以按“背景、目标、行动、结果”检查结构，面试现场不念 STAR 字母。
 
 ## 当前固定用例指标与简历取舍
 
@@ -70,17 +70,38 @@
 
 “为了方便排错和评测，我还保存每次任务的运行轨迹，包括调用了什么工具、返回了什么、为什么失败。现在项目处于开发和固定用例验证阶段，还没有接入真实医院和药店，所以我会把已经完成的功能、正在验证的能力和后续计划分开讲，不会把设计目标说成线上结果。”
 
-准备时可以用“背景、目标、行动、结果”检查有没有讲完整，但面试现场直接按上面三段自然说。只有面试官继续追问实现时，再展开 LangGraph、Pydantic、MCP 或数据库表等技术细节。
+准备时可以用“背景、目标、行动、结果”检查有没有讲完整，但面试现场直接按上面三段自然说。只有面试官继续追问实现时，再展开 LangGraph、Pydantic、Tool Registry、RAG 或数据库表等技术细节。
 
 ## 4B 本地开发环境验证补充
 
-本次已在 Docker Desktop 的 PostgreSQL/Redis/backend 开发环境中真实执行 migration、幂等 seed、health 和知识搜索 smoke。简历可以准确表达为“验证了 Docker Compose 本地开发链路和 PostgreSQL migration/seed 启动流程”；不能表达为生产部署、临床验收、真实医院/药店接入或模型质量指标。
+本次已在 Docker Desktop 的 PostgreSQL/Redis/backend/frontend 开发环境中真实执行 migration、幂等 seed、health、知识搜索、三条业务任务 API、并发确认和 Redis 故障回源 smoke。简历可以准确表达为“验证了 Docker Compose 本地开发链路、PostgreSQL migration/seed、pgvector 索引、Redis 故障回源和确认幂等边界”；不能表达为生产部署、临床验收、真实医院/药店接入或模型质量指标。真实 wall-clock 只来自本机一次验收，不能写成生产 p95。
 
 Provider 相关亮点可以表述为“设计统一 Provider Adapter 契约和 mock/degraded 运行模式，所有外部结果保留成员与来源指针，并通过 Registry 做身份一致性校验”。不能表述为已经接入真实医院、药店或通知 Provider。
 
-4B 任务三可以表述为“统一 FastEmbed、PostgreSQL pgvector 和关键词降级的 RAG 链路，增加 embedding 模型/维度/schema/hash 校验、HNSW 索引迁移和可追溯 SourceRef”。如果没有实际下载模型并在 PostgreSQL 完成索引回归，只能说完成了代码契约和离线测试，不能声称真实语义召回质量。
+4B 任务三可以表述为“统一 FastEmbed、PostgreSQL pgvector 和关键词降级的 RAG 链路，增加 embedding 模型/维度/schema/hash 校验、HNSW 索引迁移和可追溯 SourceRef”。任务十二已经在 Docker PostgreSQL 完成 deterministic 向量索引回归，但这仍不能声称真实 FastEmbed 语义召回质量。
 
 4B 任务四可以表述为“把统一 Model Gateway 接入预问诊、慢病用药和报告解读三条业务子图，使用结构化 FinalAnswer、输出安全检查和 deterministic fallback”。可以说设计并实现了双模式接线，不能说真实模型质量、准确率或线上延迟已经验证。
+
+4B 任务五现在可以如实表述为“实现结构化 ComplexityRoute、TaskPlan、AgentTaskResult、SupervisorDecision 和三阶段 SafetyDecision 契约，并用不依赖 LLM、数据库和业务工具的 deterministic Router 区分单领域直达与复杂跨领域任务”。
+
+4B 任务六现在可以如实表述为“实现三个确定性领域 Agent、一次性 Planner 和串行 bounded Supervisor：简单请求直达单一角色，复杂请求最多按 3 步串行执行，并对依赖、角色白名单、成员隔离、有限重试、降级、澄清和终止原因进行结构化校验”。这证明的是离线编排内核和契约回归，不代表真实 Provider、数据库、LLM 质量或三层安全确认已经完成。
+
+4B 任务七现在可以如实表述为“实现 Request Safety、Action Policy 和 Final Output Safety 三层确定性门禁，并用 Pydantic 状态机约束本地 `DRAFT -> CONFIRMED -> EXECUTED`；首轮自动生成无外部副作用的草稿，确认续跑校验用户/成员/任务/版本/指纹/幂等作用域，重复确认可安全回放”。这证明的是新业务任务链路的安全与状态契约、离线回归和本地动作边界，不代表真实医院、药店或通知系统已经执行。
+
+任务八现在可以如实表述为“实现 PostgreSQL 权威 Task Checkpoint 与 Redis TTL 短期缓存回源；同一 task 下用两个独立 run 续跑，以 `parent_run_id`、checkpoint/confirmation version 和幂等键控制确认并发；确认后偏好写入绑定成员、来源版本和显式人工确认”。这证明的是状态持久化、恢复边界和本地确认审计，不代表真实医院、药店或通知系统已经执行。
+
+任务九现在可以如实表述为“为 Tool Registry 和三类重点 Provider 建立统一错误分类、只读有限重试、逐次 attempt trace 与强 Pydantic 输出契约；参数/权限/schema/业务冲突和写操作不自动重试，Provider 降级不返回 data/SourceRef，也不伪造订单、预约或问诊提交成功”。这证明的是离线 mock/degraded/故障注入下的工程可靠性，不能写成已接入真实医院药店、达到某个 SLA 或线上 p95。
+
+任务十现在可以如实表述为“实现 keyword/vector 的 RRF rank 融合，保留原始分、rank、文档/分块/embedding schema 与 fallback 决策；过期向量来源必须回到 PostgreSQL 权威版本校验；处方和药箱查询在 SQL 同时约束用户、成员和资源，并用白名单 Observation 记录节点、工具、Provider、来源、重试、模型和可用 token 计数”。可以补充“通过旧资源 ID、伪造成员、Prompt 注入和缓存污染测试”，但不能写成真实语义召回率、零数据泄漏、线上 p95 或临床安全指标。
+
+最终架构中尚未全部实现的亮点只能这样表达：
+
+- “设计简单任务直达、复杂任务由一次性 Planner 与串行 bounded Supervisor 协调的多 Agent 编排。”
+- “实现请求、动作和最终输出三层安全治理，并将 Agent 安全与只读 Agent 评测分离；确认状态机保证首轮自动草稿和确认后的本地状态迁移。”
+- “实现 Tool/Provider 可靠性、RRF/版本拒绝、成员隔离和脱敏 Observation 契约，并用 32 条固定业务用例扩展 deterministic Agent 评测。”
+- “实现同一模型/工具/RAG/Safety/确认/token 上限下的 Single-Agent、固定路由、bounded Supervisor 消融；固定集显示简单任务固定路由足够，复杂跨域任务由 Supervisor 提升角色与工具覆盖。”
+
+任务十一已有代码、测试和 deterministic 报告，因此可以写“实现消融评测”，但数字必须注明“32 条固定 deterministic fixture”。不能把 1.0000 Safety/隔离、fixture P95 或 `N/A` token/cost 写成生产指标。项目没有实现 MCP Server、OpenTelemetry/Jaeger、Agent 级并行或复杂自动重规划，不应为了增加技术名词写入简历。
 
 ## 不能夸大的内容
 

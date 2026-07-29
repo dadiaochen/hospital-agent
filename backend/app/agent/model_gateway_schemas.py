@@ -36,6 +36,25 @@ class ProviderRawResponse(ModelGatewayContract):
     model_name: NonEmptyStr
     content: NonEmptyStr
     provider_request_id: NonEmptyStr | None = None
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_token_usage(self) -> "ProviderRawResponse":
+        counts = (self.input_tokens, self.output_tokens, self.total_tokens)
+        if any(value is not None for value in counts) and not all(
+            value is not None for value in counts
+        ):
+            raise ValueError("token usage must provide input, output, and total counts")
+        if (
+            self.total_tokens is not None
+            and self.input_tokens is not None
+            and self.output_tokens is not None
+            and self.total_tokens != self.input_tokens + self.output_tokens
+        ):
+            raise ValueError("total_tokens must equal input_tokens + output_tokens")
+        return self
 
 
 class ModelProviderAttemptTrace(ModelGatewayContract):
@@ -47,6 +66,9 @@ class ModelProviderAttemptTrace(ModelGatewayContract):
     safety_flags: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     latency_ms: int = Field(ge=0)
     error_type: NonEmptyStr | None = None
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def validate_attempt_status(self) -> "ModelProviderAttemptTrace":
@@ -57,6 +79,18 @@ class ModelProviderAttemptTrace(ModelGatewayContract):
                 raise ValueError("successful attempts cannot contain error_type")
         elif self.error_type is None:
             raise ValueError("failed attempts require error_type")
+        counts = (self.input_tokens, self.output_tokens, self.total_tokens)
+        if any(value is not None for value in counts) and not all(
+            value is not None for value in counts
+        ):
+            raise ValueError("attempt token usage must be complete")
+        if (
+            self.total_tokens is not None
+            and self.input_tokens is not None
+            and self.output_tokens is not None
+            and self.total_tokens != self.input_tokens + self.output_tokens
+        ):
+            raise ValueError("attempt total_tokens must equal input + output")
         return self
 
 
@@ -73,6 +107,10 @@ class ModelCallTrace(ModelGatewayContract):
     fallback_used: bool = False
     fallback_reason: NonEmptyStr | None = None
     latency_ms: int = Field(ge=0)
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+    token_usage_available: bool = False
     attempts: tuple[ModelProviderAttemptTrace, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -86,6 +124,18 @@ class ModelCallTrace(ModelGatewayContract):
                 raise ValueError("successful calls require valid schema and safety")
         elif self.effective_provider is not None:
             raise ValueError("failed calls cannot have effective_provider")
+        counts = (self.input_tokens, self.output_tokens, self.total_tokens)
+        if self.token_usage_available != all(value is not None for value in counts):
+            raise ValueError("token_usage_available must match complete token counts")
+        if any(value is not None for value in counts) and not self.token_usage_available:
+            raise ValueError("partial token usage is not allowed")
+        if (
+            self.total_tokens is not None
+            and self.input_tokens is not None
+            and self.output_tokens is not None
+            and self.total_tokens != self.input_tokens + self.output_tokens
+        ):
+            raise ValueError("total_tokens must equal input_tokens + output_tokens")
         return self
 
 

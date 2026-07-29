@@ -163,6 +163,9 @@ def test_hybrid_retriever_hydrates_vector_pointer_from_database(
             VectorMatch(
                 document_id="doc-confirmation",
                 chunk_id="chunk-confirmation",
+                document_version="1.0",
+                chunk_version="1.0",
+                embedding_schema_version="rag-embedding-v1",
                 score=0.93,
             )
         ]
@@ -197,6 +200,9 @@ def test_hybrid_retriever_deduplicates_same_chunk_and_preserves_match_modes(
             VectorMatch(
                 document_id="doc-confirmation",
                 chunk_id="chunk-confirmation",
+                document_version="1.0",
+                chunk_version="1.0",
+                embedding_schema_version="rag-embedding-v1",
                 score=0.93,
             )
         ]
@@ -218,14 +224,26 @@ def test_hybrid_retriever_deduplicates_same_chunk_and_preserves_match_modes(
     ]
     assert len(matching_sources) == 1
     assert matching_sources[0].matched_by == ("keyword", "vector")
-    assert matching_sources[0].score == 1.0
+    assert matching_sources[0].score == pytest.approx(2 / 61, abs=1e-8)
+    assert matching_sources[0].rrf_score == matching_sources[0].score
+    assert matching_sources[0].keyword_rank == 1
+    assert matching_sources[0].vector_rank == 1
 
 
 def test_hybrid_retriever_rejects_unresolvable_vector_pointer(
     knowledge_session: Session,
 ) -> None:
     backend = StaticVectorBackend(
-        [VectorMatch(document_id="doc-missing", chunk_id="chunk-missing", score=0.9)]
+        [
+            VectorMatch(
+                document_id="doc-missing",
+                chunk_id="chunk-missing",
+                document_version="1.0",
+                chunk_version="1.0",
+                embedding_schema_version="rag-embedding-v1",
+                score=0.9,
+            )
+        ]
     )
     retriever = create_knowledge_retriever(
         knowledge_session,
@@ -241,6 +259,79 @@ def test_hybrid_retriever_rejects_unresolvable_vector_pointer(
     assert result.effective_mode == "keyword"
     assert result.fallback_used is True
     assert result.fallback_reason == "vector_sources_not_found"
+
+
+def test_rrf_fuses_ranks_without_comparing_keyword_and_vector_raw_scores(
+    knowledge_session: Session,
+) -> None:
+    backend = StaticVectorBackend(
+        [
+            VectorMatch(
+                document_id="doc-safety",
+                chunk_id="chunk-safety",
+                document_version="1.0",
+                chunk_version="1.0",
+                embedding_schema_version="rag-embedding-v1",
+                score=0.99,
+            ),
+            VectorMatch(
+                document_id="doc-confirmation",
+                chunk_id="chunk-confirmation",
+                document_version="1.0",
+                chunk_version="1.0",
+                embedding_schema_version="rag-embedding-v1",
+                score=0.01,
+            ),
+        ]
+    )
+    retriever = create_knowledge_retriever(
+        knowledge_session,
+        vector_enabled=True,
+        vector_backend=backend,
+    )
+
+    result = retriever.retrieve(
+        RetrievalRequest(query="confirmation", purpose="rrf_contract")
+    )
+
+    assert result.sources[0].chunk_id == "chunk-confirmation"
+    assert result.sources[0].keyword_rank == 1
+    assert result.sources[0].vector_rank == 2
+    assert result.sources[0].rrf_score == pytest.approx(1 / 61 + 1 / 62)
+    safety = next(item for item in result.sources if item.chunk_id == "chunk-safety")
+    assert safety.vector_score == 0.99
+    assert safety.rrf_score < result.sources[0].rrf_score
+
+
+def test_stale_vector_version_is_rejected_and_keyword_fallback_is_auditable(
+    knowledge_session: Session,
+) -> None:
+    backend = StaticVectorBackend(
+        [
+            VectorMatch(
+                document_id="doc-confirmation",
+                chunk_id="chunk-confirmation",
+                document_version="0.9",
+                chunk_version="0.9",
+                embedding_schema_version="rag-embedding-v1",
+                score=0.99,
+            )
+        ]
+    )
+    retriever = create_knowledge_retriever(
+        knowledge_session,
+        vector_enabled=True,
+        vector_backend=backend,
+    )
+
+    result = retriever.retrieve(
+        RetrievalRequest(query="confirmation", purpose="stale_version")
+    )
+
+    assert result.effective_mode == "keyword"
+    assert result.fallback_used is True
+    assert result.fallback_reason == "vector_source_version_mismatch"
+    assert all(source.matched_by == ("keyword",) for source in result.sources)
 
 
 def test_vector_feature_flag_is_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:

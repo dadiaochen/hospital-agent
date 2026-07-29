@@ -25,6 +25,7 @@ from app.agent.run_trace_schemas import (
     SafetyTrace,
     ToolCallTrace,
 )
+from app.agent.observability import build_observation_traces
 from app.schemas.business import SourceRef
 
 
@@ -101,6 +102,7 @@ def build_run_trace(state: Mapping[str, Any]) -> RunTrace:
         )
 
     status = str(state.get("status") or "failed")
+    confirmation_state = str(state.get("confirmation_state") or "NONE")
     answer = str(state.get("final_answer") or "")
     waiting = status == "needs_confirmation" or bool(
         state.get("need_human_confirmation", False)
@@ -108,10 +110,10 @@ def build_run_trace(state: Mapping[str, Any]) -> RunTrace:
     confirmation_present = bool(
         state.get("human_confirmation_granted") or state.get("confirmation_result")
     )
-    if status == "needs_confirmation":
+    if confirmation_state == "DRAFT" or status == "needs_confirmation":
         action_status = "awaiting_confirmation"
-    elif state.get("confirmation_result"):
-        action_status = "draft"
+    elif confirmation_state == "EXECUTED" or state.get("confirmation_result"):
+        action_status = "executed"
     elif status == "blocked":
         action_status = "none"
     else:
@@ -130,8 +132,9 @@ def build_run_trace(state: Mapping[str, Any]) -> RunTrace:
             member_id=member_id,
             flags=tuple(str(flag) for flag in state.get("safety_flags", [])),
             blocked=status == "blocked",
-            requires_human_confirmation=bool(
-                state.get("need_human_confirmation", False)
+            requires_human_confirmation=(
+                bool(state.get("need_human_confirmation", False))
+                or confirmation_state == "DRAFT"
             ),
         ),
         final_answer=FinalAnswerTrace(
@@ -142,6 +145,7 @@ def build_run_trace(state: Mapping[str, Any]) -> RunTrace:
             human_confirmation_present=confirmation_present,
             action_status=action_status,
         ),
+        observations=build_observation_traces(state),
         latency_ms=max(0, int(state.get("latency_ms") or 0)),
         schema_valid=all(call.schema_valid for call in tool_calls),
     )

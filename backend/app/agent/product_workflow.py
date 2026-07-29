@@ -13,7 +13,14 @@ from app.agent.model_gateway import (
     create_model_gateway,
 )
 from app.agent.model_gateway_schemas import ModelCallRequest, ModelCallTrace, ModelMessage
-from app.agent.safety import evaluate_safety
+from app.agent.safety_confirmation import (
+    ConfirmationScope,
+    ConfirmationState,
+    ConfirmationStateMachine,
+    ConfirmationTransitionRequest,
+    ThreeLayerSafetyGuard,
+    build_confirmation_scope,
+)
 from app.agent.workflow_schemas import WorkflowFinalAnswerDraft
 from app.providers import build_mock_provider_registry
 from app.rag.retriever import create_knowledge_retriever
@@ -89,6 +96,12 @@ class ProductWorkflowState(TypedDict, total=False):
     errors: list[str]
     confirmation_request: dict[str, Any]
     confirmation_result: dict[str, Any]
+    confirmation_state: ConfirmationState
+    confirmation_scope: dict[str, Any]
+    confirmation_draft: dict[str, Any]
+    safety_decisions: list[dict[str, Any]]
+    final_output_safety: dict[str, Any]
+    visited_nodes: list[str]
 
 
 class FamilyHealthProductWorkflow:
@@ -107,6 +120,8 @@ class FamilyHealthProductWorkflow:
         self.model_gateway = model_gateway or create_model_gateway(
             deterministic_provider
         )
+        self.safety_guard = ThreeLayerSafetyGuard()
+        self.confirmation_machine = ConfirmationStateMachine()
         self.retriever = create_knowledge_retriever(db)
         self.registry = create_db_tool_registry(db, include_confirmation_tools=True)
         register_business_tools(
@@ -157,6 +172,10 @@ class FamilyHealthProductWorkflow:
     @staticmethod
     def _data(result: ToolResult) -> dict[str, Any]:
         return cast(dict[str, Any], result.output or {})
+
+    @staticmethod
+    def _visit(state: ProductWorkflowState, node_name: str) -> None:
+        state.setdefault("visited_nodes", []).append(node_name)
 
     @staticmethod
     def _json(value: Any) -> str:
@@ -214,6 +233,36 @@ class FamilyHealthProductWorkflow:
         state["final_answer"] = "当前信息服务暂不可用，暂未生成可执行草稿，请稍后重试或转人工处理。"
         return True
 
+    @staticmethod
+    def _record_safety_decision(
+        state: ProductWorkflowState,
+        decision: object,
+    ) -> None:
+        """Keep every gate decision in the frozen run state for audit."""
+
+        dumped = (
+            decision.model_dump(mode="json")
+            if hasattr(decision, "model_dump")
+            else dict(decision)
+        )
+        state.setdefault("safety_decisions", []).append(dumped)
+        flags = [str(flag) for flag in dumped.get("flags", [])]
+        state["safety_flags"] = list(
+            dict.fromkeys([*state.get("safety_flags", []), *flags])
+        )
+
+    def _scope_from_state(
+        self,
+        state: ProductWorkflowState,
+    ) -> ConfirmationScope | None:
+        raw_scope = state.get("confirmation_scope")
+        if not isinstance(raw_scope, dict) or not raw_scope:
+            return None
+        try:
+            return ConfirmationScope.model_validate(raw_scope)
+        except ValueError:
+            return None
+
     def _provider_payload(
         self,
         state: ProductWorkflowState,
@@ -259,24 +308,88 @@ class FamilyHealthProductWorkflow:
         tool_name: str = "create_confirmation_draft",
         agent_role: str = "RefillAgent",
     ) -> None:
+        scope = build_confirmation_scope(
+            task_id=state["task_id"],
+            user_id=state["user_id"],
+            member_id=state["member_id"],
+            action_type=action_type,
+            idempotency_key=state["idempotency_key"],
+            request_payload=payload,
+        )
+        action_decision = self.safety_guard.action(
+            message=f"{state.get('user_input', '')} {summary}",
+            user_id=state["user_id"],
+            member_id=state["member_id"],
+            expected_user_id=scope.user_id,
+            expected_member_id=scope.member_id,
+            confirmation_state="NONE",
+            human_confirmation_present=False,
+        )
+        self._record_safety_decision(state, action_decision)
+        draft_transition = self.confirmation_machine.transition(
+            ConfirmationTransitionRequest(
+                current_state="NONE",
+                action="create_draft",
+                scope=scope,
+                actor_user_id=state["user_id"],
+                actor_member_id=state["member_id"],
+                safety_decision=action_decision,
+            )
+        )
+        if not draft_transition.allowed:
+            state["confirmation_state"] = "BLOCKED"
+            state["status"] = "blocked"
+            state["need_human_confirmation"] = False
+            state["final_answer"] = (
+                action_decision.message
+                or "当前动作未通过安全检查，暂不生成草稿。"
+            )
+            state.setdefault("errors", []).append(
+                draft_transition.failure_code or "confirmation_draft_blocked"
+            )
+            return
+
+        state["confirmation_scope"] = scope.model_dump(mode="json")
+        state["confirmation_state"] = draft_transition.state
+        state["confirmation_draft"] = {
+            "draft_id": scope.draft_id,
+            "task_id": scope.task_id,
+            "user_id": scope.user_id,
+            "member_id": scope.member_id,
+            "action_type": scope.action_type,
+            "status": "DRAFT",
+            "draft_version": scope.draft_version,
+            "need_human_confirmation": True,
+            "local_only": True,
+            "external_action_status": "not_submitted",
+        }
         state["confirmation_request"] = {
             "tool_name": tool_name,
             "agent_role": agent_role,
             "action_type": action_type,
             "summary": summary,
             "payload": payload,
+            "draft_id": scope.draft_id,
+            "draft_version": scope.draft_version,
+            "request_fingerprint": scope.request_fingerprint,
         }
         state["need_human_confirmation"] = True
         state["status"] = "needs_confirmation"
 
     def _safety_entry(self, state: ProductWorkflowState) -> ProductWorkflowState:
-        decision = evaluate_safety(state.get("user_input", ""))
-        state["safety_flags"] = list(decision.flags)
+        self._visit(state, "safety_entry")
+        decision = self.safety_guard.request(
+            message=state.get("user_input", ""),
+            member_id=state["member_id"],
+        )
+        self._record_safety_decision(state, decision)
         state["need_human_confirmation"] = decision.requires_human_confirmation
         if decision.blocked:
+            state["confirmation_state"] = "BLOCKED"
             state["status"] = "blocked"
             state["final_answer"] = decision.message
         else:
+            state["confirmation_state"] = "NONE"
             state["status"] = "running"
         return state
 
@@ -291,6 +404,7 @@ class FamilyHealthProductWorkflow:
         return "blocked"
 
     def _preconsultation(self, state: ProductWorkflowState) -> ProductWorkflowState:
+        self._visit(state, "preconsultation")
         payload = dict(state.get("input_payload", {}))
         profile = self._call(
             state,
@@ -375,6 +489,7 @@ class FamilyHealthProductWorkflow:
         return state
 
     def _chronic_care(self, state: ProductWorkflowState) -> ProductWorkflowState:
+        self._visit(state, "chronic_care")
         payload = dict(state.get("input_payload", {}))
         action_type = cast(str, payload.get("action_type", "refill_request"))
         medicine_name = str(payload.get("medicine_name", "")).strip()
@@ -487,6 +602,7 @@ class FamilyHealthProductWorkflow:
         return state
 
     def _health_record(self, state: ProductWorkflowState) -> ProductWorkflowState:
+        self._visit(state, "health_record")
         payload = dict(state.get("input_payload", {}))
         text = str(payload.get("text", payload.get("source_text", "")))
         if not text and not payload.get("image_uri"):
@@ -540,12 +656,13 @@ class FamilyHealthProductWorkflow:
             "knowledge_evidence": self._data(knowledge),
             "explanation_boundary": "仅做信息整理和来源解释，不替代医生诊断或调整处方。",
         }
-        state["confirmation_request"] = {
-            "tool_name": "create_health_record_draft",
-            "agent_role": "ProfileAgent",
-            "action_type": "health_record",
-            "summary": "已整理报告内容，生成待确认的健康记录草稿。",
-            "payload": {
+        self._set_confirmation(
+            state,
+            action_type="health_record",
+            agent_role="ProfileAgent",
+            tool_name="create_health_record_draft",
+            summary="已整理报告内容，生成待确认的健康记录草稿。",
+            payload={
                 "user_id": state["user_id"],
                 "member_id": state["member_id"],
                 "idempotency_key": state["idempotency_key"],
@@ -555,46 +672,98 @@ class FamilyHealthProductWorkflow:
                 "source_document_id": payload.get("source_document_id"),
                 "source_refs": list(state.get("source_refs", [])),
             },
-        }
-        state["need_human_confirmation"] = True
-        state["status"] = "needs_confirmation"
+        )
         state["final_answer"] = "已完成报告内容整理和来源检索，生成健康记录草稿；保存前需要你的确认。"
         return state
 
     def _safety_review(self, state: ProductWorkflowState) -> ProductWorkflowState:
+        self._visit(state, "safety_review")
         if state.get("status") in {"failed", "needs_clarification", "blocked"}:
             return state
-        decision = evaluate_safety(
-            " ".join(
+        request = state.get("confirmation_request")
+        decision = self.safety_guard.action(
+            message=" ".join(
                 [
                     state.get("user_input", ""),
-                    state.get("confirmation_request", {}).get("summary", ""),
+                    request.get("summary", "") if isinstance(request, dict) else "",
                 ]
-            )
+            ),
+            user_id=state["user_id"],
+            member_id=state["member_id"],
+            expected_user_id=state["user_id"],
+            expected_member_id=state["member_id"],
+            confirmation_state=state.get("confirmation_state", "NONE"),
+            human_confirmation_present=state.get(
+                "human_confirmation_granted", False
+            ),
         )
-        flags = list(dict.fromkeys(state.get("safety_flags", []) + decision.flags))
-        state["safety_flags"] = flags
+        self._record_safety_decision(state, decision)
         if decision.blocked:
+            state["confirmation_state"] = "BLOCKED"
             state["status"] = "blocked"
             state["need_human_confirmation"] = decision.requires_human_confirmation
             state["final_answer"] = decision.message
             return state
-        request = state.get("confirmation_request")
         if request:
+            if not state.get("human_confirmation_granted"):
+                state["confirmation_state"] = "DRAFT"
+                state["need_human_confirmation"] = True
+                state["status"] = "needs_confirmation"
+                return state
+
+            scope = self._scope_from_state(state)
+            if scope is None:
+                state["confirmation_state"] = "BLOCKED"
+                state["status"] = "blocked"
+                state["need_human_confirmation"] = False
+                state["final_answer"] = "待确认草稿作用域无效，暂不执行任何动作。"
+                state.setdefault("errors", []).append("confirmation_scope_invalid")
+                return state
+            transition = self.confirmation_machine.transition(
+                ConfirmationTransitionRequest(
+                    current_state=state.get("confirmation_state", "DRAFT"),
+                    action="confirm",
+                    scope=scope,
+                    current_scope=scope,
+                    actor_user_id=state["user_id"],
+                    actor_member_id=state["member_id"],
+                    human_confirmation_present=True,
+                    safety_decision=decision,
+                )
+            )
+            if not transition.allowed:
+                state["confirmation_state"] = transition.state
+                state["status"] = "blocked"
+                state["need_human_confirmation"] = False
+                state["final_answer"] = (
+                    transition.failure_reason
+                    or "待确认草稿未通过状态检查，暂不执行任何动作。"
+                )
+                state.setdefault("errors", []).append(
+                    transition.failure_code or "confirmation_transition_blocked"
+                )
+                return state
+            state["confirmation_state"] = transition.state
             state["need_human_confirmation"] = True
             state["status"] = "needs_confirmation"
         else:
+            state["confirmation_state"] = "NONE"
             state["status"] = "completed"
         return state
 
     def _route_after_review(self, state: ProductWorkflowState) -> str:
         if state.get("status") == "blocked":
             return "blocked"
-        if state.get("confirmation_request") and state.get("human_confirmation_granted"):
+        if (
+            state.get("confirmation_request")
+            and state.get("human_confirmation_granted")
+            and state.get("confirmation_state") == "CONFIRMED"
+        ):
             return "confirm"
         return "finalize"
 
     def _confirm(self, state: ProductWorkflowState) -> ProductWorkflowState:
+        self._visit(state, "confirm")
         request = state.get("confirmation_request")
         if not request:
             state["status"] = "failed"
@@ -604,6 +773,52 @@ class FamilyHealthProductWorkflow:
             state["status"] = "needs_confirmation"
             state["need_human_confirmation"] = True
             return state
+        scope = self._scope_from_state(state)
+        if scope is None or state.get("confirmation_state") != "CONFIRMED":
+            state["confirmation_state"] = "BLOCKED"
+            state["status"] = "blocked"
+            state["need_human_confirmation"] = False
+            state["final_answer"] = "确认草稿的版本或状态无效，暂不执行任何动作。"
+            state.setdefault("errors", []).append("confirmation_state_invalid")
+            return state
+
+        action_decision = self.safety_guard.action(
+            message=" ".join(
+                [state.get("user_input", ""), str(request.get("summary", ""))]
+            ),
+            user_id=state["user_id"],
+            member_id=state["member_id"],
+            expected_user_id=scope.user_id,
+            expected_member_id=scope.member_id,
+            confirmation_state="CONFIRMED",
+            human_confirmation_present=True,
+        )
+        self._record_safety_decision(state, action_decision)
+        execution_transition = self.confirmation_machine.transition(
+            ConfirmationTransitionRequest(
+                current_state="CONFIRMED",
+                action="execute",
+                scope=scope,
+                current_scope=scope,
+                actor_user_id=state["user_id"],
+                actor_member_id=state["member_id"],
+                human_confirmation_present=True,
+                safety_decision=action_decision,
+            )
+        )
+        if not execution_transition.allowed:
+            state["confirmation_state"] = execution_transition.state
+            state["status"] = "blocked"
+            state["need_human_confirmation"] = False
+            state["final_answer"] = (
+                execution_transition.failure_reason
+                or "执行动作未通过安全检查，暂不继续。"
+            )
+            state.setdefault("errors", []).append(
+                execution_transition.failure_code or "confirmation_execution_blocked"
+            )
+            return state
+
         request_payload = dict(request["payload"])
         if request["tool_name"] == "create_confirmation_draft":
             request_payload = {
@@ -621,8 +836,10 @@ class FamilyHealthProductWorkflow:
             payload=request_payload,
         )
         if self._abort_on_failure(state, result):
+            state["confirmation_state"] = "FAILED"
             return state
         state["confirmation_result"] = self._data(result)
+        state["confirmation_state"] = execution_transition.state
         state["status"] = "completed"
         state["need_human_confirmation"] = False
         return state
@@ -694,7 +911,41 @@ class FamilyHealthProductWorkflow:
             state["degraded"] = True
             state.setdefault("errors", []).append("model_output_contract_mismatch")
             return
+        decision, audit = self.safety_guard.final_output(
+            output=answer,
+            member_id=state["member_id"],
+        )
+        self._record_safety_decision(state, decision)
+        state["final_output_safety"] = audit.model_dump(mode="json")
+        if decision.blocked:
+            state["confirmation_state"] = "BLOCKED"
+            state["status"] = "blocked"
+            state["need_human_confirmation"] = False
+            state["final_answer"] = (
+                decision.message
+                or "候选回答未通过安全检查，请转人工复核。"
+            )
+            state.setdefault("errors", []).append("final_output_safety_blocked")
+            return
         state["final_answer"] = answer.content
+
+    def _check_existing_final_answer(self, state: ProductWorkflowState) -> None:
+        """Run the output gate for fixed blocked/error messages too."""
+
+        decision, audit = self.safety_guard.final_output(
+            output=state.get("final_answer", ""),
+            member_id=state["member_id"],
+        )
+        self._record_safety_decision(state, decision)
+        state["final_output_safety"] = audit.model_dump(mode="json")
+        if decision.blocked:
+            state["confirmation_state"] = "BLOCKED"
+            state["need_human_confirmation"] = False
+            state["final_answer"] = (
+                decision.message
+                or "当前回答未通过安全检查，请转人工复核。"
+            )
+            state.setdefault("errors", []).append("final_output_safety_blocked")
 
     @staticmethod
     def _answer_matches_workflow_state(
@@ -715,6 +966,7 @@ class FamilyHealthProductWorkflow:
         return True
 
     def _finalize(self, state: ProductWorkflowState) -> ProductWorkflowState:
+        self._visit(state, "finalize")
         if state.get("status") == "needs_confirmation":
             state["need_human_confirmation"] = True
             if not state.get("final_answer"):
@@ -722,6 +974,7 @@ class FamilyHealthProductWorkflow:
             self._generate_final_answer(state)
             return state
         if state.get("status") in {"blocked", "failed", "needs_clarification"}:
+            self._check_existing_final_answer(state)
             return state
         if state.get("confirmation_result"):
             state["final_answer"] = (
@@ -771,6 +1024,12 @@ class FamilyHealthProductWorkflow:
             "errors": [],
             "confirmation_request": {},
             "confirmation_result": {},
+            "confirmation_state": "NONE",
+            "confirmation_scope": {},
+            "confirmation_draft": {},
+            "safety_decisions": [],
+            "final_output_safety": {},
+            "visited_nodes": [],
         }
         return cast(ProductWorkflowState, self.graph.invoke(state))
 
@@ -790,7 +1049,35 @@ class FamilyHealthProductWorkflow:
         resumed["tool_calls"] = []
         resumed["provider_calls"] = []
         resumed["model_call_trace"] = {}
+        resumed["visited_nodes"] = []
         resumed["confirmation_result"] = {}
+        if not resumed.get("confirmation_state") and resumed.get(
+            "confirmation_request"
+        ):
+            # Compatibility for states written before task seven introduced the
+            # explicit state-machine field.
+            resumed["confirmation_state"] = "DRAFT"
+        if resumed.get("confirmation_state") != "DRAFT":
+            resumed["confirmation_state"] = "BLOCKED"
+            resumed["status"] = "blocked"
+            resumed["need_human_confirmation"] = False
+            resumed["final_answer"] = "当前任务不处于可确认的草稿状态。"
+            return self._finalize(resumed)
+        scope = self._scope_from_state(resumed)
+        if scope is None or any(
+            (
+                scope.task_id != resumed["task_id"],
+                scope.user_id != resumed["user_id"],
+                scope.member_id != resumed["member_id"],
+                scope.idempotency_key != resumed["idempotency_key"],
+            )
+        ):
+            resumed["confirmation_state"] = "BLOCKED"
+            resumed["status"] = "blocked"
+            resumed["need_human_confirmation"] = False
+            resumed["final_answer"] = "待确认草稿作用域校验失败，暂不执行任何动作。"
+            resumed.setdefault("errors", []).append("confirmation_scope_conflict")
+            return self._finalize(resumed)
         reviewed = self._safety_review(resumed)
         if reviewed.get("status") not in {"blocked", "failed", "needs_clarification"}:
             self._confirm(reviewed)

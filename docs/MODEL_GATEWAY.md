@@ -102,7 +102,7 @@ python -m pytest `
 
 测试覆盖 provider HTTP 契约、schema/safety、fallback、诊断退出码、运行时工厂接线、资源所有权和密钥不泄露。MockTransport 测试不能证明任何真实模型的答案质量、成本、安全率或延迟。
 
-## 9. 新业务子图接入
+## 9. 当前接入与最终模型边界
 
 `FamilyHealthProductWorkflow` 的预问诊、慢病用药和报告解读三条业务分支，在 SafetyAgent、工具调用和确认状态已经确定后，统一调用 Gateway：
 
@@ -116,6 +116,24 @@ business subgraph
   -> final_answer + ModelCallTrace
 ```
 
-模型只能改写最终答案草稿，不能决定业务路由、工具权限、成员、SafetyAgent 结果或确认门。Gateway 输入只包含任务摘要、状态、安全标记、来源数量和模板边界，不传完整 raw conversation 或完整工具输出。
+当前实现中，模型只改写最终答案草稿，不能决定业务路由、工具权限、成员、SafetyAgent 结果或确认门。Gateway 输入只包含任务摘要、状态、安全标记、来源数量和模板边界，不传完整 raw conversation 或完整工具输出。
 
 无 Key 时 `MODEL_PROVIDER=deterministic`，三条业务线仍可运行；配置 `openai_compatible` 后，真实 provider 只尝试最终答案，超时、HTTP、JSON、schema 或输出安全失败都会回退 deterministic。业务 API 的 `model_call_trace` 只保存 provider、schema、安全、fallback 和耗时，不保存 Key、完整 prompt 或 provider 原文。
+
+4B 最终允许真实模型参与有限决策，但输出空间必须由调用方固定：Router 只能在 `direct/supervised` 中选择，Planner 只能组合注册步骤，领域 Agent 只能选择白名单工具和结构化说明，Supervisor 只能在计划中尚未完成且依赖满足的角色中选择。所有结果随后还要经过 Pydantic、角色/工具白名单、成员权限、依赖、最大步数和安全规则校验。模型不得发明角色、工具、流程或确认状态。
+
+任务七的新业务链路在 Gateway 候选返回后再次调用 `ThreeLayerSafetyGuard.final_output()`，把结构化答案和危险表达检查结果写入 `final_output_safety`；失败候选不会覆盖用户答案。Gateway 的 output checker、Safety Guard 和 post-run Evaluator 仍是三个不同阶段，不能用模型输出通过 schema 代替运行时安全，也不能用 Evaluator 事后补救。
+
+LLM Judge 不复用运行时 Gateway 做在线决策。若进行实验，只离线读取脱敏冻结产物，其结果不能修改业务状态，也不是最终验收硬门槛。
+
+## 10. 与业务 Provider 的区别
+
+任务九深化的 Medical Document/Pharmacy/Hospital Provider 负责外部业务数据适配，Model Gateway 负责模型推理。两者共享“固定 timeout、有限重试、schema、attempt、fallback”原则，但不能混用：业务 Provider 失败时不得由 LLM fallback 编造库存、科室、报告字段或 SourceRef；Model Gateway 的 deterministic fallback 也不代表业务 Provider 调用成功。
+
+## 11. 任务十模型与 token 可观测字段
+
+`ProviderRawResponse`、`ModelProviderAttemptTrace` 和 `ModelCallTrace` 支持完整的 `input_tokens/output_tokens/total_tokens`。OpenAI-compatible Provider 只在响应 `usage` 同时提供三项且总数一致时记录；缺失或不完整时全部保留为 `null`，`token_usage_available=false`。deterministic provider 不估算 token。
+
+这些计数可以进入白名单 Observation，但消息内容、Provider raw response、Authorization 和 API Key 不能进入。token usage 是调用审计字段，不是模型质量指标，也不能在没有真实 Provider 报告时用于宣称成本或性能。
+
+任务十一三组共享 `deterministic/deterministic-product-answer-v1` 和相同 token 上限。由于 deterministic provider 不返回 usage，所有消融结果保持 `token_usage_available=false`、token/cost 为 `N/A`；Harness 明确拒绝在 usage 缺失时填入合成计数。

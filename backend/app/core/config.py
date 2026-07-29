@@ -33,6 +33,10 @@ class Settings(BaseModel):
         )
     )
     redis_url: str = Field(default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+    task_checkpoint_ttl_seconds: int = Field(
+        default_factory=lambda: int(os.getenv("TASK_CHECKPOINT_TTL_SECONDS", "900")),
+        ge=1,
+    )
     rag_vector_enabled: bool = Field(
         default_factory=lambda: _env_bool("RAG_VECTOR_ENABLED", False)
     )

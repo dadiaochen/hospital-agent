@@ -8,6 +8,7 @@ from app.models.business_task import (
     ProviderCall,
     SourceReference,
 )
+from app.models.checkpoint import ConfirmedPreference, TaskCheckpoint, TaskConfirmationRecord
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.medication import MedicineBoxItem, Prescription, PurchaseRecord
 from app.models.pharmacy import Pharmacy, PharmacyInventory
@@ -25,6 +26,7 @@ __all__ = [
     "AgentRun",
     "AgentToolCall",
     "BusinessTask",
+    "ConfirmedPreference",
     "ConsultationDraft",
     "FamilyMember",
     "FollowUpTask",
@@ -43,5 +45,7 @@ __all__ = [
     "PurchaseRecord",
     "RefillPlan",
     "SourceReference",
+    "TaskCheckpoint",
+    "TaskConfirmationRecord",
     "User",
 ]

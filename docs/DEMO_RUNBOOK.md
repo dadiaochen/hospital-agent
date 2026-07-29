@@ -1,5 +1,7 @@
 # MVP 演示手册
 
+> 本手册记录 3D 当前兼容演示，仍按旧确认接口运行。4B 任务七的新业务 API 已改为首次自动创建本地 DRAFT、用户确认执行；4C 才会更新页面和本演示脚本。不要用本手册覆盖总路线图的最终确认语义。
+
 本手册用于在本地重复演示家庭健康 Agent MVP。它验证的是 seed 数据、deterministic provider、PostgreSQL、FastAPI、Next.js 和固定规则，不是生产、临床或真实 LLM 质量证明。
 
 ## 1. 一键启动
@@ -139,3 +141,18 @@ docker compose logs frontend
 ```
 
 不要把 `docker compose down -v` 当作日常停止命令；`-v` 会删除本地 PostgreSQL/Redis volume。
+
+## 7. 任务十二后端验收
+
+固定演示之外，可以运行任务十二的真实本机后端验收：
+
+```powershell
+$env:RAG_VECTOR_ENABLED='true'
+$env:RAG_EMBEDDING_PROVIDER='deterministic'
+$env:RAG_EMBEDDING_MODEL='deterministic-hash-v1'
+$env:RAG_EMBEDDING_DIMENSIONS='512'
+docker compose up -d --build --wait --wait-timeout 300
+.\.venv\Scripts\python.exe scripts\task12_acceptance.py --require-vector
+```
+
+脚本会检查迁移、seed、pgvector、三条业务 API、知识搜索、并发确认和前端 health；Redis 故障模式完成后必须重新启动 Redis。结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)，本机耗时不能写成生产 SLO。
