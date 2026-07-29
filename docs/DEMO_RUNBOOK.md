@@ -1,6 +1,6 @@
 # MVP 演示手册
 
-> 本手册记录 3D 当前兼容演示，仍按旧确认接口运行。4B 任务七的新业务 API 已改为首次自动创建本地 DRAFT、用户确认执行；4C 才会更新页面和本演示脚本。不要用本手册覆盖总路线图的最终确认语义。
+> 本手册记录 4C-1 患者端首页和 3D 兼容演示。4B 任务七的新业务 API 已改为首次自动创建本地 DRAFT、用户确认执行；4C-2 将继续把黄金链路页面完全迁移到该语义。不要用本手册覆盖总路线图的最终确认语义。
 
 本手册用于在本地重复演示家庭健康 Agent MVP。它验证的是 seed 数据、deterministic provider、PostgreSQL、FastAPI、Next.js 和固定规则，不是生产、临床或真实 LLM 质量证明。
 
@@ -36,7 +36,7 @@ Compose 不强制 `.env` 存在；没有配置时使用 deterministic 本地默�
 
 | 入口 | 地址 | 展示内容 |
 | --- | --- | --- |
-| 前端 | `http://localhost:3000` | 家庭数据页、Agent 四场景、来源、安全、确认和 Trace。 |
+| 前端 | `http://localhost:3000` | 患者端首页、家庭数据页、Agent 四场景、来源、安全、确认和 Trace。 |
 | Agent 页面 | `http://localhost:3000/agent` | 固定场景按钮和首次 run / 确认续跑。 |
 | Swagger | `http://localhost:8000/docs` | 读取、草稿、Agent Runtime 和审计 API。 |
 | Health | `http://localhost:8000/health` | FastAPI 存活状态。 |
@@ -64,12 +64,13 @@ Runner 先通过 `GET /api/family-members` 查找 seed 中的 father/mother，�
 
 ## 4. 手工 UI 演示顺序
 
-1. 打开 `/family`，展示 demo user 下有本人、父亲和母亲三个成员。
-2. 切换到“父亲”，打开 `/agent`，点击“正常续方”，提交后指出状态为待确认、答案带 Tool/RAG 来源。
-3. 勾选“只创建本地草稿”声明并确认，指出续跑保持同一 task，但产生新 run；结果不代表医院已受理。
-4. 切换到“母亲”，分别演示“复诊材料”和“用药提醒”，确认后到续方/提醒页面查看本地草稿。
-5. 切回“父亲”，点击“高风险拦截”，展示 SafetyAgent flags、紧急转人工提示和没有确认按钮。
-6. 打开 run 详情，展示 ToolCall、RAG source、ModelCallTrace 与只读 EvaluationResult。
+1. 打开 `/`，展示患者端首页的搜索、四个健康事务入口、当前成员和安全边界。
+2. 打开 `/family`，展示 demo user 下有本人、父亲和母亲三个成员。
+3. 切换到“父亲”，打开 `/agent`，点击“正常续方”，提交后指出状态为待确认、答案带 Tool/RAG 来源。
+4. 勾选“只创建本地草稿”声明并确认，指出续跑保持同一 task，但产生新 run；结果不代表医院已受理。
+5. 切换到“母亲”，分别演示“复诊材料”和“用药提醒”，确认后到续方/提醒页面查看本地草稿。
+6. 切回“父亲”，点击“高风险拦截”，展示 SafetyAgent flags、紧急转人工提示和没有确认按钮。
+7. 打开 run 详情，展示 ToolCall、RAG source、ModelCallTrace 与只读 EvaluationResult。
 
 场景按钮只填写输入，不替用户偷偷切换成员。演示前必须手工选对成员，这本身就是 `member_id` 隔离设计的一部分。
 

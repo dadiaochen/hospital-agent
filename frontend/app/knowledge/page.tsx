@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useEffect } from "react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -13,6 +14,11 @@ export default function KnowledgePage() {
   const [items, setItems] = useState<KnowledgeSearchItem[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const presetQuery = new URLSearchParams(window.location.search).get("q");
+    if (presetQuery?.trim()) setQuery(presetQuery.trim());
+  }, []);
 
   async function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -21,7 +21,7 @@
 - 任务 11：32 条 Harness 与消融实验，`DONE`。
 - 任务 12：PostgreSQL/Redis/Docker 后端验收，`DONE`；baseline 19/19、Redis 故障回源 18/18。
 - 任务 13：4B 文档与 Git 收口，`DONE`。
-- 当前下一阶段：`4C` 患者端、浏览器 E2E、黄金演示和最终 MVP 交付。
+- 当前阶段：`4C IN_PROGRESS`，正在完成患者端信息架构与视觉壳层；随后进入黄金链路 UI、浏览器 E2E 和最终演示收口。
 
 当前代码仍保留旧 Agent Runtime 和旧确认草稿 API 的兼容流程；新业务任务链路已经使用任务七的三层 Safety Guard、自动本地 `DRAFT` 和 `DRAFT -> CONFIRMED -> EXECUTED` 状态机。任务八已将 PostgreSQL Task Checkpoint 设为权威源，Redis 仅做带 TTL 的短期投影并在 miss/过期/不可用时回源；任务十一已完成 32 条 deterministic Harness 和 A/B/C 同条件消融，任务十二已在本机 Docker 栈完成真实迁移、RAG、API、Redis 故障回源和并发确认验收，任务十三已完成 4B 文档与 Git 收口。
 
