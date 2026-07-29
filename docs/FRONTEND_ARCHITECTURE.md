@@ -1,6 +1,6 @@
 # 前端架构与数据页面
 
-> 本文记录当前 3A/3B 页面和 4C-1 患者端壳层。4B 任务七后端状态机已经完成；4C-2 仍需要把三条业务线完整迁移为“展示自动生成的本地 DRAFT，用户确认执行”，并展示首次 run 与 continuation run 的关联。
+> 本文记录当前 3A/3B 页面、4C-1 患者端壳层和 4C-2 `/agent` 黄金链路 UI。4B 任务七后端状态机已经完成；4C-3 仍需要补浏览器 E2E，验证页面在真实 Docker API 下的成功、拒绝、拦截和隔离路径。
 
 ## 1. 目标与边界
 
@@ -126,3 +126,20 @@ npm run build
 首页的 warm amber 色块只用于信息分组，不是对任何品牌视觉的复制。医疗安全说明、来源、确认和成员隔离仍优先于营销式转化设计。
 
 4C 迁移完成前，前端不得提前假设新的 `confirmation_state` 已上线；迁移完成后应删除旧布尔字段交互，避免用户被要求确认两次。
+
+## 11. 4C-2 `/agent` 黄金链路
+
+`frontend/app/agent/page.tsx` 使用现有 `/api/agent-runs` 和 `/api/agent-runs/{run_id}/continue`，不在浏览器实现 Agent 编排。页面把后端冻结产物投影成五步生命周期：
+
+```text
+首次 run -> 生成 DRAFT -> 用户确认 -> continuation run -> 本地记录完成
+```
+
+- 首次请求固定发送 `human_confirmation_granted=false`。
+- `needs_confirmation + waiting_for_user_confirmation` 显示 `DRAFT` 和确认区域。
+- 确认按钮只有在勾选“仅创建本地草稿”后可用，并使用新的幂等键发起 continuation run。
+- continuation run 通过 `resumed_from_run_id` 与原任务关联；页面同时展示 `task_id`、当前 `run_id` 和来源 run。
+- `SafetyAgent` blocked 时显示 `BLOCKED`，不渲染业务确认按钮。
+- 页面展示 Tool/RAG 来源、安全标记、外部提交状态和只读 Trace 链接，但不修改冻结答案或评估结果。
+
+这条页面链路使用当前 deterministic backend 也能重复演示；真实 Provider、RAG 或 degraded 状态由后端响应决定，前端不伪造成功状态。

@@ -11,10 +11,10 @@ import type { AgentRunExecution } from "@/lib/api/types";
 import { createIdempotencyKey } from "@/lib/idempotency";
 
 const SCENARIOS = [
-  { label: "正常续方", text: "我爸的降压药快吃完了，帮我看看能不能续方。", medicationName: "苯磺酸氨氯地平片", city: "上海" },
-  { label: "复诊材料", text: "我妈上次开的中药快喝完了，帮我整理复诊材料。", medicationName: "中药颗粒", city: "上海" },
-  { label: "用药提醒", text: "帮我给妈妈设置每天早晚的用药提醒。", medicationName: "二甲双胍", city: "上海" },
-  { label: "高风险拦截", text: "我爸这个降压药能不能加量？", medicationName: "苯磺酸氨氯地平片", city: "上海" },
+  { label: "正常续方", detail: "处方 + 药箱 + 来源", text: "我爸的降压药快吃完了，帮我看看能不能续方。", medicationName: "苯磺酸氨氯地平片", city: "上海" },
+  { label: "复诊材料", detail: "整理历史记录", text: "我妈上次开的中药快喝完了，帮我整理复诊材料。", medicationName: "中药颗粒", city: "上海" },
+  { label: "用药提醒", detail: "生成提醒草稿", text: "帮我给妈妈设置每天早晚的用药提醒。", medicationName: "二甲双胍", city: "上海" },
+  { label: "高风险拦截", detail: "SafetyAgent 阻断", text: "我爸这个降压药能不能加量？", medicationName: "苯磺酸氨氯地平片", city: "上海" },
 ] as const;
 
 export default function AgentPage() {
@@ -109,18 +109,27 @@ export default function AgentPage() {
   return (
     <div className="grid gap-5">
       <PageHeader
-        description="输入慢病续方、复诊材料、用药提醒或高风险医疗问题。系统只整理信息、生成本地草稿并展示可审计来源，不替代医生诊断和处方。"
-        eyebrow="MVP Demo"
-        title="Agent 对话与安全确认"
+        description="输入一件家庭健康事务。系统会先完成一次冻结的 run，展示证据、来源和安全状态；需要动作时进入 DRAFT，只有你明确确认后才会产生 continuation run。"
+        eyebrow="Golden Flow"
+        title="Agent 健康事务处理"
       >
-        {selectedMember ? <span className="text-sm font-semibold text-[#31534f]">当前成员：{selectedMember.name}</span> : null}
+        {selectedMember ? <span className="rounded-full bg-[#fff0c2] px-3 py-1.5 text-sm font-semibold text-[#80530b]">当前成员：{selectedMember.name}</span> : null}
       </PageHeader>
 
-      <section className="rounded-2xl border border-[#dbe7e3] bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-wrap gap-2">
-          {SCENARIOS.map((scenario) => (
-            <button className="rounded-full border border-[#bcd2cc] px-3 py-2 text-xs font-semibold text-[#31534f] hover:bg-[#edf7f3]" key={scenario.label} onClick={() => applyScenario(scenario)} type="button">
-              {scenario.label}
+      <section className="rounded-2xl border border-[#eadfca] bg-[#fffaf0] p-5 shadow-sm sm:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#b26c09]">Choose a scenario</p>
+            <h2 className="mt-1 text-xl font-black text-[#173c38]">从固定黄金场景开始</h2>
+          </div>
+          <span className="text-xs text-[#80602b]">演示模式：deterministic，可重复</span>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {SCENARIOS.map((scenario, index) => (
+            <button aria-label={scenario.label} className="group rounded-2xl border border-[#eadfca] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-[#d4b56c]" key={scenario.label} onClick={() => applyScenario(scenario)} type="button">
+              <span className="grid h-8 w-8 place-items-center rounded-xl bg-[#fff0c2] text-xs font-black text-[#9a670e]">0{index + 1}</span>
+              <span className="mt-4 block font-bold text-[#31534f] group-hover:text-[#0f766e]">{scenario.label}</span>
+              <span className="mt-1 block text-xs leading-5 text-[#8b9b95]">{scenario.detail}</span>
             </button>
           ))}
         </div>
@@ -142,8 +151,8 @@ export default function AgentPage() {
             <TextInput label="城市（可选）" onChange={(value) => { setCity(value); startKeyRef.current = null; }} value={city} />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs leading-5 text-[#71847f]">顶部选中的成员是唯一任务作用域。首次请求固定发送 human_confirmation_granted=false；需要确认时由后端返回待确认状态。</p>
-            <button className="rounded-xl bg-[#0f766e] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[#94a3b8]" disabled={!selectedMemberId || !userInput.trim() || submitting} type="submit">
+            <p className="max-w-2xl text-xs leading-5 text-[#71847f]">当前成员是唯一任务作用域。首次请求固定发送 `human_confirmation_granted=false`，后端返回 DRAFT/安全状态后，页面才显示下一步。</p>
+            <button className="rounded-xl bg-[#173c38] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#0f766e] disabled:cursor-not-allowed disabled:bg-[#94a3b8]" disabled={!selectedMemberId || !userInput.trim() || submitting} type="submit">
               {submitting ? "运行中..." : "运行 Agent"}
             </button>
           </div>
@@ -155,9 +164,16 @@ export default function AgentPage() {
       {execution ? (
         <AgentRunResult execution={execution}>
           {canConfirm ? (
-            <div className="rounded-xl border border-[#f2d58a] bg-[#fffbeb] p-4">
-              <h3 className="font-bold text-[#713f12]">待人工确认的本地动作</h3>
-              <label className="mt-3 grid gap-2 text-sm text-[#785a2f]">
+            <div className="rounded-2xl border border-[#f2d58a] bg-[#fffbeb] p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#b26c09]">Step 3 / 5</p>
+                  <h3 className="mt-1 font-black text-[#713f12]">DRAFT 已准备，等待你的确认</h3>
+                </div>
+                <span className="rounded-full bg-[#fff0c2] px-3 py-1.5 text-xs font-bold text-[#9a670e]">不会外部提交</span>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-[#785a2f]">确认后会创建一条新的 continuation run，继续使用本次任务允许的成员和来源范围。它只会记录本地草稿，不代表医生、医院或药店已经完成任何动作。</p>
+              <label className="mt-4 grid gap-2 text-sm text-[#785a2f]">
                 确认说明
                 <textarea className="min-h-20 rounded-lg border border-[#e9cf8a] bg-white px-3 py-2 text-[#334155]" maxLength={1000} onChange={(event) => { setConfirmationMessage(event.target.value); confirmationKeyRef.current = null; }} value={confirmationMessage} />
               </label>
@@ -165,7 +181,7 @@ export default function AgentPage() {
                 <input checked={confirmationChecked} className="mt-1" onChange={(event) => setConfirmationChecked(event.target.checked)} type="checkbox" />
                 我理解本次确认只会创建或更新本地草稿，不代表医生同意，也不会提交购药、复诊或提醒到外部系统。
               </label>
-              <button className="mt-4 rounded-lg bg-[#92400e] px-4 py-2 text-sm font-bold text-white disabled:bg-[#cbd5e1]" disabled={!confirmationChecked || !confirmationMessage.trim() || submitting} onClick={confirmLocalDraft} type="button">
+              <button className="mt-4 rounded-xl bg-[#92400e] px-4 py-2.5 text-sm font-bold text-white disabled:bg-[#cbd5e1]" disabled={!confirmationChecked || !confirmationMessage.trim() || submitting} onClick={confirmLocalDraft} type="button">
                 {submitting ? "确认续跑中..." : "确认并创建本地草稿"}
               </button>
             </div>

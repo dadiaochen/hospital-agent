@@ -453,8 +453,8 @@ Docker Task 12: baseline 19/19; Redis failure 18/18
 | 任务 | 状态 | 目标 | 关键验收 |
 | --- | --- | --- | --- |
 | 4C-1 患者端信息架构与视觉壳层 | `DONE` | 以药品/健康服务场景常见的搜索、分类、快捷入口和状态卡片为参考，重做患者端首页与导航 | 桌面端/移动端可用；成员作用域清晰；不引入药品价格、支付或真实下单暗示 |
-| 4C-2 黄金链路 UI | `NEXT` | 接通慢病续方、用药提醒两条黄金链路的草稿审阅、确认续跑、来源和安全状态 | 首次 run -> `DRAFT` -> 用户确认 -> continuation run；blocked/degraded/无来源状态可解释 |
-| 4C-3 浏览器 E2E | `PLANNED` | 为续方、提醒各写 2–3 条浏览器场景，预问诊作为第三条回归线 | 成功、拒绝确认、高风险拦截、成员切换和 API 失败路径可重复 |
+| 4C-2 黄金链路 UI | `DONE` | 接通慢病续方、用药提醒两条黄金链路的草稿审阅、确认续跑、来源和安全状态 | `/agent` 展示首次 run -> `DRAFT` -> 用户确认 -> continuation run；blocked/degraded/无来源状态可解释 |
+| 4C-3 浏览器 E2E | `NEXT` | 为续方、提醒各写 2–3 条浏览器场景，预问诊作为第三条回归线 | 成功、拒绝确认、高风险拦截、成员切换和 API 失败路径可重复 |
 | 4C-4 固定演示与最终交付 | `PLANNED` | 一键启动、黄金演示、测试报告和 README 收口 | 5 分钟完成演示；Docker、迁移、seed、后端 Harness、浏览器 E2E 证据齐全 |
 
 ### 8.1 4C-1 设计决策：患者端不是电商下单页
@@ -468,6 +468,29 @@ Docker Task 12: baseline 19/19; Redis failure 18/18
 - 任何患者端页面都不能绕过 `member_id` 隔离、SafetyAgent、确认状态机和只读 Trace。
 
 4C-1 当前实现边界：只修改 `frontend/` 以及对应前端文档和测试，不新增后端业务接口；已有 API 不满足页面需求时，先在现有 DTO 中寻找可用字段，不通过前端拼接医疗事实。
+
+### 8.2 4C-2 黄金链路 UI
+
+状态：`DONE`。本任务只改造患者端 `/agent` 的展示和交互，不新增后端接口、不改变确认状态机。
+
+交付内容：
+
+- 用五步生命周期展示 `首次 run -> DRAFT -> 用户确认 -> continuation run -> 本地记录完成`。
+- 展示 `task_id`、当前 `run_id` 和 `resumed_from_run_id`，让用户看懂同一任务的两次 run 关系。
+- 只有后端返回 `needs_confirmation` 且未被 SafetyAgent 拦截时，才展示确认区和“确认并创建本地草稿”按钮。
+- 明确外部动作仍为 `not_submitted`，高风险请求显示 `BLOCKED` 且没有确认按钮。
+- 保留 Tool/RAG source、Safety、EvaluationResult 和只读 Trace 入口。
+- Docker 部署文档补充数据库、backend、Agent（运行在 backend 内）和 frontend 的启动、日志、健康检查与停止方式。
+
+验证：
+
+```text
+Frontend Vitest: 5 files, 25 passed
+TypeScript typecheck: passed
+Next.js production build: passed
+Docker Compose: postgres/redis/backend/frontend healthy
+HTTP smoke: backend /health = 200; frontend / = 200
+```
 
 ## 9. 简历和指标边界
 
@@ -492,4 +515,4 @@ Docker Task 12: baseline 19/19; Redis failure 18/18
 
 ## 11. 当前唯一下一步
 
-`4B` 已完成；当前唯一阶段是 `4C`，4C-1 患者端信息架构与视觉壳层已完成，当前唯一下一任务是 `4C-2 黄金链路 UI`。完成后按表格顺序进入 4C-3 和 4C-4；4C 完成后不再新增必要产品阶段。
+`4B` 已完成；当前唯一阶段是 `4C`，4C-1 患者端信息架构与视觉壳层、4C-2 黄金链路 UI 已完成，当前唯一下一任务是 `4C-3 浏览器 E2E`。完成后进入 4C-4；4C 完成后不再新增必要产品阶段。

@@ -82,6 +82,8 @@ describe("AgentPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "运行 Agent" }));
 
     expect(await screen.findByText("结构化答案")).toBeTruthy();
+    expect(screen.getByText("DRAFT")).toBeTruthy();
+    expect(screen.getByText("task-3b-demo")).toBeTruthy();
     expect(screen.getByText(execution.artifacts.run_trace.final_answer.content)).toBeTruthy();
     expect(screen.getByText(/source_id: source-tool-1/)).toBeTruthy();
     expect(screen.getByText("human_confirmation_required")).toBeTruthy();
@@ -117,6 +119,8 @@ describe("AgentPage", () => {
     await userEvent.click(confirmButton);
 
     expect(await screen.findByText("本地提醒草稿已创建，尚未提交到外部系统。")).toBeTruthy();
+    expect(screen.getByText("LOCAL_COMPLETED")).toBeTruthy();
+    expect(screen.getByText("continuation run")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "确认并创建本地草稿" })).toBeNull();
     expect(screen.getByText(/外部提交状态：/)).toBeTruthy();
 

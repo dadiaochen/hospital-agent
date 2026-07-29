@@ -21,7 +21,7 @@
 - 任务 11：32 条 Harness 与消融实验，`DONE`。
 - 任务 12：PostgreSQL/Redis/Docker 后端验收，`DONE`；baseline 19/19、Redis 故障回源 18/18。
 - 任务 13：4B 文档与 Git 收口，`DONE`。
-- 当前阶段：`4C IN_PROGRESS`，正在完成患者端信息架构与视觉壳层；随后进入黄金链路 UI、浏览器 E2E 和最终演示收口。
+- 当前阶段：`4C IN_PROGRESS`，患者端信息架构与 `/agent` 黄金链路 UI 已完成；当前进入浏览器 E2E 和最终演示收口。
 
 当前代码仍保留旧 Agent Runtime 和旧确认草稿 API 的兼容流程；新业务任务链路已经使用任务七的三层 Safety Guard、自动本地 `DRAFT` 和 `DRAFT -> CONFIRMED -> EXECUTED` 状态机。任务八已将 PostgreSQL Task Checkpoint 设为权威源，Redis 仅做带 TTL 的短期投影并在 miss/过期/不可用时回源；任务十一已完成 32 条 deterministic Harness 和 A/B/C 同条件消融，任务十二已在本机 Docker 栈完成真实迁移、RAG、API、Redis 故障回源和并发确认验收，任务十三已完成 4B 文档与 Git 收口。
 
@@ -74,30 +74,42 @@ flowchart LR
 
 ## 快速运行
 
-详细安装、WSL 2、Docker 数据目录和故障排查见 [本地环境与部署](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)。PowerShell 从仓库根目录执行：
+推荐使用 Docker Compose 一键启动 PostgreSQL、Redis、FastAPI backend 和 Next.js frontend。详细安装、WSL 2、Docker 数据目录和故障排查见 [本地环境与部署](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)。PowerShell 从仓库根目录执行：
 
 ```powershell
-Copy-Item .env.example .env
-docker compose up -d postgres redis
-
-.\.venv\Scripts\Activate.ps1
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m alembic upgrade head
-python scripts\seed.py
-python -m uvicorn app.main:app --reload --app-dir backend
+Set-Location E:\project_code\hospital
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+docker compose up -d --build --wait --wait-timeout 300
+docker compose ps
 ```
 
-新终端启动前端：
+打开：
 
-```powershell
-Set-Location frontend
-npm install
-npm run dev
-```
-
+- 患者端：`http://localhost:3000`
+- Agent 黄金链路：`http://localhost:3000/agent`
 - Swagger：`http://localhost:8000/docs`
 - 后端健康检查：`http://localhost:8000/health`
-- 前端：`http://localhost:3000`
+
+Agent 运行在 `backend` 容器内，不存在单独的 `agent` 容器；前端 `/agent` 发起请求后，由 FastAPI backend 执行 Agent 工作流。
+
+查看日志：
+
+```powershell
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+只结束后端但保留数据库、Redis 和前端：
+
+```powershell
+docker compose stop backend
+```
+
+结束全部容器但保留数据：
+
+```powershell
+docker compose stop
+```
 
 默认 `MODEL_PROVIDER=deterministic`，不需要 API Key。真实模型和向量 RAG 配置见 [LLM 配置](docs/LLM_CONFIGURATION.md) 与 [RAG 设计](docs/RAG_RETRIEVAL.md)。
 

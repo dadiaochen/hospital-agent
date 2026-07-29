@@ -4,6 +4,113 @@
 
 > 完整学习、migration、seed、Swagger/Postman 和前后端联调统一使用 Docker Desktop 中的 PostgreSQL/Redis。SQLite 仅用于 pytest 隔离测试，或 Docker 暂不可用时的临时排错；它不能替代 PostgreSQL 联调。本仓库仍是本地开发演示，不是生产部署方案。
 
+## 0. 最短路径：Docker 运行完整项目
+
+如果你的目标是“把项目跑起来并看到前后端”，优先使用这一条路线。它会启动数据库、缓存、FastAPI 后端和 Next.js 前端；backend 容器启动时会自动执行 migration 和幂等 seed。
+
+### 0.1 第一次准备
+
+在 Docker Desktop 已启动、WSL 2 和硬件虚拟化已正常的前提下，从仓库根目录执行：
+
+```powershell
+Set-Location E:\project_code\hospital
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+docker compose config
+```
+
+`docker compose config` 能正常输出四个 service，说明 Compose 文件可以解析。`.env` 只保存在本机，不要提交。
+
+### 0.2 一键启动数据库、后端、Agent 和前端
+
+```powershell
+Set-Location E:\project_code\hospital
+docker compose up -d --build --wait --wait-timeout 300
+docker compose ps
+```
+
+四个服务的职责是：
+
+| Compose service | 作用 | 访问方式 |
+| --- | --- | --- |
+| `postgres` | PostgreSQL + pgvector，保存业务数据、Task Checkpoint 和来源元数据 | 后端容器内部使用 `postgres:5432` |
+| `redis` | TTL 短期任务缓存与多实例协调 | 后端容器内部使用 `redis:6379` |
+| `backend` | FastAPI、业务 Service、Tool、RAG、Planner、Supervisor、Safety 和 Evaluator | `http://localhost:8000` |
+| `frontend` | Next.js 患者端页面 | `http://localhost:3000` |
+
+**Agent 不需要单独启动。** 本项目没有 `agent` 容器：Agent 工作流运行在 `backend` 进程内。打开患者端 `/agent` 页面并点击“运行 Agent”，前端会调用 backend 的 `/api/agent-runs`；backend 再执行路由、领域 Agent、工具、RAG、安全和评估。
+
+### 0.3 怎么确认启动成功
+
+```powershell
+docker compose ps
+Invoke-WebRequest http://localhost:8000/health
+```
+
+浏览器打开：
+
+- 患者端首页：<http://localhost:3000>
+- Agent 黄金链路：<http://localhost:3000/agent>
+- FastAPI Swagger：<http://localhost:8000/docs>
+- OpenAPI JSON：<http://localhost:8000/openapi.json>
+- 后端健康检查：<http://localhost:8000/health>
+
+推荐演示顺序：打开 `/` 选择成员 -> 打开 `/agent` -> 点击“正常续方” -> 查看 `DRAFT` -> 勾选本地草稿确认 -> 查看新的 continuation run 和本地完成状态。
+
+### 0.4 查看后端、Agent 和数据库日志
+
+```powershell
+# 持续查看后端日志；其中包含 Agent 运行、Tool、RAG、安全和 Provider Trace
+docker compose logs -f backend
+
+# 查看前端日志
+docker compose logs -f frontend
+
+# 查看数据库/Redis 启动与健康日志
+docker compose logs postgres
+docker compose logs redis
+```
+
+进入 backend 容器执行只读检查：
+
+```powershell
+docker compose exec backend python -m alembic current
+docker compose exec backend python -c "from app.main import app; print(app.title)"
+```
+
+### 0.5 结束后端或结束整个项目
+
+只结束 backend，保留 PostgreSQL、Redis 和前端：
+
+```powershell
+docker compose stop backend
+docker compose ps
+```
+
+重新启动 backend：
+
+```powershell
+docker compose start backend
+docker compose ps
+```
+
+结束整个 Docker 项目但保留数据库 volume：
+
+```powershell
+docker compose stop
+```
+
+下次继续：
+
+```powershell
+docker compose start
+```
+
+如果使用 `docker compose down`，容器会被删除但 named volume 默认保留；不要日常使用 `docker compose down -v`，它会删除本地 PostgreSQL/Redis 数据。
+
+### 0.6 两种运行方式不要混用
+
+完整 Docker 运行时，不要再在主机启动 `uvicorn` 或 `npm run dev`，否则会与容器争用 `8000` 或 `3000` 端口。需要调试代码时，可以停止对应容器，再使用“主机后端 + Docker 数据库”或“主机前端 + Docker backend”的开发方式，具体见第 4B 节。
+
 ## 1. 项目的环境分别在哪里
 
 | 环境或数据 | 推荐位置 | 用途 | 提交 Git？ |
