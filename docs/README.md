@@ -22,6 +22,7 @@
 | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | 本地开发、分层、Git 和提交检查 |
 | [LOCAL_SETUP_AND_DEPLOYMENT.md](LOCAL_SETUP_AND_DEPLOYMENT.md) | WSL 2、Docker、PostgreSQL/Redis、前后端启动与排错 |
 | [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) | 固定 MVP 演示流程 |
+| [mvp_closeout_report.4c.md](mvp_closeout_report.4c.md) | 4C-4 一键收口、固定 Demo、Harness 和浏览器 E2E 证据 |
 
 ## 接口与数据
 
@@ -59,6 +60,8 @@
 - [agent_ablation_report.4b.md](agent_ablation_report.4b.md)：4B 任务十一 32 条 deterministic fixture 与三种编排策略消融报告。
 - [task12_backend_acceptance_report.4b.md](task12_backend_acceptance_report.4b.md)：4B 任务十二 Docker PostgreSQL/Redis/API/RAG/并发确认验收报告。
 - [task13_4b_closeout_report.md](task13_4b_closeout_report.md)：4B 任务十三文档、测试和 Git 收口报告。
+- [browser_e2e_report.4c.md](browser_e2e_report.4c.md)：4C-3 Playwright 浏览器 E2E 验收报告。
+- [mvp_closeout_report.4c.md](mvp_closeout_report.4c.md)：4C-4 最终 MVP 收口报告。
 - `provider_adapter_validation_report.4b.md`、`model_gateway_report.4b.md`、`vector_rag_report.4a.md`：对应局部能力的本地验证记录。
 - `mvp_demo_report.3d.md`：3D 固定演示快照。
 - `agent_eval_report.example.md`：由测试生成的示例格式，代码依赖该路径，不能当真实报告。

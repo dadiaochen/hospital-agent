@@ -123,7 +123,7 @@ SafetyAgent 属于治理层，不是 Supervisor 的候选业务角色。Evaluato
 | 阶段 | 状态 | 目标 |
 | --- | --- | --- |
 | 4B | `DONE` | 完成可靠后端 Agent：最终契约、三领域 Agent、按需 Planner、bounded Supervisor、安全/确认、状态缓存、Provider/RAG 可靠性和 32 条评测 |
-| 4C | `IN_PROGRESS` | 完成患者端、浏览器 E2E、黄金演示和最终交付；4C 完成后不再新增必要产品阶段 |
+| 4C | `DONE` | 完成患者端、浏览器 E2E、黄金演示和最终交付；4C 完成后不再新增必要产品阶段 |
 
 ## 7. 4B 任务拆分与审计
 
@@ -455,7 +455,7 @@ Docker Task 12: baseline 19/19; Redis failure 18/18
 | 4C-1 患者端信息架构与视觉壳层 | `DONE` | 以药品/健康服务场景常见的搜索、分类、快捷入口和状态卡片为参考，重做患者端首页与导航 | 桌面端/移动端可用；成员作用域清晰；不引入药品价格、支付或真实下单暗示 |
 | 4C-2 黄金链路 UI | `DONE` | 接通慢病续方、用药提醒两条黄金链路的草稿审阅、确认续跑、来源和安全状态 | `/agent` 展示首次 run -> `DRAFT` -> 用户确认 -> continuation run；blocked/degraded/无来源状态可解释 |
 | 4C-3 浏览器 E2E | `DONE` | 为续方、提醒各写 2–3 条浏览器场景，预问诊作为第三条回归线 | 成功、拒绝确认、高风险拦截、成员切换和 API 失败路径可重复 |
-| 4C-4 固定演示与最终交付 | `NEXT` | 一键启动、黄金演示、测试报告和 README 收口 | 5 分钟完成演示；Docker、迁移、seed、后端 Harness、浏览器 E2E 证据齐全 |
+| 4C-4 固定演示与最终交付 | `DONE` | 一键启动、黄金演示、测试报告和 README 收口 | 5 分钟完成演示；Docker、迁移、seed、后端 Harness、浏览器 E2E 证据齐全 |
 
 ### 8.1 4C-1 设计决策：患者端不是电商下单页
 
@@ -507,6 +507,25 @@ HTTP smoke: backend /health = 200; frontend / = 200
 
 验证：Playwright 使用本机 Edge 执行 7 条场景，结果为 `7 passed`；Docker Compose 的 PostgreSQL、Redis、backend、frontend 均为 `healthy`。详细结果见 [4C 浏览器 E2E 验收报告](browser_e2e_report.4c.md)。该结果只证明本机 deterministic 演示链路可重复，不是生产 SLO、临床安全率或真实 LLM 指标。
 
+### 8.4 4C-4 固定演示与最终交付
+
+状态：`DONE`。本任务没有新增业务 API、数据库表、Agent 角色或模型能力，只把已有交付物组织成一条可重复的本地 MVP 验收路径。
+
+```powershell
+Set-Location E:\project_code\hospital
+.\scripts\closeout_4c.ps1
+```
+
+脚本按固定顺序执行：
+
+1. 构建并启动 PostgreSQL、Redis、backend 和 frontend；backend 启动入口执行 Alembic migration、幂等 seed 和可选索引准备。
+2. 通过公开 Runtime API 执行四个固定业务场景，验证 `DRAFT -> confirmation -> continuation`、高风险 `BLOCKED`、来源和 `external_action_status=not_submitted`。
+3. 在宿主机离线运行 deterministic Agent Harness 和 Single Agent / fixed router / bounded Supervisor A/B/C 消融；Harness fixture 不进入 backend 生产镜像。
+4. 使用本机 Edge 通过真实 HTTP 执行 7 条浏览器 E2E，验证患者端确认、成员隔离、安全拦截和 API 失败路径。
+5. 把脱敏结果写入被 Git 忽略的 `var/closeout/`，失败时返回非零退出码。
+
+本次本机收口结果：固定 Demo `4/4`、backend/frontend health `200`、Harness/A/B/C `PASS`、浏览器 E2E `7/7`。详细记录见 [4C-4 MVP 收口报告](mvp_closeout_report.4c.md)。
+
 ## 9. 简历和指标边界
 
 - 设计能力只能写“设计了”；代码和测试完成后才能写“实现了”。
@@ -530,4 +549,4 @@ HTTP smoke: backend /health = 200; frontend / = 200
 
 ## 11. 当前唯一下一步
 
-`4B` 已完成；当前唯一阶段是 `4C`，4C-1 患者端信息架构与视觉壳层、4C-2 黄金链路 UI、4C-3 浏览器 E2E 已完成，当前唯一下一任务是 `4C-4 固定演示与最终交付`。4C 完成后不再新增必要产品阶段。
+`4B` 和 `4C` 已完成；当前没有新增必要产品阶段。后续只做 bug 修复、依赖升级、真实 Provider/LLM 联调、生产认证和部署准备等独立工作，不再临时增加新的产品阶段编号。

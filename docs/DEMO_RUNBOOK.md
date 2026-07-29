@@ -1,6 +1,6 @@
 # MVP 演示手册
 
-> 本手册记录 4C-1 患者端首页、4C-2 `/agent` 黄金链路和 3D 兼容演示。4B 任务七的新业务 API 已改为首次生成本地 DRAFT、用户确认后继续运行；页面仍不会向外部医院、药店或通知服务提交动作。不要用本手册覆盖总路线图的最终确认语义。
+> 本手册记录 4C-1 患者端首页、4C-2 `/agent` 黄金链路、4C-3 浏览器 E2E 和 4C-4 最终 MVP 收口。4B 任务七的新业务 API 已改为首次生成本地 DRAFT、用户确认后继续运行；页面仍不会向外部医院、药店或通知服务提交动作。不要用本手册覆盖总路线图的最终确认语义。
 
 本手册用于在本地重复演示家庭健康 Agent MVP。它验证的是 seed 数据、deterministic provider、PostgreSQL、FastAPI、Next.js 和固定规则，不是生产、临床或真实 LLM 质量证明。
 
@@ -31,6 +31,16 @@ docker compose up --build
 ```
 
 Compose 不强制 `.env` 存在；没有配置时使用 deterministic 本地默认值。有 `.env` 时会自动读取本机覆盖项。
+
+### 1.1 一键最终收口
+
+需要同时验证 Docker、固定 Demo、后端 Harness 和浏览器 E2E 时，从仓库根目录执行：
+
+```powershell
+.\scripts\closeout_4c.ps1
+```
+
+成功后查看 `var\closeout\4c-closeout.md`；它只保存步骤状态和报告路径，不保存成员 ID、run ID、答案正文、Prompt、Token 或 API Key。
 
 ## 2. 演示入口
 

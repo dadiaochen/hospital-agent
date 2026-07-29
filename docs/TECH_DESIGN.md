@@ -236,3 +236,15 @@ current task version -> Redis scoped/versioned projection
 ```
 
 Redis 投影不含 raw conversation、scratchpad、candidate inference、完整 provider response 或 API Key。`checkpoint_version` 和 `confirmation_version` 由 API 客户端回传时执行乐观校验；过期版本返回结构化冲突，不创建 continuation run。确认完成后，`ConfirmedPreferenceService` 还会校验 `EXECUTED` 记录、成员、source version 和显式人工确认，才写入可撤销的偏好版本。
+
+## 17. 4C-4 交付编排
+
+最终交付使用 `scripts/closeout_4c.ps1` 作为操作员入口，而不是新增一个业务运行时。它按顺序调用已有的 Docker Compose、Runtime Demo、deterministic Harness、A/B/C 消融和 Playwright E2E：
+
+```text
+Docker build/up -> migration/seed -> fixed Runtime Demo
+  -> HTTP health -> offline Harness/A/B/C
+  -> real browser E2E -> redacted closeout report
+```
+
+Harness fixture 在宿主机离线执行，避免把测试数据打进 backend 镜像；浏览器 E2E 通过公开前端和 API 访问真实 Docker 服务。脚本只写 `var/closeout/` 运行报告，不持久化完整聊天、医疗正文、Prompt、Token、成员 ID、run ID 或密钥。任一步骤失败都返回非零退出码，因此“演示能打开”不能替代完整收口。

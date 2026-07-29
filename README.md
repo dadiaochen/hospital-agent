@@ -6,7 +6,7 @@
 
 ## 当前进度
 
-[开发总路线图](docs/DEVELOPMENT_ROADMAP.md) 是阶段、状态和顺序的唯一权威来源。`4B` 后端已完成，当前进入 `4C`：
+[开发总路线图](docs/DEVELOPMENT_ROADMAP.md) 是阶段、状态和顺序的唯一权威来源。`4B` 后端和 `4C` 患者端 MVP 已完成：
 
 - 任务 1：Git 线性历史，`DONE`。
 - 任务 2：Alembic 迁移链与向量维度冲突，`DONE`。
@@ -21,7 +21,7 @@
 - 任务 11：32 条 Harness 与消融实验，`DONE`。
 - 任务 12：PostgreSQL/Redis/Docker 后端验收，`DONE`；baseline 19/19、Redis 故障回源 18/18。
 - 任务 13：4B 文档与 Git 收口，`DONE`。
-- 当前阶段：`4C IN_PROGRESS`，4C-1 患者端信息架构、4C-2 `/agent` 黄金链路 UI、4C-3 浏览器 E2E 已完成；当前唯一下一项是 4C-4 固定演示与最终交付。
+- 当前阶段：`4C DONE`，4C-1 患者端信息架构、4C-2 `/agent` 黄金链路 UI、4C-3 浏览器 E2E、4C-4 固定演示与最终交付均已完成；4C 之后不再新增必要产品阶段。
 
 当前代码仍保留旧 Agent Runtime 和旧确认草稿 API 的兼容流程；新业务任务链路已经使用任务七的三层 Safety Guard、自动本地 `DRAFT` 和 `DRAFT -> CONFIRMED -> EXECUTED` 状态机。任务八已将 PostgreSQL Task Checkpoint 设为权威源，Redis 仅做带 TTL 的短期投影并在 miss/过期/不可用时回源；任务十一已完成 32 条 deterministic Harness 和 A/B/C 同条件消融，任务十二已在本机 Docker 栈完成真实迁移、RAG、API、Redis 故障回源和并发确认验收，任务十三已完成 4B 文档与 Git 收口。
 
@@ -43,6 +43,7 @@
 - mock/degraded Provider Adapter、三条新业务任务 API 和 Next.js 演示页面。
 - Docker Compose 本地 PostgreSQL、Redis、FastAPI、Next.js 演示链路。
 - 4C-3 浏览器 E2E：Playwright 使用本机 Edge 访问真实 Docker 前后端，7 条场景全部通过；报告见 [4C 浏览器 E2E 报告](docs/browser_e2e_report.4c.md)。
+- 4C-4 最终收口：一键脚本串联 Docker 构建、migration/seed、四场景 Demo、deterministic Harness、A/B/C 消融和浏览器 E2E；运行记录见 [4C-4 MVP 收口报告](docs/mvp_closeout_report.4c.md)。
 
 历史 16 条契约基线见 [Agent 评测报告](docs/AGENT_EVAL_REPORT.md)，4B 的 32 条同条件 A/B/C 结果见 [任务十一消融报告](docs/agent_ablation_report.4b.md)。两者都是 deterministic 固定轨迹指标，不是临床效果、真实模型准确率或线上延迟。
 
@@ -135,6 +136,15 @@ Windows 默认临时目录或旧 `__pycache__` 出现 `PermissionError` 时，�
 
 浏览器 E2E 必须在 Docker Compose 已健康启动时执行。默认使用 Windows 已安装的 Microsoft Edge，不额外下载浏览器；测试报告和失败截图/trace 写入被 Git 忽略的 `var/playwright-report` 与 `var/playwright-test-results`。
 
+完整 MVP 收口可以从仓库根目录一键执行：
+
+```powershell
+Set-Location E:\project_code\hospital
+.\scripts\closeout_4c.ps1
+```
+
+脚本要求 Docker Desktop、项目 `.venv`、`frontend/node_modules` 和 Windows Edge 已准备好；执行结果写入被 Git 忽略的 `var/closeout/`。
+
 任务六编排层也可以单独回归：
 
 ```powershell
@@ -215,6 +225,8 @@ docker compose up -d --build --wait --wait-timeout 300
 - [任务十一消融报告](docs/agent_ablation_report.4b.md)
 - [任务十二后端验收报告](docs/task12_backend_acceptance_report.4b.md)
 - [任务十三 4B 收口报告](docs/task13_4b_closeout_report.md)
+- [4C-3 浏览器 E2E 报告](docs/browser_e2e_report.4c.md)
+- [4C-4 MVP 收口报告](docs/mvp_closeout_report.4c.md)
 
 ## 边界
 
@@ -222,4 +234,4 @@ docker compose up -d --build --wait --wait-timeout 300
 - 本地草稿不等于医院提交、药店下单、提醒推送或真实服务完成。
 - mock Provider 不代表真实外部系统已经接入。
 - deterministic fixture 指标不代表线上模型、用户采纳、临床安全或真实性能。
-- 4B 任务十一至十三的 deterministic、Docker 和 Git 收口证据均已生成；当前进入 4C。不能把 fixture latency 或本机 wall-clock 写成线上检索、临床安全或生产性能结果。
+- 4B 任务十一至十三和 4C 的 deterministic、Docker、浏览器 E2E 与 Git 收口证据均已生成。不能把 fixture latency 或本机 wall-clock 写成线上检索、临床安全或生产性能结果。

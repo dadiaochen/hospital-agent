@@ -85,6 +85,15 @@ npm run test:e2e
 
 当前本机结果为 7 条通过。该结果证明固定 deterministic Docker 演示链路可重复，不代表真实 LLM 质量、临床安全或生产 SLO。API 失败场景使用 Playwright route 模拟 HTTP 503，专门验证前端错误映射，不冒充真实 Provider 故障率。
 
+4C-4 最终收口：
+
+```powershell
+Set-Location E:\project_code\hospital
+.\scripts\closeout_4c.ps1
+```
+
+该脚本把 Docker migration/seed、固定四场景 Demo、deterministic Harness、A/B/C 消融和浏览器 E2E 串成一个验收命令。它不会把 Harness fixture 放入 backend 镜像，也不会调用真实 LLM；步骤结果写入被 Git 忽略的 `var/closeout/`。本机最终结果为 Demo `4/4`、浏览器 `7/7`、前后端 health `200`。
+
 ## 如何 review 一个改动
 
 按这个顺序读 diff，通常最省力：
@@ -114,7 +123,7 @@ Review Agent UI 时要区分当前兼容契约与最终交互。最终页面展�
 ## 当前常见风险
 
 - 2G-2 Agent API/runtime 持久化已实现，但多模型线上质量验证、生产认证和外部医院/药店集成尚未实现，不能用 deterministic 成功结果替代真实验证。
-- 4C-3 已在真实 PostgreSQL/Redis/FastAPI/Next.js Docker 栈上完成 7 条浏览器 E2E；4C-4 仍需把固定演示、全套报告和最终 README 收口。浏览器 E2E 仍不替代真实 Trace Harness、真实 LLM 质量或生产验收。
+- 4C-3 已在真实 PostgreSQL/Redis/FastAPI/Next.js Docker 栈上完成 7 条浏览器 E2E；4C-4 已把固定演示、Harness、报告和 README 收口。浏览器 E2E 仍不替代真实 Trace Harness、真实 LLM 质量或生产验收。
 - 2026-07-19 使用 npm 官方 registry 执行 `npm audit --omit=dev` 时，Next 14 生产依赖报告 1 项 high 和 1 项 moderate；官方自动修复建议升级到 Next 16，属于 major upgrade。当前本地演示不因此冒充生产安全版本，升级与回归应作为部署前独立任务处理。
 - `agent_eval_report.example.md` 是固定 mock fixture 的计算结果，不是生产质量、临床效果或安全率证明。
 - 本项目的配置示例只用于本地开发。生产环境必须从安全的环境变量或秘密管理系统注入连接信息和模型 Key。

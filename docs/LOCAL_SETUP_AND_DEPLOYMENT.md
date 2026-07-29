@@ -138,6 +138,17 @@ npm run test:e2e
 
 场景包括：续方未确认停留在 `DRAFT`、续方确认续跑、提醒确认、复诊材料回归、高风险 `BLOCKED`、成员切换清理旧结果和 API 失败提示。测试不会调用真实 LLM、医院、药店或通知 Provider。
 
+### 0.8 4C-4 最终 MVP 收口
+
+当 Docker、`.venv`、`frontend/node_modules` 和 Edge 都已准备好时，可以从仓库根目录执行完整验收：
+
+```powershell
+Set-Location E:\project_code\hospital
+.\scripts\closeout_4c.ps1
+```
+
+该命令会自动构建容器、等待四项 healthcheck、执行 migration/seed、运行固定四场景 Demo、离线 deterministic Harness/A/B/C 消融和浏览器 E2E。成功结果写入 `E:\project_code\hospital\var\closeout\`；任何步骤失败都会以非零退出码结束。需要快速复用已构建镜像时使用 `.\scripts\closeout_4c.ps1 -SkipBuild`。
+
 ## 1. 项目的环境分别在哪里
 
 | 环境或数据 | 推荐位置 | 用途 | 提交 Git？ |

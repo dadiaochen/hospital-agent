@@ -105,12 +105,14 @@ Provider 相关亮点可以表述为“设计统一 Provider Adapter 契约和 m
 
 4C-3 可以如实表述为“使用 Playwright 在真实 Docker Compose 前后端上建立浏览器级回归，覆盖续方 DRAFT/确认续跑、用药提醒、复诊材料、高风险拦截、成员切换和 API 失败，7 条固定场景本机通过”。这里的 7/7 是 deterministic 本地演示链路的 E2E 证据，不是线上成功率、临床安全率或真实模型指标。实现细节见 [4C 浏览器 E2E 报告](browser_e2e_report.4c.md)。
 
+4C-4 可以如实表述为“设计并实现一键 MVP 收口脚本，串联 Docker 构建、PostgreSQL migration/seed、固定四场景 Runtime Demo、deterministic Agent Harness、A/B/C 消融和 Playwright 浏览器 E2E，并生成脱敏 closeout report”。本次本机证据为 Demo `4/4`、浏览器 `7/7` 和前后端 health `200`；这些是本地 deterministic 验收结果，不是生产可用率、临床安全率或线上 p95。
+
 ## 不能夸大的内容
 
 - 不要说已上线生产、接入真实医院/药店、自动开方、诊断或修改处方。
 - 不要把固定响应的本地 Agent Harness 说成真实大模型评测或临床评测。
 - 不要声称“安全召回率达到 100%”“零幻觉”或某个明确的 p95 延迟，除非有对应真实运行的评估报告和数据范围。
-- Agent 运行接口、运行记录持久化和前端核心页面已实现；4C-3 已完成固定浏览器场景的端到端运行轨迹验证，但仍不是生产环境验证。
+- Agent 运行接口、运行记录持久化和前端核心页面已实现；4C-3/4C-4 已完成固定浏览器和 MVP 收口验证，但仍不是生产环境验证。
 - 知识库搜索已完成自动化与本地 PostgreSQL/Postman 验证，但不能把本地联调描述为生产检索质量或临床有效性验证。
 - 不要把 RAG 检索分数描述为医疗正确率，也不要把本地 deterministic provider 的结果描述成真实语义模型质量；当前代码已具备 FastEmbed + PostgreSQL pgvector 链路，但真实模型质量和线上检索指标仍未验证。
 - 不要把固定响应或模拟接口测试描述成真实大模型效果，也不要宣称模型准确率、安全率、成本或 p95 延迟。
