@@ -1,6 +1,6 @@
 # 前端架构与数据页面
 
-> 本文记录当前 3A/3B 页面、4C-1 患者端壳层和 4C-2 `/agent` 黄金链路 UI。4B 任务七后端状态机已经完成；4C-3 仍需要补浏览器 E2E，验证页面在真实 Docker API 下的成功、拒绝、拦截和隔离路径。
+> 本文记录当前 3A/3B 页面、4C-1 患者端壳层、4C-2 `/agent` 黄金链路 UI 和 4C-3 浏览器 E2E。4B 任务七后端状态机已经完成；4C-3 已在真实 Docker API 下验证成功、拒绝、拦截、隔离和失败路径。
 
 ## 1. 目标与边界
 
@@ -143,3 +143,14 @@ npm run build
 - 页面展示 Tool/RAG 来源、安全标记、外部提交状态和只读 Trace 链接，但不修改冻结答案或评估结果。
 
 这条页面链路使用当前 deterministic backend 也能重复演示；真实 Provider、RAG 或 degraded 状态由后端响应决定，前端不伪造成功状态。
+
+## 12. 4C-3 浏览器 E2E
+
+浏览器级测试位于 `frontend/e2e/`，通过 Playwright 使用真实浏览器访问已经启动的 Docker Compose。配置位于 `frontend/playwright.config.ts`：默认使用 Windows 已安装的 Edge，保留失败截图和 trace，关闭视频录制以避免额外的 ffmpeg 下载；测试报告写入被 Git 忽略的 `var/`。
+
+E2E 不在浏览器中重算业务结果，也不直接访问数据库。它只验证用户能看到后端冻结产物，并且 UI 没有绕过确认、安全和成员作用域：
+
+- `agent-golden-flows.spec.ts` 覆盖续方的 DRAFT/确认续跑、用药提醒确认、复诊材料回归和高风险拦截。
+- `portal-boundaries.spec.ts` 覆盖 member 切换清理旧结果和 API 503 错误呈现。
+
+组件测试回答“React 状态逻辑是否正确”，浏览器 E2E 回答“真实 Docker 前后端和浏览器之间的契约是否能走通”；两者不能互相替代。

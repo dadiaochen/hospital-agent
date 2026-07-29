@@ -21,7 +21,7 @@
 - 任务 11：32 条 Harness 与消融实验，`DONE`。
 - 任务 12：PostgreSQL/Redis/Docker 后端验收，`DONE`；baseline 19/19、Redis 故障回源 18/18。
 - 任务 13：4B 文档与 Git 收口，`DONE`。
-- 当前阶段：`4C IN_PROGRESS`，患者端信息架构与 `/agent` 黄金链路 UI 已完成；当前进入浏览器 E2E 和最终演示收口。
+- 当前阶段：`4C IN_PROGRESS`，4C-1 患者端信息架构、4C-2 `/agent` 黄金链路 UI、4C-3 浏览器 E2E 已完成；当前唯一下一项是 4C-4 固定演示与最终交付。
 
 当前代码仍保留旧 Agent Runtime 和旧确认草稿 API 的兼容流程；新业务任务链路已经使用任务七的三层 Safety Guard、自动本地 `DRAFT` 和 `DRAFT -> CONFIRMED -> EXECUTED` 状态机。任务八已将 PostgreSQL Task Checkpoint 设为权威源，Redis 仅做带 TTL 的短期投影并在 miss/过期/不可用时回源；任务十一已完成 32 条 deterministic Harness 和 A/B/C 同条件消融，任务十二已在本机 Docker 栈完成真实迁移、RAG、API、Redis 故障回源和并发确认验收，任务十三已完成 4B 文档与 Git 收口。
 
@@ -42,6 +42,7 @@
 - 任务十二真实本机验收：Docker PostgreSQL/Redis/FastAPI/Next.js 健康，Alembic `0007`、幂等 seed、512 维 pgvector 索引、三条业务 API、Redis 故障 PostgreSQL 回源和并发确认通过；结果见 [任务十二后端验收报告](docs/task12_backend_acceptance_report.4b.md)。
 - mock/degraded Provider Adapter、三条新业务任务 API 和 Next.js 演示页面。
 - Docker Compose 本地 PostgreSQL、Redis、FastAPI、Next.js 演示链路。
+- 4C-3 浏览器 E2E：Playwright 使用本机 Edge 访问真实 Docker 前后端，7 条场景全部通过；报告见 [4C 浏览器 E2E 报告](docs/browser_e2e_report.4c.md)。
 
 历史 16 条契约基线见 [Agent 评测报告](docs/AGENT_EVAL_REPORT.md)，4B 的 32 条同条件 A/B/C 结果见 [任务十一消融报告](docs/agent_ablation_report.4b.md)。两者都是 deterministic 固定轨迹指标，不是临床效果、真实模型准确率或线上延迟。
 
@@ -126,9 +127,13 @@ Set-Location frontend
 npm test
 npm run typecheck
 npm run build
+$env:E2E_BROWSER_CHANNEL='msedge'
+npm run test:e2e
 ```
 
 Windows 默认临时目录或旧 `__pycache__` 出现 `PermissionError` 时，使用 `output` 下新的 `--basetemp` 和 `PYTHONPYCACHEPREFIX`，不要复用无权限目录。完整分层测试和 review 清单见 [测试指南](docs/TESTING_GUIDE.md)。
+
+浏览器 E2E 必须在 Docker Compose 已健康启动时执行。默认使用 Windows 已安装的 Microsoft Edge，不额外下载浏览器；测试报告和失败截图/trace 写入被 Git 忽略的 `var/playwright-report` 与 `var/playwright-test-results`。
 
 任务六编排层也可以单独回归：
 

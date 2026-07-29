@@ -13,5 +13,14 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Browser specs are executed by Playwright, not inside the jsdom suite.
+    exclude: [
+      "**/node_modules/**",
+      "**/.git/**",
+      "**/dist/**",
+      "**/cypress/**",
+      "**/.{idea,cache,output,temp}/**",
+      "e2e/**",
+    ],
   },
 });

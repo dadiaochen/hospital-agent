@@ -62,6 +62,18 @@ Runner 先通过 `GET /api/family-members` 查找 seed 中的 father/mother，�
 
 本次固定实跑结果见 [3D MVP 演示报告](mvp_demo_report.3d.md)。报告不保存 member ID、run ID、答案正文、prompt 或 Key。
 
+## 3.1 浏览器 E2E 回归
+
+固定演示链路通过后，可在另一个 PowerShell 窗口执行浏览器验收：
+
+```powershell
+Set-Location E:\project_code\hospital\frontend
+$env:E2E_BROWSER_CHANNEL='msedge'
+npm run test:e2e
+```
+
+当前 4C-3 本机结果为 7/7 通过，详细场景和边界见 [4C 浏览器 E2E 报告](browser_e2e_report.4c.md)。E2E 仍使用 deterministic backend，不代表真实 LLM 或生产环境指标。
+
 ## 4. 手工 UI 演示顺序
 
 1. 打开 `/`，展示患者端首页的搜索、四个健康事务入口、当前成员和安全边界。

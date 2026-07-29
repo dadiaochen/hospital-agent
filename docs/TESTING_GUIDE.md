@@ -22,6 +22,7 @@
 | API | `test_health.py`、`test_read_api.py`、`test_confirmation_draft_api.py` | 健康检查、只读资源和本地草稿状态机。 |
 | 3A 前端 | `frontend/lib/api/client.test.ts`、`app/medicine-box/page.test.tsx`、Next production build | URL 编码、成员响应隔离、切换时清理旧数据、loading/empty/error、TypeScript 契约和全部页面编译。 |
 | 3B Agent UI | `app/agent/page.test.tsx`、`components/RunTraceDetails.test.tsx`、API client 测试 | 首次未确认、显式续跑、高风险无按钮、成员切换清理、冻结产物隔离、错误/fallback 与评估字段。 |
+| 4C-3 浏览器 E2E | `frontend/e2e/*.spec.ts`、Playwright + Docker Compose | 真实浏览器 HTTP 链路、续方/提醒/复诊材料、高风险拦截、成员切换、API 失败和确认门禁。 |
 
 ## 运行命令
 
@@ -72,6 +73,18 @@ npm run build
 
 组件测试使用 jsdom 和 mock HTTP，只证明 React 状态与渲染规则。自动测试之外还要做真实联调：启动 migration、seed、后端和前端，依次切换本人、父亲、母亲，核对 Network 请求和响应中的 `member_id`。知识 API 未合入时不能用 mock 页面冒充真实联调通过。
 
+4C-3 浏览器 E2E：
+
+```powershell
+Set-Location E:\project_code\hospital
+docker compose up -d --build --wait --wait-timeout 300
+Set-Location frontend
+$env:E2E_BROWSER_CHANNEL='msedge'
+npm run test:e2e
+```
+
+当前本机结果为 7 条通过。该结果证明固定 deterministic Docker 演示链路可重复，不代表真实 LLM 质量、临床安全或生产 SLO。API 失败场景使用 Playwright route 模拟 HTTP 503，专门验证前端错误映射，不冒充真实 Provider 故障率。
+
 ## 如何 review 一个改动
 
 按这个顺序读 diff，通常最省力：
@@ -101,7 +114,7 @@ Review Agent UI 时要区分当前兼容契约与最终交互。最终页面展�
 ## 当前常见风险
 
 - 2G-2 Agent API/runtime 持久化已实现，但多模型线上质量验证、生产认证和外部医院/药店集成尚未实现，不能用 deterministic 成功结果替代真实验证。
-- 当前页面已具备契约与组件测试；最终阶段 4C 必须在真实 PostgreSQL、真实 API 和真实前端页面上跑通三条业务线的浏览器 E2E，并执行真实 Trace Harness。
+- 4C-3 已在真实 PostgreSQL/Redis/FastAPI/Next.js Docker 栈上完成 7 条浏览器 E2E；4C-4 仍需把固定演示、全套报告和最终 README 收口。浏览器 E2E 仍不替代真实 Trace Harness、真实 LLM 质量或生产验收。
 - 2026-07-19 使用 npm 官方 registry 执行 `npm audit --omit=dev` 时，Next 14 生产依赖报告 1 项 high 和 1 项 moderate；官方自动修复建议升级到 Next 16，属于 major upgrade。当前本地演示不因此冒充生产安全版本，升级与回归应作为部署前独立任务处理。
 - `agent_eval_report.example.md` 是固定 mock fixture 的计算结果，不是生产质量、临床效果或安全率证明。
 - 本项目的配置示例只用于本地开发。生产环境必须从安全的环境变量或秘密管理系统注入连接信息和模型 Key。

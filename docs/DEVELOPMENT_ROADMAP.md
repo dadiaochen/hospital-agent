@@ -454,8 +454,8 @@ Docker Task 12: baseline 19/19; Redis failure 18/18
 | --- | --- | --- | --- |
 | 4C-1 患者端信息架构与视觉壳层 | `DONE` | 以药品/健康服务场景常见的搜索、分类、快捷入口和状态卡片为参考，重做患者端首页与导航 | 桌面端/移动端可用；成员作用域清晰；不引入药品价格、支付或真实下单暗示 |
 | 4C-2 黄金链路 UI | `DONE` | 接通慢病续方、用药提醒两条黄金链路的草稿审阅、确认续跑、来源和安全状态 | `/agent` 展示首次 run -> `DRAFT` -> 用户确认 -> continuation run；blocked/degraded/无来源状态可解释 |
-| 4C-3 浏览器 E2E | `NEXT` | 为续方、提醒各写 2–3 条浏览器场景，预问诊作为第三条回归线 | 成功、拒绝确认、高风险拦截、成员切换和 API 失败路径可重复 |
-| 4C-4 固定演示与最终交付 | `PLANNED` | 一键启动、黄金演示、测试报告和 README 收口 | 5 分钟完成演示；Docker、迁移、seed、后端 Harness、浏览器 E2E 证据齐全 |
+| 4C-3 浏览器 E2E | `DONE` | 为续方、提醒各写 2–3 条浏览器场景，预问诊作为第三条回归线 | 成功、拒绝确认、高风险拦截、成员切换和 API 失败路径可重复 |
+| 4C-4 固定演示与最终交付 | `NEXT` | 一键启动、黄金演示、测试报告和 README 收口 | 5 分钟完成演示；Docker、迁移、seed、后端 Harness、浏览器 E2E 证据齐全 |
 
 ### 8.1 4C-1 设计决策：患者端不是电商下单页
 
@@ -492,6 +492,21 @@ Docker Compose: postgres/redis/backend/frontend healthy
 HTTP smoke: backend /health = 200; frontend / = 200
 ```
 
+### 8.3 4C-3 浏览器 E2E
+
+状态：`DONE`。本任务只增加患者端浏览器级回归，不改变后端业务契约。测试使用 Docker 中的 deterministic backend，浏览器通过真实 HTTP 请求访问 `http://localhost:3000`，不调用真实 LLM 或外部 Provider。
+
+场景覆盖：
+
+- 续方首次运行进入 `DRAFT`，未勾选确认时按钮保持禁用，验证“拒绝/暂不确认”不会推进副作用。
+- 续方确认后产生 continuation run，并展示 `LOCAL_COMPLETED` 与续跑来源。
+- 用药提醒确认后完成本地草稿闭环。
+- 高风险加量请求被 `SafetyAgent` 拦截，不显示业务确认按钮。
+- 切换 `member_id` 后清理前一成员的运行结果，页面只保留新成员作用域。
+- 模拟 Agent API 失败时展示可读错误，不伪造成功答案。
+
+验证：Playwright 使用本机 Edge 执行 7 条场景，结果为 `7 passed`；Docker Compose 的 PostgreSQL、Redis、backend、frontend 均为 `healthy`。详细结果见 [4C 浏览器 E2E 验收报告](browser_e2e_report.4c.md)。该结果只证明本机 deterministic 演示链路可重复，不是生产 SLO、临床安全率或真实 LLM 指标。
+
 ## 9. 简历和指标边界
 
 - 设计能力只能写“设计了”；代码和测试完成后才能写“实现了”。
@@ -515,4 +530,4 @@ HTTP smoke: backend /health = 200; frontend / = 200
 
 ## 11. 当前唯一下一步
 
-`4B` 已完成；当前唯一阶段是 `4C`，4C-1 患者端信息架构与视觉壳层、4C-2 黄金链路 UI 已完成，当前唯一下一任务是 `4C-3 浏览器 E2E`。完成后进入 4C-4；4C 完成后不再新增必要产品阶段。
+`4B` 已完成；当前唯一阶段是 `4C`，4C-1 患者端信息架构与视觉壳层、4C-2 黄金链路 UI、4C-3 浏览器 E2E 已完成，当前唯一下一任务是 `4C-4 固定演示与最终交付`。4C 完成后不再新增必要产品阶段。

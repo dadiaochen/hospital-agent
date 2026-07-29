@@ -111,6 +111,33 @@ docker compose start
 
 完整 Docker 运行时，不要再在主机启动 `uvicorn` 或 `npm run dev`，否则会与容器争用 `8000` 或 `3000` 端口。需要调试代码时，可以停止对应容器，再使用“主机后端 + Docker 数据库”或“主机前端 + Docker backend”的开发方式，具体见第 4B 节。
 
+### 0.7 浏览器 E2E 验收
+
+4C-3 的 Playwright 测试不是 jsdom 组件测试：浏览器会通过真实 HTTP 访问 Docker 中的 Next.js 和 FastAPI，并使用 seed 数据执行黄金链路。先确认四个 Compose service 为 `healthy`，再从前端目录执行：
+
+```powershell
+Set-Location E:\project_code\hospital\frontend
+npm install
+$env:E2E_BROWSER_CHANNEL='msedge'
+npm run test:e2e
+```
+
+默认使用 Windows 已安装的 Microsoft Edge，因此不需要把浏览器包下载到系统盘。Playwright 的 HTML 报告、失败截图和 trace 位于 `E:\project_code\hospital\var\playwright-report` 与 `E:\project_code\hospital\var\playwright-test-results`，这些目录已被 Git 忽略。
+
+如果机器没有 Edge，可以把 Chromium 下载到 E 盘后运行：
+
+```powershell
+Set-Location E:\project_code\hospital
+New-Item -ItemType Directory -Force var\playwright-browsers | Out-Null
+$env:PLAYWRIGHT_BROWSERS_PATH=(Resolve-Path 'var\playwright-browsers').Path
+Set-Location frontend
+npx.cmd playwright install chromium
+$env:E2E_BROWSER_CHANNEL='chromium'
+npm run test:e2e
+```
+
+场景包括：续方未确认停留在 `DRAFT`、续方确认续跑、提醒确认、复诊材料回归、高风险 `BLOCKED`、成员切换清理旧结果和 API 失败提示。测试不会调用真实 LLM、医院、药店或通知 Provider。
+
 ## 1. 项目的环境分别在哪里
 
 | 环境或数据 | 推荐位置 | 用途 | 提交 Git？ |
