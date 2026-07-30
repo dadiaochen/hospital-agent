@@ -7,6 +7,7 @@ import math
 from collections import Counter
 from pathlib import Path
 from statistics import fmean
+from time import perf_counter
 from typing import Any, Iterable, cast
 from uuid import UUID, uuid5
 
@@ -101,6 +102,35 @@ class AblationHarnessRunner:
             results=results,
             metrics=metrics,
         )
+
+    def run_strategy(self, strategy: AblationStrategy) -> tuple[AblationCaseResult, ...]:
+        """Run one orchestration policy without changing the frozen suite.
+
+        The original ``run`` method intentionally runs all three strategies for
+        the ablation report.  Local observation needs one strategy at a time so
+        it can measure that strategy's wall-clock execution independently.
+        """
+
+        fairness, cases = self.load_suite()
+        return tuple(
+            self._evaluate_case(case, strategy, fairness)
+            for case in cases
+        )
+
+    def run_strategy_observed(
+        self,
+        strategy: AblationStrategy,
+    ) -> tuple[tuple[AblationCaseResult, int], ...]:
+        """Run one policy and return each result with local wall-clock latency."""
+
+        fairness, cases = self.load_suite()
+        observed: list[tuple[AblationCaseResult, int]] = []
+        for case in cases:
+            started = perf_counter()
+            result = self._evaluate_case(case, strategy, fairness)
+            elapsed_ms = max(1, round((perf_counter() - started) * 1000))
+            observed.append((result, elapsed_ms))
+        return tuple(observed)
 
     def _evaluate_case(
         self,

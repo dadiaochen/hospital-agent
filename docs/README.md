@@ -69,7 +69,8 @@
 ## 学习与面试
 
 - [learning/README.md](learning/README.md)：从零理解并运行项目的学习路线。
-- [核心代码走读](learning/17_CORE_CODE_WALKTHROUGH.md)：从 HTTP 请求一路读到 Planner、Supervisor、领域 Agent、Safety、RAG、Trace 和 Evaluator。
+- [核心代码走读](learning/17_CORE_CODE_WALKTHROUGH.md)：面向初学者逐行解释 Python 语法、变量和调用链，并区分当前固定领域 API 工作流与已独立评测的 bounded Supervisor 内核。
+- [简历与面试写法](learning/05_RESUME_AND_INTERVIEW.md)：按岗位方向组织项目经历，只使用可复现的测试、覆盖率、E2E 和消融证据。
 - [INTERVIEW_QA.md](INTERVIEW_QA.md)：项目面试题、项目化回答与记忆方法。
 - [RESUME_NOTES.md](RESUME_NOTES.md)：可以如实写入简历的亮点和指标边界。
 - [GENERAL_INTERVIEW_KNOWLEDGE.md](GENERAL_INTERVIEW_KNOWLEDGE.md)：通用计算机与后端面试知识。
@@ -83,3 +84,8 @@
 - 运行报告记录事实，不维护阶段状态。
 - 过时方案应删除或改成历史说明，不能与权威设计并列。
 - 未真实运行的指标只能写成目标指标或评估维度。
+
+## 当前评测文档
+
+- [4D-B Benchmark 使用指南](4D_B_BENCHMARK_GUIDE.md)：冻结 gold 数据、deterministic runner、报告和指标边界。
+- [4D-B 报告](benchmark_report.4d.md)：当前本机 deterministic 数据契约报告；其中运行时质量指标仍为 `N/A`。

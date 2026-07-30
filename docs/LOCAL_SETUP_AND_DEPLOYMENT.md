@@ -8,6 +8,53 @@
 
 如果你的目标是“把项目跑起来并看到前后端”，优先使用这一条路线。它会启动数据库、缓存、FastAPI 后端和 Next.js 前端；backend 容器启动时会自动执行 migration 和幂等 seed。
 
+### 0.0 你现在就照着做：第一次完整启动
+
+下面十步不要求你先理解 Docker 内部原理。先完成一次成功启动，再回头学习后续章节：
+
+1. 打开 Docker Desktop，等首页显示 Docker Engine 正在运行。
+2. 打开一个新的 PowerShell，不要在 `frontend` 或 `backend` 子目录执行。
+3. 进入仓库根目录并在缺少配置时创建本机 `.env`：
+
+```powershell
+Set-Location E:\project_code\hospital
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
+
+4. 检查 Compose 配置能否解析：
+
+```powershell
+docker compose config --quiet
+```
+
+5. 构建并启动 PostgreSQL、Redis、FastAPI 和 Next.js：
+
+```powershell
+docker compose up -d --build --wait --wait-timeout 300
+```
+
+6. 查看状态。`postgres`、`redis`、`backend`、`frontend` 都应显示 `healthy`：
+
+```powershell
+docker compose ps
+```
+
+7. 检查后端是否真正响应：
+
+```powershell
+(Invoke-WebRequest http://localhost:8000/health).Content
+```
+
+8. 浏览器依次打开患者端 <http://localhost:3000>、Agent 页面 <http://localhost:3000/agent> 和接口文档 <http://localhost:8000/docs>。
+9. 在 `/agent` 选择“正常续方”，先观察 `DRAFT`，再勾选确认并续跑；这会同时经过前端、HTTP API、数据库、Agent 工作流和确认状态机。
+10. 学习结束后停止全部服务，但保留 PostgreSQL 数据：
+
+```powershell
+docker compose stop
+```
+
+下次只需在仓库根目录执行 `docker compose start`。如果代码或依赖有变化，再执行第 5 步重新构建。
+
 ### 0.1 第一次准备
 
 在 Docker Desktop 已启动、WSL 2 和硬件虚拟化已正常的前提下，从仓库根目录执行：
@@ -37,7 +84,7 @@ docker compose ps
 | `backend` | FastAPI、业务 Service、Tool、RAG、Planner、Supervisor、Safety 和 Evaluator | `http://localhost:8000` |
 | `frontend` | Next.js 患者端页面 | `http://localhost:3000` |
 
-**Agent 不需要单独启动。** 本项目没有 `agent` 容器：Agent 工作流运行在 `backend` 进程内。打开患者端 `/agent` 页面并点击“运行 Agent”，前端会调用 backend 的 `/api/agent-runs`；backend 再执行路由、领域 Agent、工具、RAG、安全和评估。
+**Agent 不需要单独启动。** 本项目没有 `agent` 容器：Agent 工作流运行在 `backend` 进程内。打开患者端 `/agent` 页面并点击“运行 Agent”，前端会调用兼容入口 `/api/agent-runs`，由 `AgentRuntimeService + LangGraphAgentWorkflow` 执行。4B 新业务 API `/api/business-tasks` 使用另一条 `BusinessTaskService + FamilyHealthProductWorkflow` 链；两者当前都可运行，但 bounded Supervisor 编排内核尚未接入这两个 HTTP 入口。
 
 ### 0.3 怎么确认启动成功
 
@@ -180,6 +227,28 @@ Set-Location E:\project_code\hospital
 | 生产环境 | 真实认证、患者流量、秘密管理、监控、高可用和外部医院接口。 | 尚未建设 |
 
 因此“现在使用测试环境”不够精确。开发和 Postman 使用本地集成环境，pytest 使用隔离测试环境；两者都不能描述为生产上线。
+
+### 1.2 三种数据库不要混淆
+
+| 数据库 | 谁使用 | 生命周期 | 适合做什么 |
+| --- | --- | --- | --- |
+| pytest 内存 SQLite | 大部分后端自动化测试 | 单个测试或测试进程结束后消失 | 快速验证 Service、契约和失败分支 |
+| Docker PostgreSQL + pgvector | 本地前后端、Swagger/Postman、浏览器 E2E 和演示脚本 | 数据保存在 named volume，停止容器后仍保留 | 模拟真实关系数据库、迁移、事务、向量列和跨请求续跑 |
+| 生产数据库 | 尚未建设 | 由云环境、备份和运维策略决定 | 真实用户流量；当前仓库不能冒充这一层 |
+
+所以项目**已经有可重复生成的本地演示数据库**，不需要你手工再造一个数据库。`backend` 容器启动时先执行 Alembic migration，再运行幂等 `scripts/seed.py`。seed 中是虚构家庭成员、处方、药箱、药店库存和知识条目，不是真实患者数据；重复启动不会无限复制固定 seed 记录。
+
+2026-07-30 本机 Docker 快照已经验证包含 1 个 demo user、3 个家庭成员、3 份健康档案、2 份处方、2 条药箱记录、2 条购药记录、2 家药店、3 条库存和 4 份知识文档/切片。`business_tasks`、`agent_runs`、`agent_tool_calls` 与 `task_checkpoints` 会随着演示和测试继续增长，因此不把它们写成固定 seed 数量。
+
+你可以只读查看表和关键记录数量：
+
+```powershell
+docker compose exec -T postgres psql -U hospital -d family_health -c "\dt"
+docker compose exec -T postgres psql -U hospital -d family_health -c "SELECT COUNT(*) AS members FROM family_members;"
+docker compose exec -T postgres psql -U hospital -d family_health -c "SELECT COUNT(*) AS runs FROM agent_runs;"
+```
+
+日常停止使用 `docker compose stop`。只有明确想清空所有本地演示数据并从零 seed 时才使用 `docker compose down -v`；该命令会删除 named volume，不能用来普通关机。
 
 ## 2. 需要安装的软件
 

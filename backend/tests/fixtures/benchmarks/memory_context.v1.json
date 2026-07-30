@@ -1,0 +1,1417 @@
+{
+  "dataset_id": "memory_context",
+  "dataset_version": "4d-a-gold-v1",
+  "status": "gold",
+  "human_reviewed": true,
+  "source_of_truth": "repository_templates_and_existing_fixtures",
+  "cases": [
+    {
+      "case_id": "4dqa_memory_same_task_01",
+      "category": "same_task_compaction",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-same-01",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请整理续方材料",
+          "confirmed": true,
+          "fact_id": "same_task_fact_01"
+        },
+        {
+          "turn_id": "t2",
+          "text": "继续这个任务",
+          "confirmed": false,
+          "fact_id": null
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "same_task_fact_01"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_01"
+      ],
+      "expected_source_keys": [
+        "tool:query_prescriptions",
+        "checkpoint:task-memory-same-01"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_same_task_02",
+      "category": "same_task_compaction",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-same-02",
+      "member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请整理续方材料",
+          "confirmed": true,
+          "fact_id": "same_task_fact_02"
+        },
+        {
+          "turn_id": "t2",
+          "text": "继续这个任务",
+          "confirmed": false,
+          "fact_id": null
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "same_task_fact_02"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_02"
+      ],
+      "expected_source_keys": [
+        "tool:query_prescriptions",
+        "checkpoint:task-memory-same-02"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_same_task_03",
+      "category": "same_task_compaction",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-same-03",
+      "member_id": "member-self",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请整理续方材料",
+          "confirmed": true,
+          "fact_id": "same_task_fact_03"
+        },
+        {
+          "turn_id": "t2",
+          "text": "继续这个任务",
+          "confirmed": false,
+          "fact_id": null
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "same_task_fact_03"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_03"
+      ],
+      "expected_source_keys": [
+        "tool:query_prescriptions",
+        "checkpoint:task-memory-same-03"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_same_task_04",
+      "category": "same_task_compaction",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-same-04",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请整理续方材料",
+          "confirmed": true,
+          "fact_id": "same_task_fact_04"
+        },
+        {
+          "turn_id": "t2",
+          "text": "继续这个任务",
+          "confirmed": false,
+          "fact_id": null
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "same_task_fact_04"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_04"
+      ],
+      "expected_source_keys": [
+        "tool:query_prescriptions",
+        "checkpoint:task-memory-same-04"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_same_task_05",
+      "category": "same_task_compaction",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-same-05",
+      "member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请整理续方材料",
+          "confirmed": true,
+          "fact_id": "same_task_fact_05"
+        },
+        {
+          "turn_id": "t2",
+          "text": "继续这个任务",
+          "confirmed": false,
+          "fact_id": null
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "same_task_fact_05"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_05"
+      ],
+      "expected_source_keys": [
+        "tool:query_prescriptions",
+        "checkpoint:task-memory-same-05"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_same_task_06",
+      "category": "same_task_compaction",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-same-06",
+      "member_id": "member-self",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请整理续方材料",
+          "confirmed": true,
+          "fact_id": "same_task_fact_06"
+        },
+        {
+          "turn_id": "t2",
+          "text": "继续这个任务",
+          "confirmed": false,
+          "fact_id": null
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "same_task_fact_06"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_06"
+      ],
+      "expected_source_keys": [
+        "tool:query_prescriptions",
+        "checkpoint:task-memory-same-06"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_same_task_07",
+      "category": "same_task_compaction",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-same-07",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请整理续方材料",
+          "confirmed": true,
+          "fact_id": "same_task_fact_07"
+        },
+        {
+          "turn_id": "t2",
+          "text": "继续这个任务",
+          "confirmed": false,
+          "fact_id": null
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "same_task_fact_07"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_07"
+      ],
+      "expected_source_keys": [
+        "tool:query_prescriptions",
+        "checkpoint:task-memory-same-07"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_same_task_08",
+      "category": "same_task_compaction",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-same-08",
+      "member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请整理续方材料",
+          "confirmed": true,
+          "fact_id": "same_task_fact_08"
+        },
+        {
+          "turn_id": "t2",
+          "text": "继续这个任务",
+          "confirmed": false,
+          "fact_id": null
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "same_task_fact_08"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_08"
+      ],
+      "expected_source_keys": [
+        "tool:query_prescriptions",
+        "checkpoint:task-memory-same-08"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_same_task_09",
+      "category": "same_task_compaction",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-same-09",
+      "member_id": "member-self",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请整理续方材料",
+          "confirmed": true,
+          "fact_id": "same_task_fact_09"
+        },
+        {
+          "turn_id": "t2",
+          "text": "继续这个任务",
+          "confirmed": false,
+          "fact_id": null
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "same_task_fact_09"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_09"
+      ],
+      "expected_source_keys": [
+        "tool:query_prescriptions",
+        "checkpoint:task-memory-same-09"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_same_task_10",
+      "category": "same_task_compaction",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-same-10",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请整理续方材料",
+          "confirmed": true,
+          "fact_id": "same_task_fact_10"
+        },
+        {
+          "turn_id": "t2",
+          "text": "继续这个任务",
+          "confirmed": false,
+          "fact_id": null
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "same_task_fact_10"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_10"
+      ],
+      "expected_source_keys": [
+        "tool:query_prescriptions",
+        "checkpoint:task-memory-same-10"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_task_reset_01",
+      "category": "task_reset",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-reset-01",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "完成上一个任务",
+          "confirmed": true,
+          "fact_id": "old_fact"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "old_fact",
+        "old_scratchpad"
+      ],
+      "expected_source_keys": [
+        "run_summary:task-memory-reset-01"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_task_reset_02",
+      "category": "task_reset",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-reset-02",
+      "member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "完成上一个任务",
+          "confirmed": true,
+          "fact_id": "old_fact"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "old_fact",
+        "old_scratchpad"
+      ],
+      "expected_source_keys": [
+        "run_summary:task-memory-reset-02"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_task_reset_03",
+      "category": "task_reset",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-reset-03",
+      "member_id": "member-self",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "完成上一个任务",
+          "confirmed": true,
+          "fact_id": "old_fact"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "old_fact",
+        "old_scratchpad"
+      ],
+      "expected_source_keys": [
+        "run_summary:task-memory-reset-03"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_task_reset_04",
+      "category": "task_reset",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-reset-04",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "完成上一个任务",
+          "confirmed": true,
+          "fact_id": "old_fact"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "old_fact",
+        "old_scratchpad"
+      ],
+      "expected_source_keys": [
+        "run_summary:task-memory-reset-04"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_task_reset_05",
+      "category": "task_reset",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-reset-05",
+      "member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "完成上一个任务",
+          "confirmed": true,
+          "fact_id": "old_fact"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "old_fact",
+        "old_scratchpad"
+      ],
+      "expected_source_keys": [
+        "run_summary:task-memory-reset-05"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_task_reset_06",
+      "category": "task_reset",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-reset-06",
+      "member_id": "member-self",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "完成上一个任务",
+          "confirmed": true,
+          "fact_id": "old_fact"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "old_fact",
+        "old_scratchpad"
+      ],
+      "expected_source_keys": [
+        "run_summary:task-memory-reset-06"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_task_reset_07",
+      "category": "task_reset",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-reset-07",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "完成上一个任务",
+          "confirmed": true,
+          "fact_id": "old_fact"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "old_fact",
+        "old_scratchpad"
+      ],
+      "expected_source_keys": [
+        "run_summary:task-memory-reset-07"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_task_reset_08",
+      "category": "task_reset",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-reset-08",
+      "member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "完成上一个任务",
+          "confirmed": true,
+          "fact_id": "old_fact"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "old_fact",
+        "old_scratchpad"
+      ],
+      "expected_source_keys": [
+        "run_summary:task-memory-reset-08"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_confirmation_01",
+      "category": "confirmation_gate",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-confirm-01",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请设置提醒",
+          "confirmed": true,
+          "fact_id": "confirmed_preference_01"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "confirmed_preference_01"
+      ],
+      "expected_dropped_fact_ids": [],
+      "expected_source_keys": [
+        "confirmation:task-memory-confirm-01"
+      ],
+      "expected_memory_write_ids": [
+        "confirmed_preference_01"
+      ],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_confirmation_02",
+      "category": "confirmation_gate",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-confirm-02",
+      "member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请设置提醒",
+          "confirmed": false,
+          "fact_id": "confirmed_preference_02"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "confirmed_preference_02"
+      ],
+      "expected_source_keys": [
+        "confirmation:task-memory-confirm-02"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_confirmation_03",
+      "category": "confirmation_gate",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-confirm-03",
+      "member_id": "member-self",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请设置提醒",
+          "confirmed": true,
+          "fact_id": "confirmed_preference_03"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "confirmed_preference_03"
+      ],
+      "expected_dropped_fact_ids": [],
+      "expected_source_keys": [
+        "confirmation:task-memory-confirm-03"
+      ],
+      "expected_memory_write_ids": [
+        "confirmed_preference_03"
+      ],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_confirmation_04",
+      "category": "confirmation_gate",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-confirm-04",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请设置提醒",
+          "confirmed": false,
+          "fact_id": "confirmed_preference_04"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "confirmed_preference_04"
+      ],
+      "expected_source_keys": [
+        "confirmation:task-memory-confirm-04"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_confirmation_05",
+      "category": "confirmation_gate",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-confirm-05",
+      "member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请设置提醒",
+          "confirmed": true,
+          "fact_id": "confirmed_preference_05"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "confirmed_preference_05"
+      ],
+      "expected_dropped_fact_ids": [],
+      "expected_source_keys": [
+        "confirmation:task-memory-confirm-05"
+      ],
+      "expected_memory_write_ids": [
+        "confirmed_preference_05"
+      ],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_confirmation_06",
+      "category": "confirmation_gate",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-confirm-06",
+      "member_id": "member-self",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请设置提醒",
+          "confirmed": false,
+          "fact_id": "confirmed_preference_06"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "confirmed_preference_06"
+      ],
+      "expected_source_keys": [
+        "confirmation:task-memory-confirm-06"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_confirmation_07",
+      "category": "confirmation_gate",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-confirm-07",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请设置提醒",
+          "confirmed": true,
+          "fact_id": "confirmed_preference_07"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "confirmed_preference_07"
+      ],
+      "expected_dropped_fact_ids": [],
+      "expected_source_keys": [
+        "confirmation:task-memory-confirm-07"
+      ],
+      "expected_memory_write_ids": [
+        "confirmed_preference_07"
+      ],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_confirmation_08",
+      "category": "confirmation_gate",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-confirm-08",
+      "member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "请设置提醒",
+          "confirmed": false,
+          "fact_id": "confirmed_preference_08"
+        }
+      ],
+      "expected_retained_fact_ids": [],
+      "expected_dropped_fact_ids": [
+        "confirmed_preference_08"
+      ],
+      "expected_source_keys": [
+        "confirmation:task-memory-confirm-08"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": null
+    },
+    {
+      "case_id": "4dqa_memory_recovery_01",
+      "category": "checkpoint_recovery",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-recovery-01",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "继续上次等待确认任务",
+          "confirmed": true,
+          "fact_id": "checkpoint_fact_01"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "checkpoint_fact_01"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_01"
+      ],
+      "expected_source_keys": [
+        "checkpoint:task-memory-recovery-01"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql_after_redis_fallback",
+      "fault": "redis_unavailable"
+    },
+    {
+      "case_id": "4dqa_memory_recovery_02",
+      "category": "checkpoint_recovery",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-recovery-02",
+      "member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "继续上次等待确认任务",
+          "confirmed": true,
+          "fact_id": "checkpoint_fact_02"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "checkpoint_fact_02"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_02"
+      ],
+      "expected_source_keys": [
+        "checkpoint:task-memory-recovery-02"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql_after_redis_fallback",
+      "fault": "redis_expired"
+    },
+    {
+      "case_id": "4dqa_memory_recovery_03",
+      "category": "checkpoint_recovery",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-recovery-03",
+      "member_id": "member-self",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "继续上次等待确认任务",
+          "confirmed": true,
+          "fact_id": "checkpoint_fact_03"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "checkpoint_fact_03"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_03"
+      ],
+      "expected_source_keys": [
+        "checkpoint:task-memory-recovery-03"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql_after_redis_fallback",
+      "fault": "redis_wrong_member"
+    },
+    {
+      "case_id": "4dqa_memory_recovery_04",
+      "category": "checkpoint_recovery",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-recovery-04",
+      "member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "继续上次等待确认任务",
+          "confirmed": true,
+          "fact_id": "checkpoint_fact_04"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "checkpoint_fact_04"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_04"
+      ],
+      "expected_source_keys": [
+        "checkpoint:task-memory-recovery-04"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql_after_redis_fallback",
+      "fault": "stale_checkpoint_version"
+    },
+    {
+      "case_id": "4dqa_memory_recovery_05",
+      "category": "checkpoint_recovery",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-recovery-05",
+      "member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "继续上次等待确认任务",
+          "confirmed": true,
+          "fact_id": "checkpoint_fact_05"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "checkpoint_fact_05"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_05"
+      ],
+      "expected_source_keys": [
+        "checkpoint:task-memory-recovery-05"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql_after_redis_fallback",
+      "fault": "foreign_source"
+    },
+    {
+      "case_id": "4dqa_memory_recovery_06",
+      "category": "checkpoint_recovery",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-recovery-06",
+      "member_id": "member-self",
+      "turns": [
+        {
+          "turn_id": "t1",
+          "text": "继续上次等待确认任务",
+          "confirmed": true,
+          "fact_id": "checkpoint_fact_06"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "checkpoint_fact_06"
+      ],
+      "expected_dropped_fact_ids": [
+        "scratchpad_06"
+      ],
+      "expected_source_keys": [
+        "checkpoint:task-memory-recovery-06"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql_after_redis_fallback",
+      "fault": "redis_corrupt"
+    },
+    {
+      "case_id": "4dqa_memory_member_switch_01",
+      "category": "member_switch_isolation",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-member-switch-01",
+      "member_id": "member-mother",
+      "previous_member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "old",
+          "member_id": "member-father",
+          "text": "旧成员事实",
+          "confirmed": true,
+          "fact_id": "foreign_fact_01"
+        },
+        {
+          "turn_id": "new",
+          "member_id": "member-mother",
+          "text": "切换成员后重新查询",
+          "confirmed": true,
+          "fact_id": "current_fact_01"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "current_fact_01"
+      ],
+      "expected_dropped_fact_ids": [
+        "foreign_fact_01"
+      ],
+      "expected_source_keys": [
+        "tool:query_health_profile:member-mother"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": "member_switch"
+    },
+    {
+      "case_id": "4dqa_memory_member_switch_02",
+      "category": "member_switch_isolation",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-member-switch-02",
+      "member_id": "member-self",
+      "previous_member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "old",
+          "member_id": "member-mother",
+          "text": "旧成员事实",
+          "confirmed": true,
+          "fact_id": "foreign_fact_02"
+        },
+        {
+          "turn_id": "new",
+          "member_id": "member-self",
+          "text": "切换成员后重新查询",
+          "confirmed": true,
+          "fact_id": "current_fact_02"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "current_fact_02"
+      ],
+      "expected_dropped_fact_ids": [
+        "foreign_fact_02"
+      ],
+      "expected_source_keys": [
+        "tool:query_health_profile:member-self"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": "member_switch"
+    },
+    {
+      "case_id": "4dqa_memory_member_switch_03",
+      "category": "member_switch_isolation",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-member-switch-03",
+      "member_id": "member-father",
+      "previous_member_id": "member-self",
+      "turns": [
+        {
+          "turn_id": "old",
+          "member_id": "member-self",
+          "text": "旧成员事实",
+          "confirmed": true,
+          "fact_id": "foreign_fact_03"
+        },
+        {
+          "turn_id": "new",
+          "member_id": "member-father",
+          "text": "切换成员后重新查询",
+          "confirmed": true,
+          "fact_id": "current_fact_03"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "current_fact_03"
+      ],
+      "expected_dropped_fact_ids": [
+        "foreign_fact_03"
+      ],
+      "expected_source_keys": [
+        "tool:query_health_profile:member-father"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": "member_switch"
+    },
+    {
+      "case_id": "4dqa_memory_member_switch_04",
+      "category": "member_switch_isolation",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-member-switch-04",
+      "member_id": "member-mother",
+      "previous_member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "old",
+          "member_id": "member-father",
+          "text": "旧成员事实",
+          "confirmed": true,
+          "fact_id": "foreign_fact_04"
+        },
+        {
+          "turn_id": "new",
+          "member_id": "member-mother",
+          "text": "切换成员后重新查询",
+          "confirmed": true,
+          "fact_id": "current_fact_04"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "current_fact_04"
+      ],
+      "expected_dropped_fact_ids": [
+        "foreign_fact_04"
+      ],
+      "expected_source_keys": [
+        "tool:query_health_profile:member-mother"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": "member_switch"
+    },
+    {
+      "case_id": "4dqa_memory_member_switch_05",
+      "category": "member_switch_isolation",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-member-switch-05",
+      "member_id": "member-self",
+      "previous_member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "old",
+          "member_id": "member-mother",
+          "text": "旧成员事实",
+          "confirmed": true,
+          "fact_id": "foreign_fact_05"
+        },
+        {
+          "turn_id": "new",
+          "member_id": "member-self",
+          "text": "切换成员后重新查询",
+          "confirmed": true,
+          "fact_id": "current_fact_05"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "current_fact_05"
+      ],
+      "expected_dropped_fact_ids": [
+        "foreign_fact_05"
+      ],
+      "expected_source_keys": [
+        "tool:query_health_profile:member-self"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": "member_switch"
+    },
+    {
+      "case_id": "4dqa_memory_member_switch_06",
+      "category": "member_switch_isolation",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-member-switch-06",
+      "member_id": "member-father",
+      "previous_member_id": "member-self",
+      "turns": [
+        {
+          "turn_id": "old",
+          "member_id": "member-self",
+          "text": "旧成员事实",
+          "confirmed": true,
+          "fact_id": "foreign_fact_06"
+        },
+        {
+          "turn_id": "new",
+          "member_id": "member-father",
+          "text": "切换成员后重新查询",
+          "confirmed": true,
+          "fact_id": "current_fact_06"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "current_fact_06"
+      ],
+      "expected_dropped_fact_ids": [
+        "foreign_fact_06"
+      ],
+      "expected_source_keys": [
+        "tool:query_health_profile:member-father"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": "member_switch"
+    },
+    {
+      "case_id": "4dqa_memory_member_switch_07",
+      "category": "member_switch_isolation",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-member-switch-07",
+      "member_id": "member-mother",
+      "previous_member_id": "member-father",
+      "turns": [
+        {
+          "turn_id": "old",
+          "member_id": "member-father",
+          "text": "旧成员事实",
+          "confirmed": true,
+          "fact_id": "foreign_fact_07"
+        },
+        {
+          "turn_id": "new",
+          "member_id": "member-mother",
+          "text": "切换成员后重新查询",
+          "confirmed": true,
+          "fact_id": "current_fact_07"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "current_fact_07"
+      ],
+      "expected_dropped_fact_ids": [
+        "foreign_fact_07"
+      ],
+      "expected_source_keys": [
+        "tool:query_health_profile:member-mother"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": "member_switch"
+    },
+    {
+      "case_id": "4dqa_memory_member_switch_08",
+      "category": "member_switch_isolation",
+      "generated_by_ai": true,
+      "human_reviewed": true,
+      "review_status": "approved",
+      "review_notes": "Batch approval recorded after project owner review.",
+      "reviewer_id": "project-owner",
+      "reviewed_at": "2026-07-30T06:36:13+00:00",
+      "task_id": "task-memory-member-switch-08",
+      "member_id": "member-self",
+      "previous_member_id": "member-mother",
+      "turns": [
+        {
+          "turn_id": "old",
+          "member_id": "member-mother",
+          "text": "旧成员事实",
+          "confirmed": true,
+          "fact_id": "foreign_fact_08"
+        },
+        {
+          "turn_id": "new",
+          "member_id": "member-self",
+          "text": "切换成员后重新查询",
+          "confirmed": true,
+          "fact_id": "current_fact_08"
+        }
+      ],
+      "expected_retained_fact_ids": [
+        "current_fact_08"
+      ],
+      "expected_dropped_fact_ids": [
+        "foreign_fact_08"
+      ],
+      "expected_source_keys": [
+        "tool:query_health_profile:member-self"
+      ],
+      "expected_memory_write_ids": [],
+      "expected_checkpoint_source": "postgresql",
+      "fault": "member_switch"
+    }
+  ],
+  "reviewed_at": "2026-07-30T06:36:13+00:00",
+  "frozen_at": "2026-07-30T06:36:13+00:00"
+}

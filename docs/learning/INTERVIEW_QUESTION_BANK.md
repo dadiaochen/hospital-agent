@@ -22,19 +22,19 @@
 | `候选` | 有业务价值，但需先进入路线图 | 先讨论，不立即加代码 |
 | `明确不做` | 与医疗边界、MVP 或资源约束冲突 | 解释为什么不做 |
 
-快速导航：
+快速导航按主题组织，面试官换一种问法时，先定位主题，再调用同一套项目证据：
 
-- [Q01 RAG 是否一定需要 Embedding](#q01-rag-是否一定需要-embedding)
-- [Q02 项目是否调用真实 LLM，Key 在哪里填](#q02-项目是否调用真实-llmkey-在哪里填)
-- [Q03 当初用 Dify 怎样设计工作流](#q03-当初用-dify-怎样设计工作流)
-- [Q04 当前是什么环境，为什么不是生产](#q04-当前是什么环境为什么不是生产)
-- [Q05 每日药量检查和提醒算不算 Loop](#q05-每日药量检查和提醒算不算-loop)
-- [Q06 后端为什么需要这些技术栈和分层](#q06-后端为什么需要这些技术栈和分层)
-- [Q07 客户端、API、依赖注入、Schema、Service、Model 分别是什么](#q07-客户端api依赖注入schemaservicemodel-分别是什么)
+- [RAG 与模型](#2-rag-与模型)
+- [Dify、环境与业务闭环](#3-dify环境与业务闭环)
+- [后端基础](#4-后端基础)
+- [上下文与记忆](#5-上下文与记忆)
+- [多-Agent-编排](#6-多-agent-编排)
 
 ---
 
-## Q01 RAG 是否一定需要 Embedding
+## 2. RAG 与模型
+
+### Q01 RAG 是否一定需要 Embedding
 
 **项目状态：** `已实现`。默认关键词检索；可选 FastEmbed + pgvector 向量召回。RAGFlow 为 `仅学习/当前略过`。
 
@@ -92,7 +92,7 @@ Embedding 模型不是聊天模型。它不负责写答案，只负责把语义�
 
 ---
 
-## Q02 项目是否调用真实 LLM，Key 在哪里填
+### Q02 项目是否调用真实 LLM，Key 在哪里填
 
 **项目状态：** `部分实现`。双模式 Runtime 与诊断已实现；无真实 Key，因此没有真实厂商效果报告。
 
@@ -155,7 +155,9 @@ MODEL_TIMEOUT_MS=10000
 
 ---
 
-## Q03 当初用 Dify 怎样设计工作流
+## 3. Dify、环境与业务闭环
+
+### Q03 当初用 Dify 怎样设计工作流
 
 **项目状态：** `历史方案` + 当前 `已自研`。不能虚构原 Dify 生产日志或精确节点配置。
 
@@ -222,7 +224,7 @@ Dify 更适合快速可视化原型和平台化配置；LangGraph 嵌入代码�
 
 ---
 
-## Q04 当前是什么环境，为什么不是生产
+### Q04 当前是什么环境，为什么不是生产
 
 **项目状态：** `已实现本地开发/集成/演示`；生产环境 `未实现`。
 
@@ -269,7 +271,7 @@ Dify 更适合快速可视化原型和平台化配置；LangGraph 嵌入代码�
 
 ---
 
-## Q05 每日药量检查和提醒算不算 Loop
+### Q05 每日药量检查和提醒算不算 Loop
 
 **项目状态：** Loop 思想 `部分具备`；定时任务与真实推送 `未实现`，当前为 `候选/先讨论`。
 
@@ -323,7 +325,9 @@ Trigger -> Observe -> Decide -> Act -> Verify -> Update -> Next trigger
 
 ---
 
-## Q06 后端为什么需要这些技术栈和分层
+## 4. 后端基础
+
+### Q06 后端为什么需要这些技术栈和分层
 
 **项目状态：** `已实现`。MySQL、其他 Web 框架等对比属于 `仅学习`。
 
@@ -397,7 +401,7 @@ MySQL 也能管理关系表，许多基础 API 完全可以使用。当前选择
 
 ---
 
-## Q07 客户端、API、依赖注入、Schema、Service、Model 分别是什么
+### Q07 客户端、API、依赖注入、Schema、Service、Model 分别是什么
 
 **项目状态：** `已实现`。
 
@@ -483,7 +487,462 @@ DB row -> ORM -> Service result -> response DTO -> JSON -> Client
 
 ---
 
-## 2. 收到新面经时的处理模板
+## 5. 上下文与记忆
+
+这一组问题共用一套项目事实。项目里的“上下文”是当前任务运行需要看到的信息；“记忆”是跨运行保留、并且经过规则允许写入的信息。两者不能混成完整聊天历史。
+
+### Q08 你的上下文是怎么做的，为什么这么做
+
+**项目状态：** `已实现`，但旧 Agent Runtime 和新业务任务链仍是两条兼容链，不能说已经完全统一。
+
+#### 原题原句
+
+> “你的上下文是怎么做的，为什么这么做？”
+
+> “多 Agent 之间怎么传上下文？”
+
+> “为什么不把完整聊天记录发给所有 Agent？”
+
+#### 30 秒回答
+
+我没有把完整聊天直接传给所有 Agent，而是先构造一份结构化任务上下文，绑定 `run_id`、`task_id`、`user_id` 和 `member_id`，再按角色裁剪。Planner 只看任务摘要和槽位，用药 Agent 只看处方、药箱等来源，安全节点只看风险判断需要的信息。这样可以减少无关 token、避免家庭成员数据串用，也能限制每个 Agent 的工具权限。
+
+#### 2 分钟项目回答
+
+一次请求先由服务端确定可信的用户和家庭成员作用域，然后 `ContextManager` 创建 `ContextEnvelope`。它包含任务意图、已确认槽位、待补信息、安全标记、允许工具，以及 Tool/RAG 的来源指针，不保存所有工具正文和完整聊天。
+
+执行某个角色前，`build_role_view` 再生成最小角色视图。允许工具取“任务白名单”和“角色白名单”的交集；任务字段、工具来源、RAG 来源和安全标记分别裁剪。`EvaluatorAgent` 不取得业务写上下文，只读取运行完成后的冻结产物。
+
+选择这种方式不是为了多设计一个对象，而是解决四个真实问题：
+
+1. 一个账号管理多个家庭成员，必须隔离处方、报告和药箱。
+2. 角色职责不同，完整上下文会增加 token 和误调用工具的概率。
+3. 医疗事实必须有 DB、Provider 或 RAG 来源，不能来自模型猜测。
+4. 运行结束后要能清理临时推理，同时保留审计和任务续跑信息。
+
+#### 代码证据
+
+- [上下文构造和角色裁剪](../../backend/app/agent/context_manager.py)
+- [上下文数据契约](../../backend/app/agent/context_schemas.py)
+- [完整上下文设计](../CONTEXT_MANAGEMENT.md)
+- [角色视图测试](../../backend/tests/test_context_manager.py)
+
+#### 怎么理解和记忆
+
+记住：**“先定人和任务，再按角色发最小资料。”**
+
+---
+
+### Q09 什么时候需要压缩上下文
+
+#### 原题原句
+
+> “什么时候需要压缩上下文？”
+
+> “上下文达到 token 上限，但任务还没完成怎么办？”
+
+#### 30 秒回答
+
+项目不会等到 token 用完才处理上下文。同一任务发生多轮补充、确认续跑，或者旧信息开始重复时，就可以做结构化压缩；每次 run 结束还会固定执行 reset。压缩只允许发生在相同 `task_id` 和 `member_id` 内，保留任务状态和来源指针，不把不同成员的信息合并。
+
+#### 判断条件
+
+当前代码实现的是**业务规则触发**，不是自动计算 token 阈值：
+
+- 同一任务有多轮补充，需要合并已确认槽位和待确认项。
+- 上一轮已经结束，新一轮只需要恢复任务摘要和来源。
+- 重复的 Tool/RAG 引用需要去重。
+- 旧对话对当前任务不再有直接作用，只需进入结构化摘要。
+
+项目还没有实现“token 达到某个百分比自动压缩”。如果以后接真实长对话模型，可以增加 token 预算，例如达到输入上限的 70% 至 80% 时提前 compact，但该阈值必须通过真实模型测试确定，当前不能说已经实现。
+
+#### 怎么理解和记忆
+
+**“多轮可压，换任务必清，换成员必隔离。”**
+
+---
+
+### Q10 怎么判断哪些上下文要保留，哪些要删除
+
+#### 原题原句
+
+> “怎么判断哪些上下文是要的，哪些是不要的？”
+
+> “压缩以后怎么保证关键信息没有丢？”
+
+#### 30 秒回答
+
+判断标准不是“模型觉得重要”，而是“完成当前任务是否需要、是否有可信来源、是否属于当前成员”。保留任务目标、已确认槽位、待确认项、安全标记、步骤状态和来源指针；删除完整旧对话、scratchpad、临时工具拼装、Provider 原文和未确认推断。
+
+#### 保留与删除规则
+
+| 内容 | 处理 | 原因 |
+| --- | --- | --- |
+| `task_id/member_id/intent` | 保留 | 决定任务和成员边界 |
+| 已确认槽位、待确认项 | 保留 | 支持任务继续执行 |
+| Tool 的 `source_id/tool_call_id` | 保留 | 可以回查业务事实 |
+| RAG 的文档、切片和版本 | 保留 | 可以回查知识来源 |
+| 安全标记、确认状态 | 保留 | 不能因压缩绕过门禁 |
+| 完整聊天历史 | 删除，必要内容进入摘要 | 控制 token 和隐私暴露 |
+| scratchpad、模型内部推理 | 删除 | 不是业务事实，也不应持久化 |
+| 未确认候选推断 | 删除 | 防止把猜测升级为事实 |
+| 完整 Tool/Provider 返回正文 | 运行后删除 | 通过来源指针按需重新读取 |
+
+`compact` 会检查所有输入是否属于同一任务和同一成员；合并后仍保存 `source_id`、`tool_call_id`、`member_id`。因此“压缩”是缩短表达，不是切断证据链。
+
+---
+
+### Q11 你的记忆机制是怎么设计的
+
+#### 原题原句
+
+> “你的短期记忆和长期记忆怎么做？”
+
+> “Redis 是不是你的长期记忆？”
+
+> “RAG 是不是用户记忆？”
+
+#### 30 秒回答
+
+我把记忆分成运行状态、任务检查点、短期缓存和确认偏好。单次运行状态放在 LangGraph；PostgreSQL 权威保存任务检查点、确认记录和用户明确确认的非医疗偏好；Redis 只保存带 TTL 的任务缓存，失效后回源 PostgreSQL。RAG 保存审核后的公共医疗知识，不保存个人健康记忆。处方、报告和药箱每次从业务数据库或 Provider 重新读取。
+
+#### 分层说明
+
+```text
+LangGraph：当前 run 的临时状态
+PostgreSQL Task Checkpoint：可恢复的任务状态和确认记录
+Redis TTL：检查点的短期缓存，不是权威数据
+Confirmed Preferences：用户确认后的非医疗偏好
+PostgreSQL + pgvector RAG：公共知识，不是个人记忆
+```
+
+系统明确不保存长期完整聊天，也不建立个人健康向量记忆。这样做是因为处方、库存和报告会变化，旧副本可能过期；医疗事实如果被模型错误总结后长期保留，风险比普通聊天偏好更高。
+
+#### 什么可以写入长期记忆
+
+- 用户明确确认的提醒展示、通知方式等非医疗偏好。
+- 必须绑定 `user_id/member_id/source/version`。
+- 必须经过已完成任务和确认记录校验。
+- 支持版本冲突、幂等和撤销状态。
+
+不能写入：诊断、处方、剂量、报告结果、药箱库存、模型猜测和未确认偏好。
+
+#### 代码证据
+
+- [任务检查点服务](../../backend/app/services/checkpoint_service.py)
+- [Redis 短期缓存](../../backend/app/services/task_checkpoint_cache.py)
+- [确认偏好写入门](../../backend/app/services/preference_service.py)
+- [记忆引用校验](../../backend/app/agent/context_schemas.py)
+
+#### 怎么理解和记忆
+
+**“运行状态放图里，任务状态放库里，Redis 只加速，医疗事实现用现查，偏好确认才记。”**
+
+---
+
+### Q12 为什么 PostgreSQL 和 Redis 都要用
+
+#### 原题原句
+
+> “PostgreSQL 已经能保存任务状态，为什么还需要 Redis？”
+
+> “Redis 挂了以后上下文会不会丢？”
+
+#### 回答
+
+PostgreSQL 是权威来源，负责事务、版本和持久化；Redis 负责带 TTL 的快速读取和多实例协调。读取检查点时先尝试 Redis，缓存 miss、过期、内容不合法或服务不可用时回源 PostgreSQL。Redis 里的 key 和 payload 都包含用户、成员、任务、线程和版本作用域，缓存不能覆盖权威状态。
+
+这套设计的关键不是“用了两个数据库”，而是明确一致性顺序：**正确性依赖 PostgreSQL，Redis 只改善性能。**
+
+---
+
+### Q13 任务结束后上下文怎么处理，用户回来后怎么续跑
+
+#### 原题原句
+
+> “Agent run 结束以后上下文会一直留着吗？”
+
+> “用户确认时怎么继续上一次任务？”
+
+#### 回答
+
+每次 run 结束先冻结 FinalAnswer、Tool/RAG 来源和 RunTrace，再生成 `RunSummary`。`reset_after_run` 清理完整聊天、scratchpad、候选推断和临时工具输出，只保留摘要、确认状态、步骤、来源和评测引用。
+
+用户回来确认时创建新的 `run_id`，继续使用原 `task_id/member_id`。系统恢复最小 checkpoint，但处方、报告、库存等可变事实重新查询。这样既能续跑，又不会把上一次模型的临时思考当成当前事实。
+
+---
+
+### Q14 怎么评测上下文和记忆机制
+
+#### 原题原句
+
+> “针对这个记忆是怎么进行评测的？”
+
+> “怎么证明上下文不会串到别的家庭成员？”
+
+> “怎么证明模型推断没有被写进长期记忆？”
+
+#### 30 秒回答
+
+当前不是用 LLM 判断“记忆好不好”，而是用确定性契约和异常用例验证。测试会检查角色视图不含完整聊天、压缩后来源不丢、不同成员不能合并、reset 不保存未确认推断、Redis 异常能回源 PostgreSQL、偏好写入必须有确认和来源。Evaluator 还检查 RunTrace 中所有 Tool、RAG 和安全记录的 `member_id` 是否一致。
+
+#### 当前已经验证的维度
+
+| 维度 | 验证方式 |
+| --- | --- |
+| 最小上下文 | 给角色视图注入 `raw_conversation`，Pydantic 必须拒绝 |
+| 来源完整 | compact 前后比较 `source_id/tool_call_id` |
+| 成员隔离 | 错误 `member_id`、跨成员来源和污染缓存必须失败 |
+| 未确认内容隔离 | `confirmed_by_user=false` 的 MemoryRef 必须校验失败 |
+| reset | 结束后检查 scratchpad、候选推断和完整聊天已清理 |
+| 任务恢复 | Redis miss、过期和不可用时必须从 PostgreSQL 恢复 |
+| 长期偏好 | 缺确认、来源、版本或成员不一致时拒绝写入 |
+| 运行后评测 | DeterministicEvaluator 计算 `context_isolation_passed` |
+
+当前已经有规则测试，但还没有一份独立的记忆评测报告，所以简历暂时不能填写“记忆准确率”或“压缩率”。面试回答不能停在“以后可以评测”，而要把下面的实施流程讲清楚。
+
+#### 独立记忆评测怎么做
+
+**第一步：建立固定评测集**
+
+先准备 40 条人工标注用例，每条用例包含多轮输入、任务和成员，以及哪些信息应该保留或删除。建议按下面六组分配：
+
+| 分组 | 数量 | 主要验证 |
+| --- | ---: | --- |
+| 同一任务多轮补充 | 8 | 关键槽位和来源在 compact 后仍存在 |
+| 任务切换 | 6 | 上一任务临时信息被 reset |
+| 家庭成员切换 | 8 | 成员 A 的事实不会进入成员 B |
+| 确认与未确认偏好 | 8 | 只有用户明确确认的偏好可以写入 |
+| Redis 故障与过期 | 5 | 缓存失败后从 PostgreSQL 恢复 |
+| 陈旧来源与版本冲突 | 5 | 旧来源不能覆盖新任务状态 |
+
+fixture 可以设计为：
+
+```json
+{
+  "case_id": "memory_member_switch_001",
+  "task_id": "task-refill-001",
+  "input_member_id": "member-mother",
+  "turns": [
+    {"text": "妈妈的药快吃完了", "confirmed": true},
+    {"text": "也许她更喜欢自提", "confirmed": false}
+  ],
+  "expected_retained_fact_ids": ["medicine_shortage"],
+  "expected_dropped_fact_ids": ["pickup_candidate"],
+  "expected_source_ids": ["tool:medicine-box:001"],
+  "expected_memory_write_ids": [],
+  "expected_member_id": "member-mother",
+  "fault": null
+}
+```
+
+不要只写自然语言期望。给每条事实一个稳定的 `fact_id`，这样评测器才能确定性比较，不需要 LLM 猜测两句话是否相同。
+
+**第二步：冻结三份产物**
+
+每条用例依次运行：
+
+```text
+原始 ContextEnvelope
+  -> compact 后的 ContextEnvelope
+  -> reset 后的 RunSummary
+  -> checkpoint 恢复后的新 ContextEnvelope
+```
+
+把四个阶段都序列化为 JSON。评测器只读取冻结产物，不允许修改上下文或偏好。
+
+**第三步：逐项计算指标**
+
+| 指标 | 公式 | 初始验收目标 |
+| --- | --- | ---: |
+| 关键信息保留率 | 保留下来的应保留事实数 / 应保留事实总数 | 100% |
+| 无关信息清理率 | 已删除的应删除事实数 / 应删除事实总数 | 不低于 95% |
+| 来源指针保留率 | compact 后仍存在的预期来源数 / 预期来源总数 | 100% |
+| 未确认记忆写入率 | 被错误写入的未确认项 / 全部未确认项 | 0% |
+| 跨成员泄漏率 | 出现在错误成员上下文中的事实数 / 隔离事实总数 | 0% |
+| checkpoint 恢复成功率 | 正确恢复任务状态的故障用例数 / 故障用例总数 | 100% |
+| 压缩后任务一致率 | compact 前后得到相同任务状态的用例数 / 可比较用例总数 | 100% |
+| token 降幅 | `1 - compact_tokens / original_tokens` | 先测基线，再定目标 |
+
+前六项可以用确定性代码直接计算。token 必须使用实际目标模型对应的 tokenizer，或者读取真实模型返回的 token usage；如果只是按字符数计算，报告必须写“字符降幅”，不能写 token 降幅。
+
+**第四步：注入异常**
+
+评测不能只跑成功路径，至少主动制造以下错误：
+
+1. 把成员 A 的 `source_id` 放进成员 B 的 envelope。
+2. 构造 `confirmed_by_user=false` 的 MemoryRef。
+3. 在 Redis 写入错误 member 或旧 version 的 checkpoint。
+4. 停止 Redis，再执行任务续跑。
+5. 删除 compact 后的 `tool_call_id` 或 RAG `chunk_id`。
+6. 把 scratchpad 或 `raw_conversation` 塞进角色视图。
+7. 使用已撤销偏好或陈旧确认版本执行写入。
+
+预期结果必须是明确的校验失败、缓存 miss 后回源或写入拒绝，不能静默接受后再靠最终答案“看起来正常”。
+
+**第五步：实现确定性评测器**
+
+实现时先在路线图登记任务，再新增以下文件：
+
+```text
+backend/app/agent/memory_eval_schemas.py
+backend/app/agent/memory_evaluator.py
+backend/app/agent/memory_harness_runner.py
+backend/tests/fixtures/memory_context_cases.json
+backend/tests/test_memory_evaluator.py
+backend/tests/test_memory_harness_runner.py
+docs/memory_eval_report.md
+```
+
+`MemoryEvaluator` 的输入是 ExpectedMemoryCase 和四份冻结上下文，输出每条 case 的布尔结果、计数和 `failure_reasons`。`MemoryHarnessRunner` 负责加载全部 fixture、检查 case 是否缺失、聚合指标并生成 Markdown 报告。
+
+核心伪代码：
+
+```python
+# fact_ids 是评测适配器从 confirmed_slots、RunSummary 和来源映射出的评测编号，
+# 不是当前 ContextEnvelope 已经存在的字段。
+retained = set(compacted_artifact.fact_ids)
+expected_retained = set(case.expected_retained_fact_ids)
+expected_dropped = set(case.expected_dropped_fact_ids)
+expected_sources = set(case.expected_source_ids)
+actual_sources = {
+    ref.source_id
+    for ref in [
+        *compacted.tool_evidence_refs,
+        *compacted.rag_source_refs,
+    ]
+}
+
+retention_recall = len(retained & expected_retained) / len(expected_retained)
+pruning_rate = len(expected_dropped - retained) / len(expected_dropped)
+source_retention = expected_sources.issubset(actual_sources)
+scoped_refs = [
+    *compacted.tool_evidence_refs,
+    *(ref for ref in compacted.rag_source_refs if ref.member_id is not None),
+]
+# 公共 RAG 来源可以没有 member_id；只对带成员作用域的来源做成员一致性检查。
+member_isolated = all(ref.member_id == case.expected_member_id for ref in scoped_refs)
+unconfirmed_write_detected = any(
+    item.fact_id in persisted_memory_ids
+    for item in case.turns
+    if not item.confirmed
+)
+```
+
+正式代码要处理分母为零，并用 Pydantic 校验输入输出；不能直接依赖集合长度而忽略空用例。
+
+实现完成后固定使用两组命令：
+
+```powershell
+# 第一组：纯 Python 契约、压缩、reset 和评测规则
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+python -m pytest backend\tests\test_memory_evaluator.py backend\tests\test_memory_harness_runner.py -q
+
+# 第二组：启动 Docker 后验证 PostgreSQL 权威恢复和 Redis 故障回源
+python -m app.agent.memory_harness_runner `
+  --cases backend\tests\fixtures\memory_context_cases.json `
+  --mode docker-integration `
+  --report docs\memory_eval_report.md
+```
+
+纯 Python 报告和 Docker 集成报告必须分开标记，不能把内存 fake cache 的结果写成真实 Redis 故障恢复。
+
+**第六步：生成并人工复核报告**
+
+报告必须记录：Git commit、评测日期、40 条用例分类、运行环境、每项公式、聚合结果和失败 case。先人工抽查所有失败项和至少 20% 成功项，确认 gold label 没标错，再把实测数字写入面经或简历。
+
+完成标准：40 条 fixture 全部通过 Pydantic 校验；每条 case 都生成 `failure_reasons`；六类用例不能缺组；PostgreSQL/Redis 集成组单独生成结果；报告能从失败 case 回到原始 fixture、成员和来源编号；同一 commit 重跑得到相同的确定性指标。
+
+完成这套流程后，Q14 的回答可以从“规则测试已覆盖”升级为“40 条固定多轮用例的独立记忆评测”，并填入真实的保留率、泄漏率、恢复成功率和压缩结果。在报告生成之前，上表中的百分比都只是验收目标。
+
+#### 代码证据
+
+- [上下文管理测试](../../backend/tests/test_context_manager.py)
+- [上下文契约测试](../../backend/tests/test_agent_contract_schemas.py)
+- [检查点缓存测试](../../backend/tests/test_task_checkpoint_cache.py)
+- [偏好写入与确认测试](../../backend/tests/test_business_task_api.py)
+- [确定性评测](../../backend/app/agent/evaluator.py)
+
+#### 怎么理解和记忆
+
+记住五个词：**“少给、隔离、留源、清临时、确认才记。”**
+
+---
+
+### Q15 和 OpenAI、Claude 的上下文或记忆方案有什么区别
+
+#### 原题原句
+
+> “你的记忆系统有没有参考 OpenAI、Claude？和他们有什么区别？”
+
+#### 回答
+
+当前项目没有直接实现 OpenAI Sessions 或 Claude Memory Tool，因此不能说“基于官方 Memory API”。相同点是都区分当前上下文、压缩和持久记忆；区别是通用 Agent 更偏向保存多轮消息或让模型按需读写记忆，而本项目只恢复结构化任务状态，长期只保存用户确认的非医疗偏好。
+
+本项目的压缩按任务、成员、来源和安全规则判断，不是只在 token 接近上限时做摘要；Redis 是任务缓存，不是 Prompt Cache。这样的限制牺牲了一部分自由聊天能力，但更符合家庭医疗中的事实时效、成员隔离和审计要求。
+
+面试可以说“对照过业界分层思路并结合医疗业务收紧了写入规则”，不能说“使用了 OpenAI/Claude 的记忆组件”。
+
+官方对照资料：
+
+- [OpenAI Agents SDK 的会话状态](https://openai.github.io/openai-agents-python/sessions/)
+- [Claude 的 Memory Tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool)
+- [Claude 的上下文压缩](https://platform.claude.com/docs/en/build-with-claude/compaction)
+
+---
+
+## 6. 多 Agent 编排
+
+### Q16 这个项目为什么算多 Agent
+
+#### 原题原句
+
+> “你的项目还是多 Agent 吗，是怎么设计的多 Agent？”
+
+#### 回答
+
+项目把复杂任务拆成分诊、用药和报告三个领域 Agent。它们有独立输入输出契约、允许工具、成员作用域和终止状态，不是把同一个聊天模型复制三次。简单任务直接进入一个领域 Agent；复杂任务由一次性 Planner 拆解，再由串行 bounded Supervisor 按依赖调度。安全节点和运行后评测属于治理层，不由 Supervisor 自由选择。
+
+当前要准确区分：这套 Supervisor 编排内核已经实现并完成固定用例消融，但当前 Docker 业务 API 仍主要按业务域进入固定 LangGraph 节点，两条链尚未完全统一。
+
+### Q17 Planner 和 Supervisor 会不会冲突或重复
+
+#### 回答
+
+不会，因为两者决策时机不同。Planner 只执行一次，回答“任务要拆成哪些步骤、依赖是什么”；Supervisor 不重新规划目标，只回答“下一步执行哪个已计划步骤、失败时有限重试还是停止”。拆开后可以分别测试计划正确性和执行边界，也避免运行过程中不断改计划。
+
+记忆句：**“Planner 定计划，Supervisor 按计划调度。”**
+
+### Q18 为什么是 bounded Supervisor
+
+#### 回答
+
+医疗事务不能依赖无限循环。Supervisor 有最大步骤数、每角色最大调用次数、依赖检查和有限重试；工具重试由 Tool Registry 管理，Supervisor 不能擅自无限重试。任务完成、需要补信息、安全阻断、达到上限或不可恢复失败时都必须终止。
+
+### Q19 项目有没有使用 ReAct
+
+#### 回答
+
+项目没有实现标准 ReAct。ReAct 通常让模型在“思考、行动、观察”之间循环并动态选择工具；本项目使用一次性计划、白名单工具和有界状态图，内部推理不作为长期上下文保存。这样自由度更低，但可测试、可终止，也更符合医疗安全边界。
+
+可以说“理解 ReAct，但项目基于业务风险选择 bounded workflow”，不能把现有 Supervisor 循环包装成标准 ReAct。
+
+### Q20 多 Agent 之间怎么避免上下文越来越大
+
+#### 回答
+
+Agent 之间不传完整聊天和完整工具结果，而是传结构化任务状态、前序步骤结果和来源指针。每个角色只获得最小角色视图；步骤结束后写入结构化结果，run 结束后生成 RunSummary 并 reset。复杂任务最多执行有限步骤，因此上下文增长同时受到角色裁剪、结构化传递和步数上限控制。
+
+代码入口：
+
+- [多 Agent 架构](../AGENT_ARCHITECTURE.md)
+- [编排内核](../../backend/app/agent/orchestration.py)
+- [领域 Agent](../../backend/app/agent/domain_agents.py)
+- [核心代码走读](17_CORE_CODE_WALKTHROUGH.md)
+
+---
+
+## 7. 收到新面经时的处理模板
 
 你可以直接粘贴面经，不必自己分类。维护时执行：
 
@@ -508,7 +967,7 @@ DB row -> ORM -> Service result -> response DTO -> JSON -> Client
 4. 最终补齐：30 秒答、2 分钟答、原理、代码证据、记忆法、追问。
 ```
 
-## 3. 面试回答的统一真实性边界
+## 8. 面试回答的统一真实性边界
 
 - 可以说“本地开发/集成/演示环境”，不能说已上线生产。
 - 可以说“实现可选真实 provider 接线”，没有 Key 时不能说已验证真实模型质量。

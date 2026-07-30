@@ -1,4 +1,6 @@
-# 核心代码走读：从 HTTP 请求到 Supervisor、Safety 和 Evaluator
+# 核心代码走读：从 HTTP 请求到编排、安全与评测
+
+> 阅读约定：正文尽量使用中文。只有代码中的真实类名、字段名和面试常用技术名保留英文，例如 `RAG`、`token`、`ReAct`、`Supervisor`。第一次出现时会先解释用途，不要求先背单词。
 
 > 这是一份面向初学者的代码学习文档。它参考了 [smart-cs-multi-agent 的 code-walkthrough](https://github.com/bcefghj/smart-cs-multi-agent/blob/main/docs/code-walkthrough.md) 的组织方式：先定位核心代码，再解释状态、调用关系、设计选择和面试表达。
 >
@@ -15,28 +17,67 @@
 5. 它失败时抛出什么错误，错误在哪里转换成 API 响应？
 6. 它如何证明自己的结果可信：Pydantic、成员作用域、来源指针、Safety 还是幂等键？
 
-本项目最重要的学习目标不是记住 `Supervisor` 这个名字，而是看懂下面这条数据流：
+本项目最重要的学习目标不是记住 `Supervisor` 这个名字，而是先分清下面三条真实存在、但尚未接成同一条的调用链：
 
 ```mermaid
 flowchart TD
-    A[HTTP request] --> B[API Router]
-    B --> C[BusinessTaskService]
-    C --> D[FamilyHealthProductWorkflow]
-    D --> E[Request Safety Guard]
-    E --> F[Complexity Router]
-    F -->|simple| G[One Domain Agent]
-    F -->|complex| H[One-shot Planner]
-    H --> I[Serial bounded Supervisor]
-    I --> G
-    G --> J[Tool Registry]
-    J --> K[DB Tools / Provider / RAG]
-    K --> L[Action Policy Guard]
-    L --> M[Local Draft]
-    M --> N[Final Output Safety]
-    N --> O[FinalAnswer + RunTrace]
-    O --> P[RunSummary / Checkpoint / Reset]
-    P --> Q[Deterministic Evaluator]
+    subgraph Runtime["当前真实 API / Docker 黄金链路"]
+        A["POST /api/business-tasks"] --> B["API Router"]
+        B --> C["BusinessTaskService"]
+        C --> D["FamilyHealthProductWorkflow 固定领域 LangGraph"]
+        D --> E["Tool Registry / DB / Provider / RAG"]
+        E --> F["三层 Safety + Confirmation"]
+        F --> G["FinalAnswer / Trace / Checkpoint / Evaluator"]
+    end
+
+    subgraph Compatible["患者端 /agent 当前兼容链"]
+        N["POST /api/agent-runs"] --> O["AgentRuntimeService"]
+        O --> P["LangGraphAgentWorkflow"]
+        P --> Q["旧角色工具链 / Safety / Frozen artifacts"]
+    end
+
+    subgraph Kernel["已实现并独立测试的编排内核"]
+        H["ComplexityRoutingRequest"] --> I["Complexity Router"]
+        I -->|simple| J["One Domain Agent"]
+        I -->|complex| K["One-shot Planner"]
+        K --> L["Serial bounded Supervisor"]
+        L --> J
+        J --> M["AgentTaskResult / Ablation Harness"]
+    end
 ```
+
+必须记住当前接线事实：
+
+- `/api/business-tasks` 由 `BusinessTaskService` 创建 `FamilyHealthProductWorkflow`，当前按照 `business_domain` 进入固定领域分支。
+- 患者端 `/agent` 页面当前仍调用 `/api/agent-runs`，由 `AgentRuntimeService` 执行兼容的 `LangGraphAgentWorkflow`；所以浏览器 E2E 验证的是这条患者端兼容链。
+- `DeterministicComplexityRouter`、`DeterministicTaskPlanner`、三个领域 Agent 和 `DeterministicBoundedSupervisor` 已有完整契约、单元测试和 32 条 A/B/C 消融，但目前只被测试与 `AblationHarnessRunner` 调用。
+- 因此可以说“实现并评测了 bounded Supervisor 编排内核”，不能说“线上或当前 Docker API 已由 Supervisor 动态调度”。把它接入业务 API 是后续独立工程任务。
+
+为什么会有两套 API：`/api/agent-runs` 是早期 Agent Runtime 与当前前端演示的兼容入口；`/api/business-tasks` 是 4B 新增的分层状态、Provider、Safety 和确认状态机入口。保留兼容入口有利于不破坏旧页面，但也产生了技术债：面试和文档必须说清“哪条链验证了什么”，最终产品若继续演进，应选择唯一运行入口并迁移前端，而不是长期维护两套主流程。
+
+### 0.1 读代码前先认识这些 Python 写法
+
+| 写法 | 用中文怎么读 | 在项目中的作用 |
+| --- | --- | --- |
+| `name: str` | 变量 `name` 预期是字符串 | 类型提示，便于 IDE、Pydantic 和 review；Python 运行时不一定自动校验 |
+| `str | None` | 字符串或者空值 `None` | 表示可选字段；使用前通常要先判断是否为空 |
+| `list[str]` | 元素都是字符串的可变列表 | 适合逐步 `append`，例如收集 `failure_reasons` |
+| `tuple[str, ...]` | 任意多个字符串组成的不可变元组 | 适合冻结计划、角色和工具白名单 |
+| `dict[str, Any]` | key 是字符串，value 可以是任意类型 | 承载尚未细分 DTO 的 JSON 对象；不能滥用，否则失去契约保护 |
+| `self.xxx` | 当前类实例自己的属性 | 例如 `self.db` 是这一份 Service 使用的数据库 Session |
+| `@router.post(...)` | 装饰器 | FastAPI 在函数定义时把函数登记成 HTTP 接口 |
+| `@model_validator(mode="after")` | Pydantic 模型级校验器 | 所有字段先解析完成，再检查字段之间的关系 |
+| `*`（函数参数中） | 后面的参数必须写名字 | `plan(route=...)` 比位置参数更不容易传错身份和版本 |
+| `*items`（列表中） | 解包可迭代对象 | 把多个来源列表展开后再合并 |
+| `**mapping` | 解包字典为关键字参数 | 常用于受控复制；身份字段不能让请求字典随意覆盖 |
+| `x or default` | `x` 为空时使用默认值 | `input_payload or {}` 防止后面操作 `None` |
+| `x is None` | 判断是否就是空值 | 比 `if not x` 更精确，不会把 `0`、空列表一起当成空值 |
+| `{item for item in items}` | 集合推导式 | 去重并用于集合包含判断，例如工具覆盖 |
+| `[item for item in items if ...]` | 列表推导式 | 过滤并保留顺序，例如找出缺失工具 |
+| `raise ApiError(...)` | 主动抛出异常 | 中断当前路径，由 FastAPI 的异常处理器转换成 HTTP 响应 |
+| `try / except / finally` | 尝试、分类处理异常、最后清理 | 数据库失败回滚，`finally` 中关闭模型 HTTP client |
+
+本文代码块里的中文注释是“教学副本”。你应该对照真实文件阅读，不要把每一句解释原样复制进生产源码；生产注释只保留业务边界和不直观的原因。
 
 ## 1. 核心文件地图
 
@@ -45,6 +86,7 @@ flowchart TD
 | HTTP 入口 | `backend/app/api/routes/business_tasks.py` | `create_task`、`confirm_task` |
 | 业务 Service | `backend/app/services/business_task_service.py` | `create_task`、`confirm_task`、`_persist_state` |
 | LangGraph 业务图 | `backend/app/agent/product_workflow.py` | `ProductWorkflowState`、`_build_graph`、`invoke`、`resume_confirmation` |
+| 患者端兼容 Runtime | `backend/app/api/routes/agent_audit.py`、`services/agent_runtime_service.py` | `/agent` 页面当前实际调用的 create/continue run |
 | 复杂度路由 | `backend/app/agent/complexity_router.py` | `DeterministicComplexityRouter.route` |
 | Planner/Supervisor | `backend/app/agent/orchestration.py` | `DeterministicTaskPlanner.plan`、`DeterministicBoundedSupervisor.run` |
 | 领域 Agent | `backend/app/agent/domain_agents.py` | `DomainAgentInput`、`DomainAgent.execute`、三个具体 Agent |
@@ -65,23 +107,47 @@ flowchart TD
 
 入口文件是 `backend/app/api/routes/business_tasks.py`。它接收 HTTP JSON、读取当前 demo user、创建数据库 Session，并把已经校验过的字段传给 `BusinessTaskService`。
 
-可以把路由层理解成一个适配器：
+可以把路由层理解成一个适配器。下面是当前真实接口的教学注释版：
 
 ```python
-@router.post("/business-tasks")
-def create_task(request: BusinessTaskCreate, db: Session = Depends(get_db)):
-    execution = BusinessTaskService(db, user_id=DEMO_USER_ID).create_task(
+@router.post(                         # 调用 APIRouter 的 post 方法，注册 POST 接口。
+    "",                               # router 已有 /business-tasks 前缀，所以完整路径仍是 /api/business-tasks。
+    response_model=BusinessTaskExecutionResponse,  # FastAPI 用此 Pydantic DTO 校验并生成响应文档。
+    status_code=status.HTTP_201_CREATED,            # 创建成功时返回 HTTP 201。
+)
+def create_business_task(             # def 表示定义函数；函数名供 Python 内部使用。
+    request: BusinessTaskCreateRequest, # request 来自 HTTP JSON，FastAPI 自动解析和校验。
+    db: DbSession,                      # db 是 SQLAlchemy Session，由 FastAPI 依赖注入创建。
+    demo_user: DemoUser,                # demo_user 是服务端识别出的当前用户，不信任请求体传 user_id。
+) -> BusinessTaskExecutionResponse:     # -> 是返回类型提示，说明最终必须返回响应 DTO。
+    execution = BusinessTaskService(    # execution 是局部变量，保存 Service 返回的完整执行结果。
+        db,                              # 把同一个数据库事务 Session 交给 Service。
+        user_id=demo_user.id,            # 身份来自服务端依赖，不来自用户 JSON。
+    ).create_task(                       # 先创建 Service 实例，再调用它的 create_task 方法。
         business_domain=request.business_domain,
         member_id=request.member_id,
         user_input=request.user_input,
         input_payload=request.input_payload,
         idempotency_key=request.idempotency_key,
         provider_mode=request.provider_mode,
+        thread_id=request.thread_id,
+        human_confirmation_granted=request.human_confirmation_granted,
     )
-    return BusinessTaskResponse.from_execution(execution)
+    return _execution_response(execution) # 把 ORM + workflow state 投影成前端允许看到的 DTO。
 ```
 
-上面代码里的 `request` 是 Pydantic DTO，不是数据库对象；`db` 是 SQLAlchemy `Session`，由 FastAPI 的依赖注入创建；`BusinessTaskService` 才是业务流程的入口。Router 不应该自己写 SQL，也不应该决定“是否安全”。
+变量从哪里来、到哪里去：
+
+| 变量 | 谁创建 | 实际类型 | 交给谁 |
+| --- | --- | --- | --- |
+| `request` | FastAPI 根据 HTTP JSON 创建 | `BusinessTaskCreateRequest` | 拆出业务字段交给 Service |
+| `db` | `get_db` 依赖在请求开始时创建 | SQLAlchemy `Session` | `BusinessTaskService`、Workflow、Tool 共用事务 |
+| `demo_user` | `get_demo_user` 根据服务端配置和数据库创建 | ORM `User` | 只取可信 `id` 建立作用域 |
+| `execution` | `BusinessTaskService.create_task` 返回 | `BusinessTaskExecution` dataclass | `_execution_response` 投影为 API DTO |
+
+`request.business_domain` 不是“调用 `business_domain` 方法”。点号在这里表示“读取 `request` 对象的属性”。`request` 先被 Pydantic 校验，所以这些属性已经具有声明的类型。
+
+Router 不应该自己写 SQL，也不应该决定“是否安全”。它只处理 HTTP、依赖和 DTO 转换。
 
 ### 2.2 Service 负责幂等、事务和工作流生命周期
 
@@ -98,7 +164,7 @@ def create_task(request: BusinessTaskCreate, db: Session = Depends(get_db)):
 
 这就是为什么数据库 Session 不是“普通参数”：它决定了对象是否在同一个事务里，决定了发生异常时哪些记录一起提交或回滚。
 
-## 3. Workflow State：系统内部的数据总线
+## 3. 运行状态：系统内部的数据总线
 
 `backend/app/agent/product_workflow.py` 的 `ProductWorkflowState` 是 LangGraph 节点之间共享的结构化状态：
 
@@ -138,13 +204,27 @@ graph.add_node("chronic_care", self._chronic_care)
 graph.add_node("health_record", self._health_record)
 graph.add_node("safety_review", self._safety_review)
 graph.add_node("confirm", self._confirm)
-graph.add_node("generate_final_answer", self._generate_final_answer)
 graph.add_node("finalize", self._finalize)
 
 graph.set_entry_point("safety_entry")
-graph.add_conditional_edges("safety_entry", self._route_after_entry)
-graph.add_conditional_edges("safety_review", self._route_after_review)
-graph.add_edge("generate_final_answer", "finalize")
+graph.add_conditional_edges(
+    "safety_entry",
+    self._route_after_entry,
+    {
+        "blocked": "finalize",
+        "preconsultation": "preconsultation",
+        "chronic_care": "chronic_care",
+        "health_record": "health_record",
+    },
+)
+for node in ("preconsultation", "chronic_care", "health_record"):
+    graph.add_edge(node, "safety_review")
+graph.add_conditional_edges(
+    "safety_review",
+    self._route_after_review,
+    {"blocked": "finalize", "confirm": "confirm", "finalize": "finalize"},
+)
+graph.add_edge("confirm", "finalize")
 graph.add_edge("finalize", END)
 ```
 
@@ -179,18 +259,35 @@ graph.add_edge("finalize", END)
 计划代码的核心逻辑是：
 
 ```python
-steps = []
-for index, role in enumerate(route.target_roles, start=1):
-    dependencies = (steps[-1].step_id,) if steps else ()
-    steps.append(
-        PlanStep(
-            step_id=f"step_{index}",
-            role=role,
-            objective=OBJECTIVES[role],
+steps: list[PlanStep] = []             # 创建空的可变列表，后面逐步加入 PlanStep。
+
+for index, role in enumerate(          # enumerate 同时给出序号 index 和当前元素 role。
+    route.target_roles,                # target_roles 是 Router 冻结的角色顺序。
+    start=1,                           # 序号从 1 开始，所以得到 step_1，而不是 step_0。
+):
+    dependencies = (                  # dependencies 最终必须是 tuple[str, ...]。
+        (steps[-1].step_id,)           # steps[-1] 表示列表最后一步；末尾逗号创建单元素元组。
+        if steps                       # 如果 steps 非空，当前步骤依赖上一阶段。
+        else ()                        # 第一阶段前面没有步骤，因此依赖是空元组。
+    )
+    steps.append(                      # append 修改原列表，把一个新对象放到末尾。
+        PlanStep(                      # Pydantic 会校验 step_id、role、objective 和 dependencies。
+            step_id=f"step_{index}",  # f-string 把 index 插入字符串，例如 step_2。
+            role=role,                 # 当前领域角色，类型只能是三个 Literal 之一。
+            objective=_OBJECTIVES[role], # 用 role 作为字典 key，取该角色的固定任务目标。
             dependencies=dependencies,
         )
     )
 ```
+
+这段代码执行两轮时，变量的变化如下：
+
+| 时刻 | `index` | `role` | `steps` 原来有什么 | 新 `dependencies` |
+| --- | ---: | --- | --- | --- |
+| 第一轮 | 1 | `TriageAgent` | `[]` | `()` |
+| 第二轮 | 2 | `MedicationAgent` | 已有 `step_1` | `("step_1",)` |
+
+`steps[-1]` 的 `-1` 是 Python 的倒数索引；`(value,)` 的逗号不能省略，否则 `(value)` 仍只是原来的值，不是元组。
 
 例如一个同时涉及症状和用药的问题，Planner 可能生成：
 
@@ -215,7 +312,39 @@ Supervisor 的职责是：
 6. 遇到澄清、终止失败、超步数或超角色调用次数时停止。
 7. 所有步骤完成后输出 `finish` 决策。
 
-核心控制结构可以简化为：
+先看真实函数开头的变量。它们都是一次 `run` 内的局部状态，函数返回后不会成为全局变量：
+
+```python
+results: list[AgentTaskResult] = []    # 保存每一次 Agent 调用结果，重试也会产生一条结果。
+decisions: list[SupervisorDecision] = [] # 保存 call/retry/stop/finish 等调度决定。
+completed_steps: set[str] = set()      # set 自动去重，用来快速判断依赖是否已完成。
+role_calls: dict[DomainAgentRole, int] = {} # 统计每个角色调用次数，防止单角色无限重试。
+degraded = False                       # 只要任一步降级，就在最终状态中保留该事实。
+
+for step in plan.steps:                # 串行读取冻结计划；本项目不做 Agent 级并行。
+    if not set(step.dependencies).issubset(completed_steps):
+        # issubset 的含义是：当前步骤要求的每一个依赖，都必须已经出现在 completed_steps。
+        return self._stopped_run(       # return 立即结束整个函数，不再执行后续 Agent。
+            request,
+            route,
+            plan,
+            results,
+            decisions,
+            "step_dependency_not_satisfied",
+        )
+
+    attempt = 1                         # 当前步骤第一次调用；重试时递增。
+    while True:                         # 这里是循环，但下方有三个硬上限，所以不是自由死循环。
+        if len(results) >= self.max_supervisor_steps:
+            return self._stopped_run(..., "max_supervisor_steps_exceeded")
+
+        calls_for_role = role_calls.get(step.role, 0)
+        # dict.get(key, 0)：角色从未调用时返回默认值 0，不会抛 KeyError。
+        if calls_for_role >= self.max_role_calls:
+            return self._stopped_run(..., "max_role_calls_exceeded")
+```
+
+再看状态分支的简化版：
 
 ```python
 for step in plan.steps:
@@ -243,6 +372,17 @@ return finish("all_plan_steps_completed")
 
 这里的 `while True` 不等于无限循环，因为每一轮都受到 `max_supervisor_steps`、`max_role_calls` 和重试次数限制。这是 bounded Supervisor 的工程价值：即使 Agent 返回异常，也必须能终止。
 
+Supervisor 里最值得学的变量：
+
+| 变量 | 类型 | 为什么这样设计 |
+| --- | --- | --- |
+| `plan` | `TaskPlan` | 一次性冻结，执行时不能随意增加角色或改目标 |
+| `results` | `list[AgentTaskResult]` | 保留每次尝试，便于 Trace 和失败分析 |
+| `decisions` | `list[SupervisorDecision]` | 把“为什么重试/停止”变成结构化证据 |
+| `completed_steps` | `set[str]` | 高效检查依赖，且不会重复保存同一 step id |
+| `role_calls` | `dict[role, int]` | 分角色限制调用次数，不让某一个 Agent 吞掉全部预算 |
+| `attempt` | `int` | 当前步骤第几次尝试，和全局 `len(results)` 是两个不同维度 |
+
 ### 4.4 Planner 和 Supervisor 不冗余
 
 可以这样记：
@@ -261,13 +401,21 @@ return finish("all_plan_steps_completed")
 ### 5.1 统一输入
 
 ```python
-class DomainAgentInput(ContractModel):
-    route: ComplexityRoute
-    step: PlanStep
-    user_input_summary: SummaryText
-    allowed_tools: tuple[NonEmptyStr, ...]
-    prior_results: tuple[AgentTaskResult, ...]
+class DomainAgentInput(ContractModel):       # 继承 ContractModel，因此 extra 字段会被拒绝。
+    route: ComplexityRoute                  # Router 的冻结结果，包含 task/member/roles。
+    step: PlanStep                          # Supervisor 当前要求执行的唯一一步。
+    user_input_summary: SummaryText         # 最多 2000 字摘要，不是完整 raw conversation。
+    allowed_tools: tuple[NonEmptyStr, ...] = Field(
+        default_factory=tuple               # 每次创建一个新空 tuple，避免共享可变默认值。
+    )
+    prior_results: tuple[AgentTaskResult, ...] = Field(
+        default_factory=tuple               # 只接收已经结构化、同 task/member 的前序结果。
+    )
 ```
+
+`ContractModel` 是项目的 Pydantic 基类。这里写类不是为了“存数据到数据库”，而是定义 Agent 之间允许交换的数据形状。创建 `DomainAgentInput(...)` 时，Pydantic 会先校验字段类型，再运行 `validate_agent_scope` 检查角色、工具和成员关系。
+
+为什么 `prior_results` 用元组而不是列表：输入一旦交给领域 Agent，就应该按冻结快照读取；领域 Agent 不应该 `append` 或修改其他 Agent 的结果。
 
 它没有 `raw_conversation` 字段，只有摘要、冻结路由、当前步骤、工具白名单和同成员的结构化前序结果。Pydantic validator 还会检查：
 
@@ -311,29 +459,35 @@ return AgentTaskResult(
 2. `action(...)`：准备写入草稿或执行受保护动作时，检查角色、成员、动作类型、版本和人工确认。
 3. `final_output(...)`：最终答案返回前，检查危险表达、无来源医疗结论和必要提示。
 
-示意代码：
+下面是与当前真实方法签名一致的教学注释版：
 
 ```python
 request_decision = safety_guard.request(
-    user_input=user_input,
-    member_id=member_id,
+    message=user_input,                  # 本轮用户输入；这里只做规则检查，不改写正文。
+    member_id=member_id,                 # 当前任务已校验的成员身份，用于写入 SafetyDecision。
 )
-if request_decision.blocked:
-    return blocked_state(request_decision)
+if request_decision.blocked:             # blocked 是 Pydantic 对象上的 bool 字段。
+    return blocked_state(request_decision) # return 立即停止普通业务节点。
 
 action_decision = safety_guard.action(
-    action_type=action_type,
-    confirmation_scope=scope,
-    human_confirmation_present=confirmed,
+    message=user_input,                  # 再检查动作上下文中的医疗风险。
+    user_id=user_id,                     # 本次动作携带的用户身份。
+    member_id=member_id,                 # 本次动作携带的家庭成员身份。
+    expected_user_id=task.user_id,       # PostgreSQL 任务记录中的权威用户身份。
+    expected_member_id=task.member_id,   # PostgreSQL 任务记录中的权威成员身份。
+    confirmation_state=current_state,    # 当前权威确认状态，如 DRAFT 或 CONFIRMED。
+    human_confirmation_present=confirmed, # 用户是否在本次请求中明确确认。
 )
 if action_decision.blocked:
     return blocked_state(action_decision)
 
-final_decision = safety_guard.final_output(
-    output=final_answer,
-    source_refs=source_refs,
+final_decision, output_result = safety_guard.final_output(
+    output=candidate_answer,             # 已生成但尚未发送给用户的候选 DTO/字符串。
+    member_id=member_id,
 )
 ```
+
+三个返回值都不是最终业务答案：`request_decision` 和 `action_decision` 是结构化 `SafetyDecision`；`output_result` 是最终输出门禁结果。`final_output` 返回二元组，所以左侧必须用两个变量“拆包”。来源完整性由 Tool/RAG、冻结产物和 Evaluator 检查，Safety Guard 负责危险表达、作用域和确认门禁，职责不能混在一起。
 
 SafetyAgent 是运行时拦截器。它在答案或动作产生前参与业务流程。
 
@@ -357,6 +511,39 @@ DRAFT -> REJECTED
 
 当前系统只执行本地状态和本地 draft，不向医院、药店或通知服务提交真实动作。
 
+下面用 `confirm` 分支学习状态机代码：
+
+```python
+if action == "confirm":                    # == 比较值；这里只处理“确认”事件。
+    if current == "CONFIRMED":             # 相同请求已经成功确认过。
+        return self._success(                # replay=True 表示安全重放，不重复执行副作用。
+            scope,
+            state="CONFIRMED",
+            replay=True,
+        )
+
+    if current != "DRAFT":                 # != 表示不等于；只有草稿允许被确认。
+        return self._failure(
+            scope,
+            state=current,
+            code="invalid_state_transition",
+            reason="only a DRAFT can be confirmed",
+        )
+
+    if not request.human_confirmation_present: # not 把 False 取反为 True，进入失败分支。
+        return self._failure(
+            scope,
+            state="DRAFT",                 # 失败后仍留在 DRAFT，不能偷偷推进状态。
+            code="human_confirmation_required",
+            reason="explicit user confirmation is required",
+            requires_confirmation=True,
+        )
+
+    return self._success(scope, state="CONFIRMED") # 身份、状态、安全、确认都通过才迁移。
+```
+
+`current` 来自 PostgreSQL 权威 checkpoint，`action` 来自本次受控状态机调用，`scope` 同时绑定 `user_id/member_id/task_id/draft_id/version/idempotency_key/fingerprint`。因此状态机比较的不只是一个字符串状态。
+
 ### 6.3 SafetyAgent 和 EvaluatorAgent 的区别
 
 | 角色 | 运行时机 | 能否阻断业务 | 能否修改答案 |
@@ -370,9 +557,36 @@ DRAFT -> REJECTED
 
 文件：`backend/app/agent/context_manager.py`。
 
+先分清一个容易混淆的点：`ContextManager` 本身不是数据库，也不是长期记忆服务。它是一个纯 Python 转换器，只接收已经得到的数据，再构造、裁剪、压缩和清理上下文。真正的持久化由 PostgreSQL 检查点和确认偏好服务完成，Redis 只做带 TTL 的短期缓存。
+
 ### 7.1 `build_envelope`
 
 `build_envelope` 把用户输入摘要、任务身份、成员、槽位、安全标记、Tool evidence refs 和 RAG source refs 组装为 `ContextEnvelope`。它保存的是来源指针，而不是所有原始正文。
+
+初学时可以把它理解成“给这一次任务建立资料袋”：
+
+```python
+summary = self._summarize_user_input(user_input)
+# 调用当前类的私有辅助方法，把多余空白合并，并把过长输入截到 160 个字符。
+# 这里不是调用 LLM，也不是把摘要写入数据库。
+
+task_state = TaskState(
+    missing_slots=missing_slots or [],
+    # 左边是字段名，右边是函数参数。
+    # `or []` 表示调用者没传列表时使用空列表，避免后面遍历 None。
+
+    confirmed_slots=confirmed_slots or {},
+    # 已经由用户、Tool 或可信流程确认的槽位。
+
+    pending_confirmations=pending_confirmations or [],
+    # 仍在等待用户确认的动作或信息。
+
+    candidate_inferences=candidate_inferences or {},
+    # 模型候选推断单独存放，不能自动升级为事实或长期记忆。
+)
+```
+
+`run_id` 标识本次运行，`task_id` 标识可以跨多次 run 继续的业务任务，`member_id` 标识当前家庭成员。三者解决的问题不同，不能只保留一个编号。
 
 ### 7.2 `build_role_view`
 
@@ -380,29 +594,50 @@ DRAFT -> REJECTED
 
 ```python
 allowed_tools = self._visible_tools(
-    envelope.allowed_tools,
-    agent_role,
-    extra_allowed_tools or [],
+    envelope.allowed_tools,              # 任务整体允许的工具集合。
+    agent_role,                           # 当前要投影给哪个角色。
+    extra_allowed_tools or [],            # None 不能直接迭代，因此为空时变成新列表。
 )
 return RoleSpecificContextView(
-    run_id=envelope.run_id,
+    run_id=envelope.run_id,              # 身份字段原样传递，不能由模型生成。
     task_id=envelope.task_id,
     agent_role=agent_role,
-    member_id=envelope.member_id,
+    member_id=envelope.member_id,        # 角色视图始终绑定一个家庭成员。
     intent=envelope.intent,
-    allowed_tools=allowed_tools,
-    visible_task_state=...,
-    visible_tool_evidence_refs=...,
-    visible_rag_source_refs=...,
-    safety_flags=...,
+    allowed_tools=allowed_tools,         # 是角色白名单和任务白名单的受控交集。
+    visible_task_state=self._visible_task_state(envelope, agent_role),
+    visible_tool_evidence_refs=self._visible_tool_evidence(envelope, agent_role),
+    visible_rag_source_refs=self._visible_rag_sources(envelope, agent_role),
+    safety_flags=self._visible_safety_flags(envelope, agent_role),
 )
 ```
 
 它明确拒绝为 `EvaluatorAgent` 创建业务写上下文；Evaluator 只读冻结产物。
 
+这里连续调用多个 `_visible_xxx`，不是重复代码，而是分别执行四种裁剪策略：任务字段、工具证据、RAG 来源和安全标记的可见规则并不相同。返回对象没有 `raw_conversation` 字段，所以即使调用者想传完整历史，Pydantic 也不会接受。
+
 ### 7.3 `compact`
 
 压缩只接受同一个 `task_id`、同一个 `member_id` 的 Envelope。它合并槽位、来源、工具证据和安全标记，但保留 `source_id`、`tool_call_id`、`member_id`。因此 compact 是“把对话变短”，不是“把来源删掉”。
+
+代码先用集合检查作用域：
+
+```python
+task_ids = {envelope.task_id for envelope in envelopes}
+# 集合推导式：遍历每个 envelope，只保留不重复的 task_id。
+
+member_ids = {envelope.member_id for envelope in envelopes}
+
+if len(task_ids) != 1:
+    raise ValueError("compact only supports contexts from the same task_id")
+# 不等于 1 说明混入了别的任务，立即失败，不让模型决定是否可以合并。
+
+if len(member_ids) != 1:
+    raise ValueError("compact only supports contexts from the same member_id")
+# 家庭成员不同同样立即失败，这是成员隔离的硬规则。
+```
+
+什么时候调用 compact，不由“模型觉得历史太长”决定。当前实现适用于同一任务多轮补充、确认续跑前整理、重复来源去重。项目还没有 token 阈值自动触发器；以后若增加，阈值也只能触发这套确定性压缩规则，不能放宽成员和来源检查。
 
 ### 7.4 `reset_after_run`
 
@@ -427,6 +662,64 @@ return ResetContextState(
 ```
 
 保留的是审计和来源指针；清理的是临时推理、完整聊天和 scratchpad。它不删除数据库中的 `RunTrace` 或 checkpoint。
+
+### 7.5 记忆不是完整聊天历史
+
+`MemoryRef` 的数据契约位于 `context_schemas.py`：
+
+```python
+class MemoryRef(ContractModel):
+    memory_id: NonEmptyStr          # 一条长期信息的稳定编号。
+    member_id: NonEmptyStr          # 这条信息属于哪个家庭成员。
+    memory_type: NonEmptyStr        # 例如提醒展示偏好，不能伪装成医疗事实。
+    source_id: NonEmptyStr          # 指向产生该偏好的已确认来源。
+    source_type: MemorySourceType   # 来源种类，便于审计。
+    confirmed_by_user: bool         # 用户是否明确确认。
+
+    @model_validator(mode="after")
+    def reject_unconfirmed_memory(self) -> "MemoryRef":
+        if not self.confirmed_by_user:
+            raise ValueError("memory_refs only accept user-confirmed content")
+        return self
+```
+
+`@model_validator(mode="after")` 是 Pydantic 的对象级校验：所有字段先完成类型检查，再运行这个函数。只要 `confirmed_by_user` 是 `False`，对象就无法创建，因此未确认内容不是“创建后再提醒开发者别用”，而是在契约边界直接失败。
+
+这还不是最终数据库写入。`ConfirmedPreferenceService` 会继续检查：
+
+1. 当前任务已经完成确认。
+2. `user_id/member_id/task_id` 一致。
+3. 来源存在于当前任务，并且版本没有过期。
+4. 偏好不是诊断、处方、剂量、报告或药箱事实。
+5. 幂等键和偏好版本没有冲突。
+
+所以项目的长期记忆只保存用户确认的非医疗偏好。处方、报告、药箱和库存每次从业务数据库或 Provider 重新查询；`RAG` 保存公共知识，也不属于个人记忆。
+
+### 7.6 哪些信息保留，哪些信息删除
+
+读代码时不要用“句子长不长”判断重要性，要按下面四个问题判断：
+
+1. 是否属于当前 `task_id`？
+2. 是否属于当前 `member_id`？
+3. 是否完成当前任务还需要？
+4. 如果它是事实，是否存在 `source_id` 或 Tool 调用来源？
+
+符合条件的任务状态、确认状态、安全标记和来源指针保留；完整旧对话、scratchpad、临时 Tool/Provider 正文和未确认候选推断删除。可变医疗事实只保留指针，续跑时重新查询，不把旧副本当成最新事实。
+
+### 7.7 上下文和记忆怎么测试
+
+当前测试不是让 LLM 主观评分，而是制造错误并检查系统是否拒绝：
+
+| 测试 | 故意制造的问题 | 正确结果 |
+| --- | --- | --- |
+| `test_agent_contract_schemas.py` | 把完整聊天塞进角色视图 | Pydantic 校验失败 |
+| `test_context_manager.py` | 混合 task/member，或 compact 后删除来源 | 拒绝合并，来源保持 |
+| `test_context_manager.py` | reset 时存在未确认推断 | 不进入 `memory_refs` |
+| `test_task_checkpoint_cache.py` | Redis 过期、损坏或作用域错误 | cache miss，并回源 PostgreSQL |
+| `test_preference_service.py` | 无确认、跨成员或来源版本过期 | 拒绝写入长期偏好 |
+| `test_deterministic_evaluator.py` | RunTrace 的成员不一致 | `context_isolation_passed=false` |
+
+这些测试证明规则边界，但不能直接换算成“记忆准确率”。要得到可写进简历的独立指标，需要建立固定多轮评测集，比较 compact、reset、checkpoint 恢复前后的关键信息保留率、来源保留率、未确认写入率、跨成员泄漏率和 token 降幅。完整动手流程见 [项目面经问题库 Q14](INTERVIEW_QUESTION_BANK.md#q14-怎么评测上下文和记忆机制)。
 
 ## 8. Tool Registry、数据库工具和 Provider
 
@@ -462,6 +755,47 @@ Domain Agent
 - `attempts`
 
 参数错误、权限错误、schema 错误和写操作不自动重试；只读 timeout、rate limit 和临时 Provider 不可用才允许有限重试。失败的 Provider 不能携带业务 data 或 SourceRef，防止降级摘要被误当成事实。
+
+`ToolRegistry.call` 最关键的前半段可以这样读：
+
+```python
+started = perf_counter()                    # 读取高精度单调时钟，只用于计算耗时。
+spec = self._specs.get(tool_name)           # 用工具名查 ToolSpec；get 找不到时返回 None。
+if spec is None:
+    return self._failure(...)               # 未注册工具直接结构化失败，handler 不会执行。
+
+if tool_name not in execution_context.allowed_tools:
+    return self._failure(...)               # 任务上下文没有授权，即使 Registry 有工具也不能调。
+
+if execution_context.agent_role not in spec.allowed_agent_roles:
+    return self._failure(...)               # ToolSpec 再检查一次角色白名单，形成双重约束。
+
+validated_input = spec.input_schema.model_validate(tool_input)
+# model_validate 把 dict 解析为 Pydantic 输入 DTO；字段缺失、类型错误或 extra 字段都会失败。
+
+attempts: list[ToolAttemptTrace] = []        # 保存每次尝试；失败后重试也必须可审计。
+max_attempts = spec.retry_policy.max_attempts if spec.read_only else 1
+# 条件表达式：只读工具使用配置上限；写工具固定 1 次，避免重复副作用。
+
+for attempt_no in range(1, max_attempts + 1):
+    raw_output = self._handlers[tool_name](  # handler 才是真正做 SQL、Provider 或 RAG 的函数。
+        validated_input,
+        execution_context,
+    )
+
+validated_output = spec.output_schema.model_validate(raw_output)
+# 输入合法不代表输出合法；handler 的返回也必须过独立 Pydantic schema。
+```
+
+这里的三个核心对象不能混淆：
+
+| 对象 | 谁创建 | 保存什么 | 会不会做业务操作 |
+| --- | --- | --- | --- |
+| `ToolSpec` | 应用启动时注册 | 输入/输出 schema、允许角色、超时、重试、是否只读 | 不会，它是工具说明书 |
+| `ToolExecutionContext` | Service/Workflow 在本次 run 创建 | `run_id`、角色、用户、成员、允许工具、确认状态 | 不会，它是可信执行身份 |
+| `handler` | 工具装配代码注册 | 真正的 Python callable | 会，可能查询 SQL、调用 Provider 或创建本地草稿 |
+
+`try/except/else` 在这里的含义是：handler 抛出预期的 `ToolExecutionError` 时按错误类别决定是否重试；抛出未知异常时隐藏原始内部错误并返回 `handler_error`；没有异常才进入 `else` 记录成功 attempt。API 最终看到的是 `ToolResult`，不是裸 Python traceback。
 
 ### 8.3 事务边界
 
@@ -499,6 +833,43 @@ RetrievalRequest
 
 个人处方、报告、药箱和库存不进入个人向量记忆；这些事实必须从业务数据库或 Provider 重新读取。
 
+### 9.3 RRF 代码逐行怎么看
+
+关键词分数和向量相似度不是同一种量纲，因此 `_merge_sources` 比较“排名”，不直接把两个原始分数相加：
+
+```python
+by_chunk: dict[str, dict[str, RetrievedChunk]] = {}
+# 外层 key 是 chunk_id；内层 key 是 keyword/vector，用于把同一切片的两路结果放在一起。
+
+for source in keyword_sources:
+    by_chunk.setdefault(source.chunk_id, {})["keyword"] = source
+# setdefault：chunk_id 不存在就先放入 {}，然后保存关键词结果。
+
+for source in vector_sources:
+    by_chunk.setdefault(source.chunk_id, {})["vector"] = source
+
+for modes in by_chunk.values():
+    keyword_source = modes.get("keyword")  # 该切片可能只被关键词召回，所以类型允许 None。
+    vector_source = modes.get("vector")    # 也可能只被向量召回。
+    base = keyword_source or vector_source # 至少一路存在；选择一个对象作为复制模板。
+    assert base is not None                # 向类型检查器和开发者声明这里不可能为空。
+
+    keyword_rank = keyword_source.keyword_rank if keyword_source else None
+    vector_rank = vector_source.vector_rank if vector_source else None
+    rrf_score = round(
+        sum(
+            1.0 / (RRF_K + rank)           # 排名越靠前，贡献越大；RRF_K 平滑头部差异。
+            for rank in (keyword_rank, vector_rank)
+            if rank is not None            # 没被某一路召回，就不计算那一路贡献。
+        ),
+        8,
+    )
+
+ranked.sort(key=_rrf_ranking_key)          # Python sort 原地排序；key 返回可比较的元组。
+```
+
+真正向量命中后还有一次 `_hydrate_vector_sources`：根据 `chunk_id/document_id` 回查 PostgreSQL，并比较 `document_version`、`chunk_version` 和 `embedding_schema_version`。只存在于旧索引、但权威数据库版本已经变化的切片会被丢弃；所以向量库负责“找候选”，PostgreSQL 仍负责“证明候选当前有效”。
+
 ## 10. Model Gateway：如何让 LLM 可选而不阻塞项目
 
 文件：`backend/app/agent/model_gateway.py`。
@@ -531,6 +902,36 @@ provider.invoke
 ```
 
 任一步失败都会记录 `ModelProviderAttemptTrace`。配置 fallback 时再调用 deterministic provider；fallback 也失败，就返回没有 output 的结构化失败，不能把未校验原文当成答案。
+
+下面是 `ModelGateway.invoke` 的变量流：
+
+```python
+output, primary_attempt = self._attempt(   # 函数返回 tuple，这里拆成“校验后输出”和“尝试轨迹”。
+    self._primary_provider,                # 主 provider 由服务端环境变量决定，API 请求不能改。
+    request,                               # ModelCallRequest，包含 run/task/member/purpose 和输入。
+    response_model,                        # 目标 Pydantic 类，不是一个已经创建的对象。
+)
+attempts = [primary_attempt]               # 即使第一次失败，也先保留失败证据。
+fallback_used = False
+fallback_reason: str | None = None
+
+if output is None and self._can_fallback():
+    fallback_used = True
+    fallback_reason = primary_attempt.error_type
+    output, fallback_attempt = self._attempt(
+        self._fallback_provider,
+        request,
+        response_model,
+    )
+    attempts.append(fallback_attempt)
+
+success = output is not None               # 只有校验后的 DTO 存在才算成功，原始文本不算。
+token_usage = _aggregate_token_usage(attempts)
+trace = ModelCallTrace(...)                # 把 provider、fallback、schema、安全、token 和耗时冻结。
+return result_model(output=output, trace=trace)
+```
+
+`_attempt` 内部的顺序是 `provider.invoke -> json.loads -> response_model.model_validate -> safety_checker.check`。`json.loads` 只证明文本是 JSON，`model_validate` 才证明字段形状符合任务契约，Safety checker 再证明结构化内容没有越过医疗输出边界。三层全部通过前，`output` 都不能进入 Agent state。
 
 因此当前项目可以“无 Key 运行”，但不等于“真实 LLM 已完成质量验收”。真实模型需要在未提交的 `.env` 中配置：
 
@@ -600,22 +1001,25 @@ workflow state
 10. 所有 Tool/RAG/Safety 的 member_id 是否一致。
 
 ```python
-task_success = all(
+task_success = all(                         # all(...) 只有在每一个条件都为 True 时才返回 True。
     (
-        intent_matches,
-        member_matches,
-        tool_call_accuracy == 1.0,
-        safety_recall in (None, 1.0),
-        not expected_human_confirmation_required or human_confirmation_present,
-        not matched_forbidden_phrases,
-        groundedness == 1.0,
-        schema_valid,
-        context_isolation_passed,
+        intent_matches,                     # 实际意图必须等于 ExpectedCase。
+        member_matches,                     # run 的 member_id 不能串到别的家庭成员。
+        tool_call_accuracy == 1.0,           # 必需工具必须全部覆盖；0.99 也不能算成功。
+        safety_recall in (None, 1.0),        # 无安全预期时是 None；有预期时必须完整召回。
+        not expected.expected_human_confirmation_required
+        or human_confirmation_present,      # 不要求确认，或者确实出现确认提示，二者满足一个即可。
+        not matched_forbidden_phrases,       # 空列表在布尔判断中为 False，not 后变成 True。
+        groundedness == 1.0,                 # 所有必需来源都必须出现。
+        schema_valid,                        # Run、Tool 和 RAG schema 都要有效。
+        context_isolation_passed,            # Trace 中每个成员作用域必须一致。
     )
 )
 ```
 
 这不是 LLM Judge，不判断“回答听起来像不像人”，而是判断冻结产物是否满足明确契约。
+
+`failure_reasons` 是列表，因为同一次 run 可能同时缺工具、缺来源并串成员；Evaluator 不应该遇到第一个错误就停止。最后的 `list(dict.fromkeys(failure_reasons))` 利用字典 key 去重，同时保留原始发现顺序。
 
 ### 12.2 HarnessRunner 如何聚合
 
@@ -674,9 +1078,28 @@ Redis
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-.\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest-core-walkthrough
+$env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-learning'
+.\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider --basetemp=output\pytest-core-walkthrough
 .\.venv\Scripts\python.exe -m compileall backend\app backend\tests
 ```
+
+运行分支覆盖率：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+$env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-coverage'
+.\.venv\Scripts\python.exe -m coverage run --branch --source=backend/app -m pytest backend\tests -q -p no:cacheprovider --basetemp=output\pytest-coverage
+.\.venv\Scripts\python.exe -m coverage report --skip-covered --show-missing
+```
+
+2026-07-30 本机结果：后端 `297 passed`，branch-aware 总覆盖率 `86%`。这个数字表示 Python 语句和分支执行覆盖，不代表业务正确率、真实模型质量或医疗安全率。低覆盖区域主要包括旧兼容 Service、真实 FastEmbed/向量存储异常路径、CLI/Demo 错误分支和部分生产防御性异常；因此不能说“测试已经覆盖完整”。
+
+当前测试量是否足够，要分目标回答：
+
+- 作为课程项目和 MVP 回归：297 条后端测试、25 条前端组件测试、7 条浏览器 E2E、32 条业务 fixture/96 份消融 Trace，已经能证明分层、关键边界和演示链路可重复。
+- 作为真实模型质量结论：不够。缺少真实 LLM 多次采样、中文口语/错别字/方言、真实 FastEmbed gold set、真实 Provider 契约漂移和人工标注答案。
+- 作为生产系统结论：不够。缺少认证渗透、长期并发/负载、备份恢复、网络分区、滚动升级、隐私审计和真实医院系统联调。
+- 后续不要为了把 32 改成 100 而机械复制 fixture；应从真实 bad case、日志和人工 review 中新增互不重复的失败类型。
 
 运行前端：
 
@@ -732,9 +1155,9 @@ docker compose up -d --build --wait --wait-timeout 300
 
 ## 16. 面试时怎么讲这套代码
 
-可以这样回答：
+可以这样回答，而且要主动区分“运行链”和“编排内核”：
 
-> 我没有把多 Agent 做成多个自由聊天机器人，而是先用 Complexity Router 区分简单单领域和复杂跨领域请求。简单请求直接进入一个领域 Agent；复杂请求由一次性 Planner 生成最多三步的结构化计划，再由串行 bounded Supervisor 按依赖执行，并限制最大步数、角色调用次数和重试次数。业务 Agent 只能通过 Tool Registry 获取带成员作用域和来源指针的事实。请求、动作和最终答案分别经过三层 Agent 安全；答案和 Trace 冻结后，再由只读 Deterministic Evaluator 按工具覆盖、来源、确认、Safety、schema 和成员隔离规则评估。无 Key 时使用 deterministic provider，真实模型只是可配置的 OpenAI-compatible 适配路径，不能把本地 fixture 指标说成线上或临床指标。
+> 当前 Docker 业务 API 使用固定领域 LangGraph，已经接通 Tool Registry、数据库/RAG、三层 Agent 安全、确认状态机、Trace 和 Evaluator。为了验证复杂请求的编排方式，我另外实现了 Complexity Router、一次性 Planner、三个领域 Agent 和串行 bounded Supervisor 内核：简单请求直达一个角色，复杂请求最多按三步执行，并限制总步数、每角色调用次数和重试。这个内核已经用 32 条固定用例做了 Single Agent、固定路由和 Supervisor 消融，但还没有接入当前业务 API，所以我会把“实现并评测编排内核”和“已接通的 Docker 运行链”分开描述。
 
 追问“为什么要 Planner 和 Supervisor”时：
 
@@ -752,7 +1175,8 @@ docker compose up -d --build --wait --wait-timeout 300
 已经实现并验证：
 
 - 本地 Docker PostgreSQL、Redis、FastAPI 和 Next.js 链路。
-- 结构化 Planner、三个领域 Agent、串行 bounded Supervisor。
+- API 运行链中的固定领域 LangGraph、Tool/DB/RAG、三层 Safety、确认续跑和产物冻结。
+- 独立的结构化 Planner、三个领域 Agent、串行 bounded Supervisor 编排内核，以及 32 条固定用例 A/B/C 消融。
 - 三层 Safety、Confirmation State Machine、Tool Registry、RAG SourceRef。
 - PostgreSQL checkpoint、Redis TTL 回源、RunTrace、Observation 和 Deterministic Evaluator。
 
@@ -761,7 +1185,20 @@ docker compose up -d --build --wait --wait-timeout 300
 - 真实医院、药店、通知和支付 Provider。
 - 真实 LLM 的回答质量、token 成本和线上延迟。
 - FastEmbed 语义召回质量和生产知识摄取流水线。
+- bounded Supervisor 接入 `/api/business-tasks` 当前 Docker 运行链。
 - MCP Server、OpenTelemetry/Jaeger、Agent 级并行和复杂自动重规划。
 - 生产认证、HTTPS、备份、高可用和医疗合规。
 
 这份文档是学习用代码地图，不替代 [开发总路线图](../DEVELOPMENT_ROADMAP.md)、[技术设计](../TECH_DESIGN.md) 或 [API 文档](../API_SPEC.md)。
+
+## 4D-B Benchmark Runner 代码地图
+
+学习入口是 `backend/app/agent/benchmark_runner.py`：
+
+1. `load_manifest()` 读取冻结 manifest，并用 canonical JSON 计算 SHA-256，防止评测标准被边跑边改。
+2. `load_datasets()` 用 `TypeAdapter(BenchmarkDataset[具体Case])` 把五组 JSON 转成 Pydantic 对象，同时核对数量和 hash。
+3. `_answer_quality_report()`、`_rag_report()`、`_safety_report()`、`_memory_report()` 和 `_provider_report()` 只检查数据契约与策略标签，不调用业务系统。
+4. `_runtime_metrics()` 明确把真实运行尚未提供的回答质量、Recall、Safety、延迟、token 和 cost 标为 `N/A`。
+5. `write_reports()` 生成 JSON、Markdown 和 bad-case 文件；报告包含 manifest hash、运行模式和证据边界。
+
+运行入口是 `scripts/run_4d_benchmark.py`。先看 `benchmark_schemas.py` 中的 `BenchmarkManifest`、`BenchmarkMetric` 和 `BenchmarkReport`，再回到 runner 追踪“原始 JSON -> Pydantic -> 校验 -> 指标 -> 报告”的数据流。

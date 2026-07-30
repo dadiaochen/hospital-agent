@@ -123,7 +123,9 @@ SafetyAgent 属于治理层，不是 Supervisor 的候选业务角色。Evaluato
 | 阶段 | 状态 | 目标 |
 | --- | --- | --- |
 | 4B | `DONE` | 完成可靠后端 Agent：最终契约、三领域 Agent、按需 Planner、bounded Supervisor、安全/确认、状态缓存、Provider/RAG 可靠性和 32 条评测 |
-| 4C | `DONE` | 完成患者端、浏览器 E2E、黄金演示和最终交付；4C 完成后不再新增必要产品阶段 |
+| 4C | `DONE` | 完成患者端、浏览器 E2E、黄金演示和最终交付；MVP 产品功能在此收口 |
+| 4D-A | `DONE` | 五组 gold 评测集已审核、冻结并写入 manifest hash |
+| 4D-B | `IN_PROGRESS` | 实现统一自动化评测、故障注入、重复运行和指标报告，不新增业务功能 |
 
 ## 7. 4B 任务拆分与审计
 
@@ -535,7 +537,130 @@ Set-Location E:\project_code\hospital
 - 不把 Safety、Tool 权限或成员隔离的提升归因给 Supervisor。
 - 多 Agent 是否优于固定路由由 A/B/C 消融实验决定；若简单任务固定路由更快，应如实保留复杂度分流结论。
 
-## 10. 明确非目标
+## 10. 4D 简历指标与评测证据化
+
+4D 不增加新的医疗能力，也不把本地评测包装成生产指标。目标是把 [简历学习文档 5.2](learning/05_RESUME_AND_INTERVIEW.md#52-下一轮简历指标怎么测) 中的测量方案落成版本化测试集、可重复 runner 和 JSON/Markdown 报告。所有简历数字必须能回到固定 case、Git commit、运行环境和计算公式。
+
+### 10.1 4D-A：候选用例生成与人工 gold 审核
+
+状态：`IN_PROGRESS`。A1 候选数据生成、结构校验和 A3 fail-closed 冻结工具已完成；A2 人工审核尚未完成，因此 A3 hash/manifest 冻结仍被保护逻辑阻止。本任务先冻结“什么是正确”，不实现 benchmark runner。
+
+AI 可以生成测试问题和表达变体，也可以根据现有知识文档预填候选 `source_id`、安全标签和必须包含/禁止出现项；但 AI 生成的内容只是候选数据，不能让同一个模型同时出题、给标准答案并证明自己正确。你负责最终审核，Codex 负责生成初稿、审核表、数据校验脚本和修改说明。
+
+#### A.1 数据集与最低规模
+
+| 数据集 | 最低规模 | Codex 先生成什么 | 你最终确认什么 |
+| --- | ---: | --- | --- |
+| 回答质量 | 60–100 条 | 从黄金链路、异常路径和现有 fixture 生成中文问题；预填必须包含、禁止出现、应拒答、应确认 | 问题是否自然；规则标签是否符合业务边界；不能要求模型给诊断或改药结论 |
+| RAG gold | 至少 30 条 | 从现有知识 chunk 反向生成同义问法、关键词问法和混合问法；预填候选 `source_id` | 每个问题应该命中哪些已存在来源；问题是否泄露答案原句 |
+| Agent 安全 | 至少 100 条：50 高风险 + 50 普通 | 生成口语、错别字、隐含改药、严重症状、越权成员和容易误报的普通表达 | `must_block`、安全标记和普通请求标签；只按项目安全规则审核，不把它当临床诊断题 |
+| 上下文与记忆 | 40 条 | 生成同任务多轮、换任务、换成员、确认/未确认偏好、缓存故障和版本冲突用例 | 应保留、应删除、允许长期写入的 `fact_id/source_id/member_id` |
+| Provider 故障 | 至少 30 条 | 生成 timeout、429、可恢复 5xx、格式错误、权限错误和写操作失败组合 | 哪些错误允许有限重试，哪些必须立即失败；写操作误重试必须为 0 |
+
+固定文件规划：
+
+```text
+backend/tests/fixtures/benchmarks/answer_quality.v1.json
+backend/tests/fixtures/benchmarks/rag_gold.v1.json
+backend/tests/fixtures/benchmarks/safety_gold.v1.json
+backend/tests/fixtures/benchmarks/memory_context.v1.json
+backend/tests/fixtures/benchmarks/provider_faults.v1.json
+backend/tests/fixtures/benchmarks/benchmark_manifest.v1.json
+docs/learning/18_4D_BENCHMARK_DATA_REVIEW.md
+```
+
+#### A.2 你实际需要做什么
+
+1. Codex 先从仓库现有知识、业务 fixture 和安全规则生成候选数据，不要求你从空白开始写题。
+2. 你按照审核文档逐条选择“通过、修改、删除”；重复表达可以保留，但必须覆盖不同语言现象，不能只改一个标点。
+3. RAG 用例核对 `source_id` 是否真实存在；回答质量只标注关键事实和禁用表达，不编写一篇唯一标准答案。
+4. 安全用例只判断项目应当放行、确认、拦截或转人工，不要求你判断疾病和处方是否正确。
+5. 上下文用例确认哪些事实属于当前任务和成员，哪些只是未确认猜测。
+6. 如果要测真实 LLM，你在未提交的 `.env` 中填写模型地址、Key、模型名和官方输入/输出价格；Key 不进入 fixture、报告或 Git。
+7. 跑延迟测试前确认本机没有大型任务，并允许 Docker 连续创建本地测试记录；测试数据只能使用 seed/合成数据。
+
+#### A.3 人工审核门
+
+每条 gold case 必须包含：
+
+- 唯一 `case_id` 和数据集版本。
+- `generated_by_ai=true/false`，记录是否由 AI 生成初稿。
+- `human_reviewed=true`、审核日期和非敏感 reviewer 标识。
+- 期望行为、来源或安全标签，不允许只保存“回答应该正确”。
+- 不包含真实患者姓名、身份证、电话、病历或真实 API Key。
+
+`benchmark_manifest.v1.json` 记录各数据集 hash、数量、标签分布、知识库版本、模型配置名和价格版本。任何 gold 修改都必须升级版本或更新 hash，避免边跑边改标准答案。
+
+#### A.4 完成标准
+
+- 五组数据达到最低数量，并全部通过 Pydantic/JSON 校验。
+- RAG 的每个期望 `source_id` 都能在当前知识库找到。
+- 高风险/普通、安全动作、家庭成员和业务域分布有统计，不用总 case 数掩盖缺组。
+- 所有 case 完成人工审核；AI 候选未审核时不能进入正式报告。
+- 真实模型配置与价格可以选择暂不提供；此时 4D-B 先完成 deterministic 自动化，但 token/成本和真实回答质量保持 `N/A`，不伪造数字。
+
+### 10.2 4D-B：统一自动化评测与最终指标
+
+状态：`IN_PROGRESS`，依赖 4D-A 已冻结的 `benchmark_manifest.v1.json`。B1 的 Pydantic 契约、manifest/hash 校验、deterministic runner、契约报告和 `N/A` 运行指标边界已完成；Provider 故障运行注入、真实 RunTrace 接入、Docker 集成和重复性能运行仍待完成。本任务由 Codex 实现 deterministic runner、契约校验、故障注入、重复运行和报告；真实模型配置仍然是可选项。
+
+#### B.1 自动化实现
+
+1. 为五组 fixture 建立严格 Pydantic 契约、版本和完整性校验。
+2. 实现统一 `BenchmarkRunner`，明确区分 `deterministic`、`real_model` 和 `docker_integration` 三种运行模式。
+3. 回答质量每题真实模型运行 3 次，规则先检查必须包含、禁止表达、拒答、确认和来源，再输出待人工复核列表；不以 LLM Judge 作为硬门槛。
+4. RAG 分别运行关键词、向量和混合检索，计算 Recall@3、Recall@5、MRR、引用正确率和无来源率。
+5. Agent 安全计算高风险召回率、普通请求误报率、漏拦截 case，并验证阻断发生在草稿或动作之前。
+6. 上下文与记忆计算关键信息保留率、无关信息清理率、来源保留率、未确认写入率、跨成员泄漏率、checkpoint 恢复成功率和实际 token/字符降幅。
+7. Provider 故障注入计算可重试错误恢复率、平均尝试次数、不可重试错误误重试率和写操作误重试率。
+8. 性能测试先预热 5 次，再对两条黄金链各运行 100 次、重复 3 轮，分别统计总延迟、RAG、模型和 Tool 的 p50/p95；本机结果必须标记硬件和运行环境。
+9. 读取 Model Gateway 的真实 usage，统计平均输入/输出 token、单次成本和每 1000 次估算成本；没有真实 usage 时保持 `N/A`。
+
+#### B.2 报告与证据
+
+计划生成：
+
+```text
+output/benchmarks/benchmark_report.4d.json
+docs/benchmark_report.4d.md
+docs/benchmark_badcases.4d.md
+```
+
+报告必须包含 Git commit、manifest hash、运行时间、模式、模型名、知识版本、样本数、公式、聚合指标、置信区间或重复运行波动、失败 case 和真实性边界。deterministic、真实模型和 Docker wall-clock 结果分表展示，不能混成一个总分。
+
+#### B.3 最终可选择的简历指标
+
+只从实跑且复核完成的结果中选择三到五项：
+
+- 真实回答规则通过率及样本数，不称临床准确率。
+- RAG Recall@3/@5 和引用正确率。
+- Agent 安全召回率与普通请求误报率，注明固定安全集。
+- 上下文关键信息保留率、跨成员泄漏率和恢复成功率。
+- Provider 故障恢复率与写操作误重试率。
+- 本机 p50/p95、平均 token 和成本，明确模型、硬件和测试环境。
+
+#### B.4 完成标准
+
+- 同一 manifest 和 commit 的 deterministic 结果可重复。
+- 所有指标能追溯到 case、冻结运行产物和计算公式。
+- 故意失败用例必须被 runner 识别，不能只证明成功路径。
+- 自动化、Docker 集成和可选真实模型运行分别生成报告。
+- `README`、测试指南、面经、核心代码学习文档和简历口径同步更新。
+- 只有报告中的真实数字可以进入简历；未提供 Key 或人工 gold 时对应指标保持 `N/A`。
+
+### 10.3 执行顺序
+
+```text
+4D-A1 Codex 生成候选用例和审核表
+  -> 4D-A2 你审核来源、标签和允许/禁止行为
+  -> 4D-A3 Codex 校验并冻结 benchmark manifest
+  -> 4D-B1 Codex 实现契约、Runner、故障注入和报告
+  -> 4D-B2 deterministic + Docker 全量回归
+  -> 4D-B3 可选真实 LLM、token、成本和性能测试
+  -> 人工复核 badcase
+  -> 更新简历与面经真实指标
+```
+
+## 11. 明确非目标
 
 - 疾病诊断、自动开方、处方修改或剂量调整建议。
 - 未经确认的受保护状态迁移，或真实医院、药店、支付和通知写操作。
@@ -547,6 +672,8 @@ Set-Location E:\project_code\hospital
 - LLM Judge 进入运行链或成为最终验收硬门槛。
 - 以 48 条用例数量替代 32 条高质量覆盖。
 
-## 11. 当前唯一下一步
+## 12. 当前唯一下一步
 
-`4B` 和 `4C` 已完成；当前没有新增必要产品阶段。后续只做 bug 修复、依赖升级、真实 Provider/LLM 联调、生产认证和部署准备等独立工作，不再临时增加新的产品阶段编号。
+`4B` 和 `4C` 已完成，MVP 产品能力已经收口。4D-A 的五组 gold 数据已完成人工审核并冻结 manifest；当前唯一进行中的是 **4D-B：统一自动化评测与最终指标报告**。它只生成可追溯评测证据，不新增业务功能。
+
+2026-07-30 完成一次 4C 后文档与证据维护：补充面向初学者的逐行核心代码走读、简洁版 Agent 简历、可复现指标与后续 gold set/延迟/Token/重试测量方案、测试充分性边界、本地演示数据库说明和十步 Docker 启动路径。本次维护不改变阶段状态，不把尚未接入业务 API 的 bounded Supervisor 编排内核描述为当前运行链能力。

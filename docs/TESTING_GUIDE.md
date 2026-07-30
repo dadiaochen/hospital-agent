@@ -27,12 +27,13 @@
 ## 运行命令
 
 ```powershell
+$env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-test'
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q -p no:cacheprovider --basetemp=.tmp\pytest
-python -m compileall backend\app backend\tests
+.\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider --basetemp=output\pytest-all
+.\.venv\Scripts\python.exe -m compileall backend\app backend\tests
 ```
 
-只验证某个改动时，先跑对应测试文件；准备提交前再跑完整套件。Harness 的 fixture 位于 `backend/tests/fixtures/`，它们是 deterministic 演示输入，不是临床数据或线上评估数据。
+显式使用项目 `.venv`，避免系统 Conda/Python 缺少 `pgvector` 等项目依赖。`PYTHONPYCACHEPREFIX` 和新的 `output` basetemp 用于绕开 Windows 旧 `__pycache__`/Temp ACL 问题。只验证某个改动时，先跑对应测试文件；准备提交前再跑完整套件。Harness 的 fixture 位于 `backend/tests/fixtures/`，它们是 deterministic 演示输入，不是临床数据或线上评估数据。
 
 生成当前固定用例指标：
 
@@ -93,6 +94,33 @@ Set-Location E:\project_code\hospital
 ```
 
 该脚本把 Docker migration/seed、固定四场景 Demo、deterministic Harness、A/B/C 消融和浏览器 E2E 串成一个验收命令。它不会把 Harness fixture 放入 backend 镜像，也不会调用真实 LLM；步骤结果写入被 Git 忽略的 `var/closeout/`。本机最终结果为 Demo `4/4`、浏览器 `7/7`、前后端 health `200`。
+
+## 代码覆盖率与业务覆盖
+
+运行 Python 分支覆盖率：
+
+```powershell
+Set-Location E:\project_code\hospital
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+$env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-coverage'
+.\.venv\Scripts\python.exe -m coverage run --branch --source=backend/app -m pytest backend\tests -q -p no:cacheprovider --basetemp=output\pytest-coverage
+.\.venv\Scripts\python.exe -m coverage report --skip-covered --show-missing
+```
+
+2026-07-30 本机证据：
+
+| 层级 | 结果 | 解释边界 |
+| --- | --- | --- |
+| 后端 pytest | `297 passed` | 自动化断言通过，不等于临床正确率 |
+| branch-aware coverage | `86%` | Python 语句与分支覆盖，不等于业务场景覆盖 |
+| 前端 Vitest | `25 passed` | jsdom 组件和 API client 行为 |
+| 浏览器 E2E | `7 passed` | Edge 访问真实 Docker 前后端黄金链 |
+| 编排 Harness | 32 case / 96 Trace | deterministic 三策略公平消融 |
+| Docker 验收 | baseline `19/19`，Redis 故障 `18/18` | 本地 migration/seed/API/RAG/cache，不是生产 SLO |
+
+覆盖率低于整体水平的区域包括旧兼容 Service、真实 FastEmbed/向量存储异常路径、CLI/Demo 失败分支和生产防御性异常。业务场景还缺少真实 LLM 多次采样、中文错别字/口语/方言、真实语义检索 gold set、外部 Provider 契约漂移、认证渗透、长期负载和备份恢复。32 条 fixture 对 MVP 方法验证足够，但不足以宣称生产或医疗质量；新增用例应来自真实 bad case，而不是机械复制现有 case。
+
+面向简历的下一轮质量、延迟、Token 成本和故障恢复测量，不复用 fixture 中的模拟延迟。人工数据规模、运行次数、价格输入和用户协作清单见 [简历与面试表达 5.2](learning/05_RESUME_AND_INTERVIEW.md#52-下一轮简历指标怎么测)。在 gold set 和真实模型 usage 准备完成前，报告中的这些字段必须保持 `N/A`。
 
 ## 如何 review 一个改动
 
@@ -232,4 +260,16 @@ docker compose up -d --build --wait --wait-timeout 300
 
 ## 4B 任务十三收口回归
 
-任务十三最终复核结果：后端 `297 passed`、`compileall` 通过；前端 Vitest `23 passed`、TypeScript typecheck 通过、Next.js production build 通过。完整收口记录见 [任务十三 4B 收口报告](task13_4b_closeout_report.md)。
+任务十三完成时的复核结果为后端 `297 passed`、`compileall` 通过，前端 Vitest `23 passed`、TypeScript typecheck 和 Next.js production build 通过。4C 收口后前端用例已增长到 `25 passed`，并新增 `7 passed` 的 Playwright 浏览器 E2E；历史报告保留当时快照，当前数字以本节顶部 2026-07-30 复验为准。
+
+## 4D-B Benchmark
+
+4D-A gold 数据冻结后，运行 deterministic benchmark：
+
+```powershell
+Set-Location E:\project_code\hospital
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+.\.venv\Scripts\python.exe -B scripts\run_4d_benchmark.py --mode deterministic
+```
+
+它会校验五组 fixture 的 manifest hash，并生成 `output/benchmarks/benchmark_report.4d.json`、`docs/benchmark_report.4d.md` 和 `docs/benchmark_badcases.4d.md`。报告中的 `dataset_contract` 是评测数据准备情况，不能当成模型准确率；真实回答质量、RAG Recall、Safety recall、延迟、token 和 cost 在没有运行观测时保持 `N/A`。完整说明见 [4D-B Benchmark 使用指南](4D_B_BENCHMARK_GUIDE.md)。

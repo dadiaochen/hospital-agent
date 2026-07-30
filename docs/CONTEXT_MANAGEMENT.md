@@ -114,6 +114,8 @@ Evaluator 读取冻结产物，不因评测需要延迟 working state 清理。
 - 未确认偏好、撤销偏好和知识 namespace 混用被拒绝。
 - continuation run 重新读取处方、报告和库存，不复用旧值。
 
+这些规则测试不能直接换算成“记忆准确率”。独立记忆评测需要用人工标注的多轮固定用例，比较 compact、reset 和 checkpoint 恢复前后的关键信息、来源、成员和允许写入项，再计算保留率、清理率、未确认写入率、跨成员泄漏率和恢复成功率。完整的 40 条用例拆分、指标公式、异常注入和报告流程见 [项目面经问题库 Q14](learning/INTERVIEW_QUESTION_BANK.md#q14-怎么评测上下文和记忆机制)。在报告生成前，文档中的百分比只能作为验收目标。
+
 当前 ContextManager 已实现角色裁剪、compaction 和 reset；任务五已实现最终编排契约的成员/任务身份边界和 deterministic 路由输入；任务六的 `DomainAgentInput` 继续只传任务摘要、角色 allowlist 和同成员结构化前序结果。任务八已由 `TaskCheckpointService` 将最小 `confirmation_state`、draft scope、版本、RunSummary、冻结产物和来源指针写入 PostgreSQL 权威 checkpoint，并由 `TaskCheckpointCache` 提供带作用域/版本校验的 Redis TTL 加速。Redis miss、过期或不可用时回源 PostgreSQL；continuation 不恢复 raw conversation、scratchpad 或未确认推断。偏好写入由 `ConfirmedPreferenceService` 绑定同 task 的已执行确认、成员、source version 和显式人工确认。
 
 任务九后，ContextEnvelope 只能接收成功 Provider 响应产生的 SourceRef。失败 attempt、error category 和 fallback reason 属于审计摘要，不是医疗事实；它们可以进入 RunSummary/Trace，但不能进入 memory refs。Provider source 的 `member_id` 必须与当前 ContextEnvelope 一致。

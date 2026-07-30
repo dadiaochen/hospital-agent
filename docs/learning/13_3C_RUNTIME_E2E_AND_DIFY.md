@@ -1,5 +1,7 @@
 # 13 3C Runtime E2E、环境与 Dify 面试讲解
 
+> 阅读约定：本章只保留 Dify 界面真实节点名、`RAG`、`API`、`token` 等必要技术名，其余使用中文。Dify 项目的完整面试版本以 [Dify 患者端医疗智能体实习项目](13_DIFY_PATIENT_HEALTH_AGENT_INTERNSHIP.md) 为准，本章重点解释从原型到自研系统的变化，避免维护两套互相冲突的答案。
+
 ## 1. 先把项目经历说准确
 
 这个项目可以同时有“真实业务背景”和“没有生产上线”两个事实：
@@ -10,13 +12,13 @@
 
 面试时推荐说：
 
-> 项目来源于真实互联网医院慢病管理流程。早期我用 Dify Workflow 快速验证意图路由、知识检索、业务 API、人工确认和安全分支；后来为了获得强类型契约、成员上下文隔离、可测试的 Trace、确定性评估和事务幂等，我用 FastAPI、SQLAlchemy、LangGraph 和自研 Agent Harness 重构为可本地演示的 MVP。目前完成的是开发与集成验证，不是生产医疗系统。
+> 项目来源于真实互联网医院慢病管理流程。早期我用 Dify 工作流快速验证意图路由、RAG、业务 API、人工确认和安全分支；后来为了获得明确的数据契约、成员上下文隔离、可测试的运行记录、确定性评测和事务幂等，我用 FastAPI、SQLAlchemy 和 LangGraph 重构为可本地演示的 MVP。目前完成的是开发与集成验证，不是生产医疗系统。
 
 不要说“已经上线”“服务真实患者”或“生产安全率 100%”。
 
 ## 2. Dify 到底是什么
 
-Dify 不是一个模型。它是一个把模型、Prompt、知识库/RAG、工具和工作流节点组织起来的应用开发平台。模型可以是 OpenAI-compatible 或其他 provider；Dify 负责把输入沿工作流传递给不同节点，并提供调试和运行记录。
+Dify 不是一个模型。它是一个把模型、提示词、RAG、工具和工作流节点组织起来的应用开发平台。模型可以使用不同服务；Dify 负责把输入沿工作流传递给不同节点，并提供调试和运行记录。
 
 官方资料可继续阅读：
 
@@ -31,19 +33,19 @@ Dify 不是一个模型。它是一个把模型、Prompt、知识库/RAG、工�
 因为仓库没有保存当时 Dify 导出的 DSL，下面是根据当前真实业务边界整理出的可信节点设计。面试时应说“当时的核心流程是这样”，不要编造具体模型版本、节点数量或线上指标。
 
 ```text
-Start / User Input
-  -> Parameter Extractor / Question Classifier
-  -> IF/ELSE: high-risk medical request?
-     -> yes: Knowledge Retrieval(safety rules) -> Safety LLM/Template -> End
-     -> no: business branch
-          -> HTTP tools(profile/prescription/medicine box/inventory)
-          -> Knowledge Retrieval(SOP/confirmation rules)
-          -> LLM(structured draft from evidence only)
-          -> Code/Template(normalize fields and source IDs)
-          -> IF/ELSE: key action requires confirmation?
-             -> yes: return pending-confirmation draft
-             -> no: return grounded query result
-  -> Answer / End
+开始/用户输入
+  -> 参数提取/问题分类
+  -> 条件判断：是否为高风险医疗请求
+     -> 是：检索安全规则 -> 安全答复模板 -> 结束
+     -> 否：进入业务分支
+          -> HTTP 工具：档案/处方/药箱/库存
+          -> RAG：流程和确认规则
+          -> LLM：只根据证据生成结构化草稿
+          -> 代码/模板：统一字段和来源编号
+          -> 条件判断：关键动作是否需要确认
+             -> 是：返回待确认草稿
+             -> 否：返回有来源的查询结果
+  -> 回答/结束
 ```
 
 ### 3.1 Start 节点

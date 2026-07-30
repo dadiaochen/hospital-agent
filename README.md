@@ -21,7 +21,8 @@
 - 任务 11：32 条 Harness 与消融实验，`DONE`。
 - 任务 12：PostgreSQL/Redis/Docker 后端验收，`DONE`；baseline 19/19、Redis 故障回源 18/18。
 - 任务 13：4B 文档与 Git 收口，`DONE`。
-- 当前阶段：`4C DONE`，4C-1 患者端信息架构、4C-2 `/agent` 黄金链路 UI、4C-3 浏览器 E2E、4C-4 固定演示与最终交付均已完成；4C 之后不再新增必要产品阶段。
+- 产品阶段：`4C DONE`，患者端、黄金链路、浏览器 E2E 和固定演示均已完成，MVP 业务功能在此收口。`4D-A` 五组 gold 数据已经审核并冻结；当前唯一进行中的是 `4D-B` 自动化评测和简历指标报告，不新增业务能力。
+- 4D-B 当前可运行 [Benchmark 使用指南](docs/4D_B_BENCHMARK_GUIDE.md) 中的 deterministic runner；它只报告数据契约和策略一致性，真实回答质量、RAG Recall、Safety recall、延迟、token 和成本仍保持 `N/A`。
 
 当前代码仍保留旧 Agent Runtime 和旧确认草稿 API 的兼容流程；新业务任务链路已经使用任务七的三层 Safety Guard、自动本地 `DRAFT` 和 `DRAFT -> CONFIRMED -> EXECUTED` 状态机。任务八已将 PostgreSQL Task Checkpoint 设为权威源，Redis 仅做带 TTL 的短期投影并在 miss/过期/不可用时回源；任务十一已完成 32 条 deterministic Harness 和 A/B/C 同条件消融，任务十二已在本机 Docker 栈完成真实迁移、RAG、API、Redis 故障回源和并发确认验收，任务十三已完成 4B 文档与 Git 收口。
 
@@ -47,21 +48,32 @@
 
 历史 16 条契约基线见 [Agent 评测报告](docs/AGENT_EVAL_REPORT.md)，4B 的 32 条同条件 A/B/C 结果见 [任务十一消融报告](docs/agent_ablation_report.4b.md)。两者都是 deterministic 固定轨迹指标，不是临床效果、真实模型准确率或线上延迟。
 
-## 最终 4B 架构
+## 最终设计与当前接线
+
+当前 Docker 业务 API 使用固定领域 LangGraph；下面右侧的 Router/Planner/Supervisor 是已经实现、测试并完成消融的编排内核，目前尚未接入该 API。两条链共享结构化契约、安全边界和评测思想，但不能把“内核已实现”说成“API 已动态调度”。
+
+仓库还有一条兼容链：患者端 `/agent` 当前调用 `/api/agent-runs`，由 `AgentRuntimeService + LangGraphAgentWorkflow` 执行；4B 新业务入口 `/api/business-tasks` 则使用 `BusinessTaskService + FamilyHealthProductWorkflow`。浏览器 E2E 验证前者，任务十二后端验收覆盖后者。两套入口是项目演进结果，不应包装成一条已经完全统一的 Supervisor 运行链。
 
 ```mermaid
-flowchart LR
-    A["FastAPI request"] --> G1["Request Safety Guard"]
-    G1 --> R["Complexity Router"]
-    R -->|simple| D["One domain Agent"]
-    R -->|complex| P["One-shot TaskPlanner"]
-    P --> S["Serial bounded Supervisor"]
-    S --> D
-    D --> T["Tool Registry / Providers / RAG"]
-    T --> G2["Action Policy Guard"]
-    G2 --> F["Draft and FinalAnswer"]
-    F --> G3["Final-output SafetyAgent"]
-    G3 --> Z["Freeze artifacts and deterministic evaluation"]
+flowchart TB
+    subgraph Runtime["当前 Docker API 运行链"]
+        A["FastAPI request"] --> G1["Request Safety Guard"]
+        G1 --> W["Fixed-domain LangGraph"]
+        W --> T["Tool Registry / Providers / RAG"]
+        T --> G2["Action Policy Guard"]
+        G2 --> F["Draft and FinalAnswer"]
+        F --> G3["Final-output SafetyAgent"]
+        G3 --> Z["Freeze artifacts and deterministic evaluation"]
+    end
+
+    subgraph Kernel["独立编排内核与消融链"]
+        Q["ComplexityRoutingRequest"] --> R["Complexity Router"]
+        R -->|simple| D["One domain Agent"]
+        R -->|complex| P["One-shot TaskPlanner"]
+        P --> S["Serial bounded Supervisor"]
+        S --> D
+        D --> H["Frozen result / Ablation Harness"]
+    end
 ```
 
 最终业务 Agent 只有三个：
@@ -70,7 +82,7 @@ flowchart LR
 - `MedicationAgent`：处方、药箱、库存、续方材料和提醒草稿，不开方、不改剂量、不下单。
 - `ReportAgent`：医疗文档解析、指标结构化和有来源解释，不给诊断或治疗方案。
 
-简单请求直接进入一个领域 Agent；复杂跨领域请求才使用一次性 Planner 和串行 bounded Supervisor。SafetyAgent 与 EvaluatorAgent 属于治理层，由状态图固定调用，不是 Supervisor 可选择的业务角色。
+在独立编排内核中，简单请求直接进入一个领域 Agent，复杂跨领域请求才使用一次性 Planner 和串行 bounded Supervisor。当前 API 仍按 `business_domain` 进入固定领域节点。SafetyAgent 与 EvaluatorAgent 属于治理层，由状态图固定调用，不是 Supervisor 可选择的业务角色。
 
 状态采用最终分层方案：LangGraph Working State 只服务单次 run；PostgreSQL 权威保存 Task Checkpoint、确认记录和用户偏好；Redis 只做带 TTL 的短期缓存与多实例协调，故障时回源 PostgreSQL；医疗知识使用独立 PostgreSQL + pgvector。系统不保存长期完整聊天，也不建立个人健康向量记忆。
 
@@ -133,6 +145,18 @@ npm run test:e2e
 ```
 
 Windows 默认临时目录或旧 `__pycache__` 出现 `PermissionError` 时，使用 `output` 下新的 `--basetemp` 和 `PYTHONPYCACHEPREFIX`，不要复用无权限目录。完整分层测试和 review 清单见 [测试指南](docs/TESTING_GUIDE.md)。
+
+生成 Python 分支覆盖率报告：
+
+```powershell
+Set-Location E:\project_code\hospital
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+$env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-coverage'
+.\.venv\Scripts\python.exe -m coverage run --branch --source=backend/app -m pytest backend\tests -q -p no:cacheprovider --basetemp=output\pytest-coverage
+.\.venv\Scripts\python.exe -m coverage report
+```
+
+2026-07-30 本机复验结果为：后端 `297 passed`，Python 应用代码分支感知覆盖率 `86%`；前端 Vitest `25 passed`、Playwright 浏览器 E2E `7 passed`；32 条固定场景在三种编排策略下生成 96 条消融 trace。它们是本地 deterministic / 集成测试证据，不代表真实患者、线上 LLM 或临床效果。
 
 浏览器 E2E 必须在 Docker Compose 已健康启动时执行。默认使用 Windows 已安装的 Microsoft Edge，不额外下载浏览器；测试报告和失败截图/trace 写入被 Git 忽略的 `var/playwright-report` 与 `var/playwright-test-results`。
 
