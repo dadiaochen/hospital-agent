@@ -1,222 +1,134 @@
-# Context Management
+# 上下文、状态与缓存管理
 
-## 1. 阶段边界
+## 1. 目标
 
-阶段 2A.2 只重构上下文管理设计，不实现 LangGraph 状态代码、ToolRegistry 业务工具、数据库迁移或长期记忆写入代码。
-
-上下文管理目标是让每个 Agent 只看到当前任务、当前成员和当前职责需要的信息，同时保留事实来源、工具证据、RAG 引用和可回放 trace。系统不能把完整聊天历史直接广播给所有角色，也不能把模型推断当作医疗事实保存。
-
-## 2. Context Lifecycle
+上下文管理解决四个问题：限制每个角色看到的数据、保证家庭成员隔离、支持任务续跑、阻止未确认推断污染长期数据。
 
 ```text
-Raw Conversation
-  -> TaskContext Builder
+Raw Request
+  -> Trusted Scope
+  -> Task Context Builder
   -> ContextEnvelope
-  -> Role-specific Context View
+  -> Router / Planner / Supervisor / Domain Role Views
   -> Tool Evidence / RAG Sources
-  -> FinalAnswer
-  -> Run Summary
+  -> Frozen Answer and RunTrace
+  -> RunSummary
   -> Context Reset
-  -> EvaluatorAgent Review
-  -> Long-term Memory Write
+  -> Evaluator Review
+  -> Confirmed Preference Write (optional)
 ```
 
-用户答案由业务工作流在证据整理和运行时安全检查后生成。`EvaluatorAgent` 只在答案生成后运行；Context Reset 先清理 working context，但必须保留评估所需的不可变 run 产物。
+## 2. 最终分层状态架构
 
-### 2.1 Raw Conversation
+| 层 | Key/作用域 | 存储 | 保存内容 | 不保存 |
+| --- | --- | --- | --- | --- |
+| Run Working State | `run_id + task_id + member_id` | LangGraph 进程状态 | 当前 envelope、步骤、调度游标、临时结果 | run 后 raw conversation、scratchpad、候选推断 |
+| Task Checkpoint | `user_id + member_id + task_id/thread_id` | PostgreSQL | RunSummary、步骤进度、确认记录、冻结产物 refs | 过期医疗事实替代最新 Tool 查询 |
+| Short-lived Task Cache | 同 checkpoint key + version | Redis TTL | checkpoint 缓存、分布式协调/锁提示 | 唯一状态、完整聊天、API Key、原始病历 |
+| Confirmed Preferences | `user_id + member_id + preference_type` | PostgreSQL | 用户明确确认的提醒偏好和长期设置 | 模型推断、诊断、处方/报告/库存副本 |
+| Knowledge RAG | 独立 knowledge namespace | PostgreSQL + pgvector | 审核知识、版本、chunk 和 SourceRef | 个人偏好和患者事实 |
 
-- 原始对话只作为 `TaskContext Builder` 的输入，不直接传给角色 Agent。
-- 原始对话中的成员指代、意图和槽位在确认前都属于候选信息。
-- 涉及病史、处方、库存、剂量和安全规则的事实必须由 DB/API/RAG 来源验证。
+Redis 不可用、过期或 miss 时必须回源 PostgreSQL；不得广播完整对话作为降级。
 
-### 2.2 TaskContext Builder
+## 3. 权威业务事实不是记忆
 
-负责提取 `task_id`、`member_id`、`intent`、`action_type`、缺失槽位和已确认槽位，并区分：
+以下内容每次 run 都要通过当前 `user_id + member_id` 作用域下的 DB/Provider Tool 重新读取：
 
-- `confirmed_fact`: 用户确认或工具验证的事实。
-- `candidate_inference`: 模型推断，只能用于澄清，不得作为事实传播或写入长期记忆。
-- `source_pointer`: 指向用户确认、工具调用或 RAG chunk 的可回溯引用。
+- 处方、剂量和用法。
+- 过敏史、慢病档案和报告原值。
+- 药箱、药店库存和购药记录。
+- 医院、在线问诊和外部服务状态。
 
-### 2.3 ContextEnvelope
+RunSummary 只能保存 source/resource pointer 和上次任务状态，不能代替最新事实。
 
-```json
-{
-  "run_id": "run-...",
-  "task_id": "task-...",
-  "user_id": "user-...",
-  "member_id": "member-...",
-  "intent": "refill | reminder | pharmacy | safety_check",
-  "action_type": "draft | query | safety_review",
-  "task_state": {
-    "missing_slots": [],
-    "confirmed_slots": {},
-    "pending_confirmations": []
-  },
-  "conversation_summary": {
-    "summary": "...",
-    "source_ids": []
-  },
-  "tool_evidence_refs": [],
-  "rag_source_refs": [],
-  "safety_flags": [],
-  "allowed_tools": [],
-  "memory_refs": []
-}
-```
+## 4. ContextEnvelope
 
-`ContextEnvelope` 只保存当前 run 的结构化工作集和引用，不复制完整处方、完整聊天历史或其他成员上下文。
+当前 ContextEnvelope 继续作为一次 run 的事实边界，至少包含 run/task/user/member、intent/action、TaskState、结构化会话摘要、Tool/RAG refs、Safety flags、allowed tools 和已确认 MemoryRefs。
 
-### 2.4 Role-specific Context View
+- 不把完整聊天历史广播给所有角色。
+- 每个事实保留 `source_id`、来源类型和 `member_id`。
+- `candidate_inferences` 与 `confirmed_slots` 分离。
+- 未确认内容不能进入 MemoryRef。
 
-| 角色 | 最小上下文视图 |
+## 5. 最小角色视图
+
+| 角色 | 可见内容 |
 | --- | --- |
-| Planner | intent 候选、member_id 候选、槽位状态、允许调度的角色与工具名称 |
-| ProfileAgent | 当前 member_id、档案查询条件、档案工具证据引用、安全备注 |
-| RefillAgent | 当前 member_id、处方/药箱/购药证据引用、缺失材料、确认要求 |
-| PharmacyAgent | 当前 member_id、药品标识、库存查询条件、履约候选和确认要求 |
-| ReminderAgent | 当前 member_id、已确认提醒参数、药箱证据引用、草稿状态 |
-| SafetyAgent | 当前请求、风险标记、相关证据引用、禁止动作和确认策略 |
-| EvaluatorAgent | 不接收业务角色视图；只读取冻结的 run 评估产物 |
+| Complexity Router | 用户请求摘要、当前成员、候选业务域和 request-safety 结果 |
+| TaskPlanner | 复杂任务目标、已确认槽位、缺失信息和可用角色目录；不看完整工具输出 |
+| Supervisor | 计划、步骤状态、角色目录、AgentTaskResult refs、错误/降级摘要；不看 raw conversation |
+| TriageAgent | 预问诊槽位、成员档案 refs、导诊/安全知识 refs 和允许工具 |
+| MedicationAgent | 处方、药箱、药店、续方 refs 和允许工具 |
+| ReportAgent | 报告解析、历史指标、指标知识 refs 和允许工具 |
+| Safety governance | 当前治理阶段需要的输入、动作或候选答案及来源 |
+| EvaluatorAgent | 冻结 RunTrace、ContextEnvelope 投影、Tool/RAG evidence、FinalAnswer 和 ExpectedCase，只读 |
 
-角色视图必须同时携带 `member_id`、`allowed_tools` 和来源指针。角色不得访问未授权工具，也不得读取与当前成员无关的事实。
+现有 Profile/Refill/Pharmacy/Reminder 视图在任务六迁移后仅作为 Medication 领域内部兼容步骤，不再对目标工作流公开独立 Agent 路由。
 
-### 2.5 Tool Evidence / RAG Sources
+## 6. Compaction
 
-Tool Evidence 至少保留 `source_id`、`run_id`、`member_id`、`tool_name`、输入/输出摘要、schema 校验结果和成功状态。RAG Sources 至少保留 `source_id`、`document_id`、`chunk_id`、版本或时间信息及用途。
+只有相同 task 和 member 的 envelope 可以 compact：
 
-FinalAnswer 中的事实性陈述必须能回溯到 Tool Evidence 或 RAG Sources。没有来源时只能说明信息不足、请求澄清或转人工确认。
+- 合并缺失/确认槽位、步骤状态、安全标记和 source pointers。
+- 旧对话只进入结构化摘要。
+- ToolEvidence 保留 `source_id/tool_call_id`，RAG 保留 document/chunk/version。
+- 不合并不同成员，不把候选推断提升为事实。
+- Supervisor 的历史决策只保留 step、reason、status 和 trace ref，不保存完整内部提示词。
 
-## 3. Context Reset
+## 7. Reset
 
-每次 Agent Run 结束后必须执行以下顺序：
+每次 run 冻结答案和证据后：
 
-1. 生成 `RunSummary`。
-2. 冻结 `ContextEnvelope`、Tool Evidence、RAG Sources、RunTrace 和 FinalAnswer 的评估快照。
-3. 清理当前任务 working context。
-4. 将冻结快照交给 `EvaluatorAgent`。
-5. 根据确认状态和记忆策略决定是否写入长期 memory。
+1. 生成 RunSummary。
+2. 清理 raw conversation、scratchpad、候选推断、临时工具拼装和 provider 原文。
+3. 保存 RunSummary、步骤进度、确认状态、Tool/RAG refs、FinalAnswer ref、RunTrace ref 和 Evaluation ref。
+4. 更新 PostgreSQL Task Checkpoint。
+5. 尽力刷新 Redis TTL cache；缓存失败不能改变 run 业务结果。
 
-### 3.1 RunSummary
+Evaluator 读取冻结产物，不因评测需要延迟 working state 清理。
 
-`RunSummary` 应包含：
+## 8. 两次独立 run
 
-- `run_id`、`task_id`、`member_id`、`intent`。
-- 任务结果和未完成原因。
-- 用户已确认事实及其 `source_id`。
-- 已调用工具和 RAG 来源引用。
-- 待确认动作、风险标记和 fallback。
-- FinalAnswer 引用，不复制冗长回答。
+首次 run 可以生成本地 DRAFT，然后正常结束。用户确认时：
 
-### 3.2 清理内容
+- 创建新的 `run_id`，复用原 `task_id/member_id`。
+- 先读 Redis cache，miss 或版本不匹配时读 PostgreSQL。
+- 只恢复 RunSummary、步骤、draft/version 和 source pointers。
+- 重新调用 Tool/Provider 获取可变事实。
+- 重新通过 Action Policy Guard 后执行幂等状态迁移。
 
-- 角色 scratchpad 和中间推理。
-- 未确认的成员、意图、槽位和偏好推断。
-- 与当前任务无关的历史对话片段。
-- 已持久化证据之外的临时工具拼装结果。
-- 上一成员的 working context。
+不使用进程内 suspended graph 作为唯一恢复机制。
 
-### 3.3 保留内容
+## 9. 偏好写入门
 
-- Tool Evidence 和 RAG `source_id`。
-- RunTrace、FinalAnswer 和 RunSummary。
-- 安全标记、人工确认状态和 fallback 记录。
-- EvaluationResult 及后续 eval report 引用。
+偏好写入顺序：候选偏好 -> source/member 校验 -> 用户明确确认 -> policy -> PostgreSQL 写入 -> 审计 -> Redis cache invalidation。
 
-### 3.4 Reset 边界
+偏好必须有类型、值、member、source、consent/version、created/updated/expired/revoked 状态。Supervisor、领域 Agent 和 Evaluator 都不能直接写偏好，只能提出待确认候选。
 
-- 不相关任务必须创建新的 `task_id` 和 `ContextEnvelope`。
-- 同一任务续跑可引用上一轮 `RunSummary`，但必须创建新的 `run_id`，不得恢复旧 scratchpad。
-- `member_id` 切换必须重建角色视图；多成员任务应拆分为按成员隔离的子任务。
-- 用户未确认的模型推断不得进入 `agent_memories` 或其他长期存储。
+## 10. 测试
 
-## 4. Context Compaction
+- raw conversation 和 candidate inference 不进入 role view/checkpoint。
+- member 切换、旧 resource ID、伪造成员和 Prompt 注入不产生跨成员读取。
+- Redis miss、过期和不可用时回源 PostgreSQL。
+- checkpoint version 不匹配时拒绝陈旧写入。
+- 未确认偏好、撤销偏好和知识 namespace 混用被拒绝。
+- continuation run 重新读取处方、报告和库存，不复用旧值。
 
-- 只压缩当前任务仍需要的信息。
-- 旧对话只进入结构化摘要，不保留无关闲聊或完整历史。
-- 每条事实保留 `source_id`、来源类型、`member_id` 和确认状态。
-- Tool/RAG 内容可以摘要，但不能丢失 tool call、document/chunk 等 source pointer。
-- 多成员信息按 `member_id` 分区，禁止把成员 A 的病史、处方、库存或偏好合并到成员 B。
-- 摘要冲突时优先保留最新的用户确认或工具事实，并记录冲突来源，不由模型自行裁决医疗事实。
+这些规则测试不能直接换算成“记忆准确率”。独立记忆评测需要用人工标注的多轮固定用例，比较 compact、reset 和 checkpoint 恢复前后的关键信息、来源、成员和允许写入项，再计算保留率、清理率、未确认写入率、跨成员泄漏率和恢复成功率。完整的 40 条用例拆分、指标公式、异常注入和报告流程见 [项目面经问题库 Q14](learning/INTERVIEW_QUESTION_BANK.md#q14-怎么评测上下文和记忆机制)。在报告生成前，文档中的百分比只能作为验收目标。
 
-## 5. Long-term Memory Write
+当前 ContextManager 已实现角色裁剪、compaction 和 reset；任务五已实现最终编排契约的成员/任务身份边界和 deterministic 路由输入；任务六的 `DomainAgentInput` 继续只传任务摘要、角色 allowlist 和同成员结构化前序结果。任务八已由 `TaskCheckpointService` 将最小 `confirmation_state`、draft scope、版本、RunSummary、冻结产物和来源指针写入 PostgreSQL 权威 checkpoint，并由 `TaskCheckpointCache` 提供带作用域/版本校验的 Redis TTL 加速。Redis miss、过期或不可用时回源 PostgreSQL；continuation 不恢复 raw conversation、scratchpad 或未确认推断。偏好写入由 `ConfirmedPreferenceService` 绑定同 task 的已执行确认、成员、source version 和显式人工确认。
 
-允许写入：
+任务九后，ContextEnvelope 只能接收成功 Provider 响应产生的 SourceRef。失败 attempt、error category 和 fallback reason 属于审计摘要，不是医疗事实；它们可以进入 RunSummary/Trace，但不能进入 memory refs。Provider source 的 `member_id` 必须与当前 ContextEnvelope 一致。
+## 4B 任务十：缓存残留与审计投影
 
-- 用户明确确认的提醒偏好。
-- 用户确认后的草稿状态和常用视图。
-- 可回溯到用户确认记录的非诊断性流程偏好。
+Redis checkpoint key 同时包含 user/member/task/thread/version，读取后还要用 Pydantic payload 再校验五个维度。即使错误数据被写入正确 key，只要 payload 的成员或其他作用域不一致，就按 cache miss 处理并回源 PostgreSQL；缓存内容永远不能覆盖权威任务状态。
 
-禁止写入：
+Observation 不属于 working context，也不进入长期 memory。它是 run 结束后的最小审计投影，只保存标识、状态、时延、来源和计数。Reset 仍删除 raw conversation、scratchpad、候选推断和完整 Tool/Provider payload；续跑根据 RunSummary、确认状态和 source pointer 建立新 working state。
 
-- 未确认的模型推断。
-- 模型生成的诊断、剂量调整、停药或换药建议。
-- 缺少 DB/API/RAG 来源的病史、处方、库存和安全规则。
-- 从其他 `member_id` 复制来的事实。
+## 4B 任务十一：评测上下文公平性
 
-`EvaluatorAgent` 可以报告记忆写入条件是否满足，但不能亲自写入或修改长期 memory。
+`FairnessConfig` 固定三种编排策略的 context token limit 和输出上限；fixture 只保存单条任务输入、成员作用域、结构化工具参数、来源 ID 和预期治理字段，不保存完整聊天或 scratchpad。A/B/C 不能通过扩大上下文、跨成员读取或追加隐藏来源提高指标。
 
-## 6. 阶段 2A.2 完成与验证
+## 4B 任务十二：运行时回源验证
 
-本阶段完成 Context Lifecycle、Reset、Compaction、Role-specific Context View 和长期记忆门槛设计。验证方式为文档一致性检查和关键词检查；未实现运行时代码，也未产生真实上下文隔离指标。
-
-## 7. 阶段 2B-1 Pydantic 契约实现
-
-阶段 2B-1 已在 `backend/app/agent/context_schemas.py` 落地：
-
-- `TaskState`: 缺失槽位、已确认槽位、待确认动作和候选推断。
-- `ToolEvidenceRef`: `source_id`、`run_id`、`member_id`、工具名、调用引用和 schema 状态。
-- `RAGSourceRef`: 文档、chunk、版本、用途和可选成员归属。
-- `ContextEnvelope`: 完整任务级结构化上下文，不接受未声明字段。
-- `RoleSpecificContextView`: 只包含角色可见状态与引用，不包含完整聊天历史。
-- `RunSummary`: reset 前冻结的结果、事实、待确认项和证据引用。
-- `MemoryRef`: 只允许 `confirmed_by_user=true` 的长期记忆引用。
-
-契约使用 Pydantic 2.x `extra="forbid"` 和模型级校验，确保工具证据属于当前 `run_id` / `member_id`，并阻止跨成员 RAG、memory 或证据引用进入上下文。
-
-2B-1 阶段没有实现 `TaskContext Builder`、角色视图投影函数、Context Reset hook 或长期记忆写入逻辑。后续可基于这些契约实现纯函数式 builder / projector，并保持数据库与工作流边界不变。
-
-## 8. 阶段 2B-3 ContextManager 实现
-
-阶段 2B-3 已新增 `backend/app/agent/context_manager.py`，只做纯内存上下文转换，不调用 LLM、数据库、FastAPI、ToolRegistry 或 LangGraph。
-
-### 8.1 方法说明
-
-- `build_envelope`: 根据用户输入摘要、run/task/user/member、intent、action_type、槽位、工具证据引用、RAG 来源引用、安全标记、allowed tools 和 confirmed memory refs 构造 `ContextEnvelope`。
-- `build_role_view`: 根据 `agent_role` 从 `ContextEnvelope` 投影 `RoleSpecificContextView`，拒绝 `EvaluatorAgent` 获取业务执行上下文。
-- `compact`: 对同一 `task_id` / `member_id` 的上下文做结构化压缩，合并槽位、安全标记和证据引用。
-- `create_run_summary`: 根据 `ContextEnvelope`、`RunTrace`、`FinalAnswerTrace` 和 `EvaluationResult` 生成 `RunSummary`。
-- `reset_after_run`: 生成 summary 并返回 reset 状态，只保留可审计引用和最终引用，标记 working context 已清理。
-
-### 8.2 角色视图裁剪
-
-- `Planner`: 只看 conversation summary、intent、action_type、missing slots、confirmed slots 和 pending confirmations，不看工具证据或 RAG 内容。
-- `ProfileAgent`: 只看 `query_health_profile` 证据和 profile 相关槽位。
-- `RefillAgent`: 只看处方、药箱、购药记录相关证据；默认不看库存证据。
-- `PharmacyAgent`: 只看库存、配送、自提相关证据。
-- `ReminderAgent`: 只看药箱和提醒草稿相关证据。
-- `SafetyAgent`: 可看 safety flags、安全 RAG source 和必要 evidence refs。
-- `EvaluatorAgent`: 只读 frozen run artifacts，不参与 `build_role_view`。
-
-`RoleSpecificContextView` 仍由 Pydantic `extra="forbid"` 保护，无法携带完整 raw conversation。
-
-### 8.3 Reset 与 Compact
-
-- compact 只允许同一 `task_id` / `member_id`，并保留 `source_id`、`tool_call_id` 和 `member_id`。
-- reset 不删除可审计 trace，不改写 FinalAnswer，不写业务状态。
-- reset 返回的 `memory_refs` 只来自已确认 memory；`candidate_inferences` 被列为清理字段，不会写入长期记忆。
-
-## 9. 阶段 2D-1 Tool Evidence 来源
-
-五类 DB-backed read tools 现在可以作为 `ToolEvidenceRef` 的事实来源。工具执行继续受 role-specific view 中的 `allowed_tools`、当前 `user_id` / `member_id` 和角色权限约束。
-
-- 成功结果保留 `source_id`、`source_name`、schema 状态和成员归属。
-- 缺少数据返回 `not_found`，不能把模型推断写入 `memory_refs`。
-- `ToolResult` 可映射为 `ToolCallTrace`；持久化 adapter 留到后续阶段。
-- 本阶段不写长期 memory，也不创建草稿或其他业务状态。
-
-## 10. 阶段 2D-2 草稿写入上下文边界
-
-- 写工具只接收当前 role-specific view 允许的 `create_confirmation_draft`。
-- `ToolExecutionContext.user_id`、`member_id` 和 action role 必须与工具输入一致。
-- 草稿 JSON 审计保留 `created_by_run_id` 和幂等键，但不写入长期 memory。
-- 未确认调用不写状态；确认后只写本地 draft，Context Reset 仍只保留 ToolResult、Trace 和来源引用。
+本机 Docker 验收确认 Redis 只保存带 TTL 的短期 checkpoint 投影；Redis 停止后，Context/Task 续跑从 PostgreSQL 权威 checkpoint 恢复，且不会恢复 raw conversation、scratchpad 或未确认推断。验收结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。

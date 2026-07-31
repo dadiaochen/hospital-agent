@@ -5,7 +5,15 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 NonEmptyStr = Annotated[str, Field(min_length=1)]
 
-Intent = Literal["refill", "reminder", "pharmacy", "safety_check"]
+Intent = Literal[
+    "refill",
+    "reminder",
+    "pharmacy",
+    "safety_check",
+    "preconsultation",
+    "chronic_care",
+    "health_record",
+]
 ActionType = Literal["draft", "query", "safety_review"]
 ExecutionAgentRole = Literal[
     "Planner",
@@ -25,7 +33,11 @@ MemorySourceType = Literal[
 
 
 class ContractModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+        protected_namespaces=(),
+    )
 
 
 class TaskState(ContractModel):

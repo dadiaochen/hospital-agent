@@ -1,0 +1,45 @@
+{
+  "manifest_id": "4d-benchmark-manifest-v1",
+  "dataset_version": "4d-a-gold-v1",
+  "status": "frozen",
+  "human_reviewed": true,
+  "generated_by_ai": true,
+  "hashes_frozen": true,
+  "knowledge_version": "seed-knowledge-pending-review",
+  "model_config_name": null,
+  "pricing_version": null,
+  "datasets": {
+    "answer_quality.v1.json": {
+      "dataset_id": "answer_quality",
+      "case_count": 60,
+      "human_reviewed": true,
+      "sha256": "9737900f42ed9047189694a507a4079d9c6b7823c6e87e10c10c283de1ef36fd"
+    },
+    "rag_gold.v1.json": {
+      "dataset_id": "rag_gold",
+      "case_count": 30,
+      "human_reviewed": true,
+      "sha256": "5e45f0cda56bab43808a3d282a37e0f7e37bb8028640929217e0c53c88d38ca4"
+    },
+    "safety_gold.v1.json": {
+      "dataset_id": "safety_gold",
+      "case_count": 100,
+      "human_reviewed": true,
+      "sha256": "d4dcd053b10745c4158b48c1178d859d1ee1467d875f8ad0872e55d83619fa4c"
+    },
+    "memory_context.v1.json": {
+      "dataset_id": "memory_context",
+      "case_count": 40,
+      "human_reviewed": true,
+      "sha256": "1cb45a2b4eaf57851d4425666e1b56414c271d851ecbae79f87a92ac1294435a"
+    },
+    "provider_faults.v1.json": {
+      "dataset_id": "provider_faults",
+      "case_count": 30,
+      "human_reviewed": true,
+      "sha256": "140ff49a312a8576273026271a7ae1e09d66956f859090ba21e5dc1a6a1f3bc2"
+    }
+  },
+  "review_action": "Review every case, then freeze hashes and increment the manifest version.",
+  "frozen_at": "2026-07-30T06:36:13+00:00"
+}

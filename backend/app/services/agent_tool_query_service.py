@@ -9,14 +9,13 @@ from sqlalchemy.orm import Session
 from app.models import (
     FamilyMember,
     HealthProfile,
-    KnowledgeChunk,
-    KnowledgeDocument,
     MedicineBoxItem,
     Pharmacy,
     PharmacyInventory,
     Prescription,
     PurchaseRecord,
 )
+from app.rag import RetrievalRequest, create_knowledge_retriever
 
 
 def get_health_profile_context(
@@ -24,18 +23,18 @@ def get_health_profile_context(
     user_id: str,
     member_id: str,
 ) -> dict[str, Any] | None:
-    member = db.scalar(
-        select(FamilyMember).where(
+    row = db.execute(
+        select(HealthProfile, FamilyMember)
+        .join(FamilyMember, HealthProfile.member_id == FamilyMember.id)
+        .where(
+            HealthProfile.member_id == member_id,
             FamilyMember.id == member_id,
             FamilyMember.user_id == user_id,
         )
-    )
-    if member is None:
+    ).first()
+    if row is None:
         return None
-
-    profile = db.scalar(select(HealthProfile).where(HealthProfile.member_id == member_id))
-    if profile is None:
-        return None
+    profile, member = row
 
     return {
         "source_id": f"health_profile:{profile.id}",
@@ -59,18 +58,32 @@ def get_health_profile_context(
     }
 
 
-def get_prescription_context(db: Session, member_id: str) -> dict[str, Any] | None:
+def get_prescription_context(
+    db: Session,
+    user_id: str,
+    member_id: str,
+) -> dict[str, Any] | None:
     prescriptions = list(
         db.scalars(
             select(Prescription)
-            .where(Prescription.member_id == member_id)
+            .join(FamilyMember, Prescription.member_id == FamilyMember.id)
+            .where(
+                Prescription.member_id == member_id,
+                FamilyMember.id == member_id,
+                FamilyMember.user_id == user_id,
+            )
             .order_by(Prescription.issued_at.desc())
         )
     )
     purchase_records = list(
         db.scalars(
             select(PurchaseRecord)
-            .where(PurchaseRecord.member_id == member_id)
+            .join(FamilyMember, PurchaseRecord.member_id == FamilyMember.id)
+            .where(
+                PurchaseRecord.member_id == member_id,
+                FamilyMember.id == member_id,
+                FamilyMember.user_id == user_id,
+            )
             .order_by(PurchaseRecord.purchased_at.desc())
         )
     )
@@ -116,11 +129,20 @@ def get_prescription_context(db: Session, member_id: str) -> dict[str, Any] | No
     }
 
 
-def get_medicine_box_context(db: Session, member_id: str) -> dict[str, Any] | None:
+def get_medicine_box_context(
+    db: Session,
+    user_id: str,
+    member_id: str,
+) -> dict[str, Any] | None:
     items = list(
         db.scalars(
             select(MedicineBoxItem)
-            .where(MedicineBoxItem.member_id == member_id)
+            .join(FamilyMember, MedicineBoxItem.member_id == FamilyMember.id)
+            .where(
+                MedicineBoxItem.member_id == member_id,
+                FamilyMember.id == member_id,
+                FamilyMember.user_id == user_id,
+            )
             .order_by(MedicineBoxItem.medicine_name)
         )
     )
@@ -196,63 +218,29 @@ def get_pharmacy_inventory_context(
 
 
 def search_safety_knowledge_context(db: Session, query: str) -> dict[str, Any] | None:
-    normalized_query = " ".join(query.split()).lower()
-    if not normalized_query:
-        return None
-
-    rows = list(
-        db.execute(
-            select(KnowledgeChunk, KnowledgeDocument)
-            .join(KnowledgeDocument, KnowledgeChunk.document_id == KnowledgeDocument.id)
-            .order_by(KnowledgeDocument.category, KnowledgeChunk.chunk_index)
+    result = create_knowledge_retriever(db).retrieve(
+        RetrievalRequest(
+            query=query,
+            purpose="safety_and_workflow_grounding",
         )
     )
-    matches: list[dict[str, Any]] = []
-    for chunk, document in rows:
-        haystack = " ".join(
-            [
-                document.title,
-                document.category,
-                document.source,
-                document.content,
-                chunk.content,
-                " ".join(chunk.keywords or []),
-            ]
-        ).lower()
-        if _knowledge_matches(normalized_query, haystack):
-            matches.append(
-                {
-                    "source_id": f"knowledge:{document.id}:{chunk.id}",
-                    "document_id": document.id,
-                    "chunk_id": chunk.id,
-                    "title": document.title,
-                    "category": document.category,
-                    "source": document.source,
-                    "safety_level": document.safety_level,
-                    "chunk_index": chunk.chunk_index,
-                    "content": chunk.content,
-                    "keywords": list(chunk.keywords or []),
-                }
-            )
-
-    if not matches:
+    if not result.evidence_present:
         return None
+
+    matches = [source.model_dump() for source in result.sources]
 
     return {
         "source_id": "knowledge_search:" + ",".join(item["source_id"] for item in matches),
         "source_name": "knowledge_chunks",
         "evidence_present": True,
-        "query": query,
+        "query": result.query,
+        "requested_mode": result.requested_mode,
+        "effective_mode": result.effective_mode,
+        "fallback_used": result.fallback_used,
+        "fallback_reason": result.fallback_reason,
         "sources": matches,
     }
 
 
 def _date_to_str(value: date | None) -> str | None:
     return value.isoformat() if value is not None else None
-
-
-def _knowledge_matches(query: str, haystack: str) -> bool:
-    if query in haystack:
-        return True
-    tokens = [token for token in query.replace("/", " ").split() if token]
-    return any(token in haystack for token in tokens)

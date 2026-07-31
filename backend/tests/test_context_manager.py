@@ -264,6 +264,7 @@ def test_reset_after_run_generates_run_summary_and_retains_audit_refs() -> None:
     assert summary.final_status == "needs_confirmation"
     assert reset_state["working_context_cleared"] is True
     assert reset_state["retained_tool_evidence_refs"] == envelope.tool_evidence_refs
+    assert reset_state["run_trace_ref"] == "run_trace:run-ctx-1"
     assert reset_state["final_answer_ref"] == "answer-ctx-1"
     assert reset_state["evaluation_ref"] == "evaluation:context-manager-case:run-ctx-1"
 

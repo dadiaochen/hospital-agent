@@ -1,0 +1,126 @@
+{
+  "fixture_version": "local-benchmark-v1",
+  "description": "Synthetic, non-customer RAG cases for local integration measurement.",
+  "cases": [
+    {
+      "case_id": "local_rag_refill_01",
+      "query": "refill materials workflow",
+      "purpose": "refill_sop",
+      "category": "refill_sop",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-refill-sop:local-doc-refill-sop-chunk",
+      "expected_source": "internal_sop:local-v1"
+    },
+    {
+      "case_id": "local_rag_refill_02",
+      "query": "prescription renewal evidence",
+      "purpose": "refill_sop",
+      "category": "refill_sop",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-refill-sop:local-doc-refill-sop-chunk",
+      "expected_source": "internal_sop:local-v1"
+    },
+    {
+      "case_id": "local_rag_refill_03",
+      "query": "refill doctor confirmation",
+      "purpose": "refill_sop",
+      "category": "refill_sop",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-refill-sop:local-doc-refill-sop-chunk",
+      "expected_source": "internal_sop:local-v1"
+    },
+    {
+      "case_id": "local_rag_reminder_01",
+      "query": "medicine reminder draft fields",
+      "purpose": "reminder_template",
+      "category": "reminder_template",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-reminder-template:local-doc-reminder-template-chunk",
+      "expected_source": "internal_template:local-v1"
+    },
+    {
+      "case_id": "local_rag_reminder_02",
+      "query": "morning evening reminder schedule",
+      "purpose": "reminder_template",
+      "category": "reminder_template",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-reminder-template:local-doc-reminder-template-chunk",
+      "expected_source": "internal_template:local-v1"
+    },
+    {
+      "case_id": "local_rag_reminder_03",
+      "query": "reminder confirmation prompt",
+      "purpose": "reminder_template",
+      "category": "reminder_template",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-reminder-template:local-doc-reminder-template-chunk",
+      "expected_source": "internal_template:local-v1"
+    },
+    {
+      "case_id": "local_rag_safety_01",
+      "query": "severe symptom escalation",
+      "purpose": "medical_safety",
+      "category": "medical_safety",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-safety-policy:local-doc-safety-policy-chunk",
+      "expected_source": "safety_policy:local-v1"
+    },
+    {
+      "case_id": "local_rag_safety_02",
+      "query": "do not change medicine dosage",
+      "purpose": "medical_safety",
+      "category": "medical_safety",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-safety-policy:local-doc-safety-policy-chunk",
+      "expected_source": "safety_policy:local-v1"
+    },
+    {
+      "case_id": "local_rag_safety_03",
+      "query": "urgent human escalation rule",
+      "purpose": "medical_safety",
+      "category": "medical_safety",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-safety-policy:local-doc-safety-policy-chunk",
+      "expected_source": "safety_policy:local-v1"
+    },
+    {
+      "case_id": "local_rag_confirmation_01",
+      "query": "confirmation before reminder creation",
+      "purpose": "human_confirmation",
+      "category": "human_confirmation",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-confirmation-policy:local-doc-confirmation-policy-chunk",
+      "expected_source": "safety_policy:confirmation-local-v1"
+    },
+    {
+      "case_id": "local_rag_confirmation_02",
+      "query": "confirmation before pharmacy action",
+      "purpose": "human_confirmation",
+      "category": "human_confirmation",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-confirmation-policy:local-doc-confirmation-policy-chunk",
+      "expected_source": "safety_policy:confirmation-local-v1"
+    },
+    {
+      "case_id": "local_rag_confirmation_03",
+      "query": "draft is not executed without confirmation",
+      "purpose": "human_confirmation",
+      "category": "human_confirmation",
+      "mode": "keyword",
+      "top_k": 3,
+      "expected_source_id": "knowledge:local-doc-confirmation-policy:local-doc-confirmation-policy-chunk",
+      "expected_source": "safety_policy:confirmation-local-v1"
+    }
+  ]
+}

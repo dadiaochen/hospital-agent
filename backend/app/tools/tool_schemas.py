@@ -1,6 +1,16 @@
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
+
+from app.core.reliability import ErrorCategory, classify_error
+from app.schemas.business import ProviderMode, SourceRef
 
 
 NonEmptyStr = Annotated[
@@ -25,8 +35,8 @@ ToolPermissionScope = NonEmptyStr
 
 
 class RetryPolicy(ToolContractModel):
-    max_attempts: int = Field(default=1, ge=1)
-    backoff_ms: int = Field(default=0, ge=0)
+    max_attempts: int = Field(default=1, ge=1, le=5)
+    backoff_ms: int = Field(default=0, ge=0, le=5000)
 
 
 class ToolSpec(ToolContractModel):
@@ -37,6 +47,7 @@ class ToolSpec(ToolContractModel):
     )
 
     name: NonEmptyStr
+    tool_version: NonEmptyStr = "v1"
     description: NonEmptyStr
     input_schema: type[BaseModel]
     output_schema: type[BaseModel]
@@ -64,10 +75,34 @@ class ToolExecutionContext(ToolContractModel):
     allowed_tools: list[NonEmptyStr] = Field(default_factory=list)
     safety_flags: list[NonEmptyStr] = Field(default_factory=list)
     human_confirmation_granted: bool = False
+    provider_mode: ProviderMode = "mock"
+
+
+class ToolAttemptTrace(ToolContractModel):
+    attempt_no: int = Field(ge=1)
+    success: bool
+    latency_ms: int = Field(ge=0)
+    error_type: NonEmptyStr | None = None
+    error_category: ErrorCategory | None = None
+    retryable: bool = False
+
+    @model_validator(mode="after")
+    def validate_status(self) -> "ToolAttemptTrace":
+        if self.success and any(
+            (self.error_type is not None, self.error_category is not None, self.retryable)
+        ):
+            raise ValueError("successful tool attempts cannot carry errors")
+        if not self.success and (
+            self.error_type is None or self.error_category is None
+        ):
+            raise ValueError("failed tool attempts require normalized errors")
+        return self
 
 
 class ToolResult(ToolContractModel):
     tool_name: NonEmptyStr
+    tool_version: NonEmptyStr = "v1"
+    provider_mode: ProviderMode = "mock"
     success: bool
     output: dict[str, Any] = Field(default_factory=dict)
     run_id: NonEmptyStr | None = None
@@ -75,12 +110,16 @@ class ToolResult(ToolContractModel):
     member_id: NonEmptyStr | None = None
     tool_input: dict[str, Any] = Field(default_factory=dict)
     error_type: NonEmptyStr | None = None
+    error_category: ErrorCategory | None = None
     error_message: str | None = None
     fallback_action: NonEmptyStr | None = None
     latency_ms: int = Field(ge=0)
     schema_valid: bool
     requires_human_confirmation: bool
     evidence_present: bool
+    evidence_refs: list[SourceRef] = Field(default_factory=list)
+    retryable: bool = False
+    attempts: list[ToolAttemptTrace] = Field(default_factory=list)
     source_name: NonEmptyStr | None = None
     permission_scope: NonEmptyStr | None = None
     read_only: bool = True
@@ -107,18 +146,29 @@ class ToolResult(ToolContractModel):
         tool_input: dict[str, Any] | None = None,
         permission_scope: str | None = None,
         read_only: bool = True,
+        tool_version: str = "v1",
+        provider_mode: ProviderMode = "mock",
+        retryable: bool = False,
+        evidence_refs: list[SourceRef] | None = None,
+        attempts: list[ToolAttemptTrace] | None = None,
     ) -> "ToolResult":
         return cls(
             tool_name=tool_name,
+            tool_version=tool_version,
+            provider_mode=provider_mode,
             success=False,
             output={},
             error_type=error_type,
+            error_category=classify_error(error_type),
             error_message=error_message,
             fallback_action=fallback_action,
             latency_ms=latency_ms,
             schema_valid=schema_valid,
             requires_human_confirmation=requires_human_confirmation,
             evidence_present=False,
+            evidence_refs=evidence_refs or [],
+            retryable=retryable,
+            attempts=attempts or [],
             source_name=None,
             run_id=run_id,
             agent_role=agent_role,

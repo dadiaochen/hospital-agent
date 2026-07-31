@@ -1,258 +1,135 @@
-# Resume Notes
+# 项目亮点与简历表达
 
-> 项目阶段状态和未来计划以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为唯一依据；本文档只维护可验证的简历表达边界。
+> 本文统一使用中文面试口径，只保留 FastAPI、LangGraph、RAG、token、Supervisor 等必要技术名。代码内部的类名、字段名和不常用英文缩写不进入简历或口述。准备时可以按“为什么做、我做了什么、怎么解决、结果怎样”检查结构，面试现场不念方法名。
 
-## 当前阶段
+## 当前固定用例指标与简历取舍
 
-Phase 2D-2: confirmation-gated local draft writes integrated with Tool Registry permissions, idempotency, member isolation and safety fallback.
+2026-07-31 已重新执行当前分支的自动化与固定用例评测。推荐按证据强度选择指标：
 
-## 已完成
+| 证据 | 最新结果 | 简历能说明什么 | 不能说明什么 |
+| --- | --- | --- | --- |
+| Python 自动化 | `308/308`；最近一次 branch-aware 覆盖率 `86%` | 后端回归和异常分支具有较完整自动化保护 | 业务正确率、模型准确率、临床安全率 |
+| 前端自动化 | `25/25` 组件测试、`7/7` Edge E2E | 固定患者端黄金链和错误展示可重复 | 浏览器兼容全覆盖、线上可用率 |
+| 编排消融 | 32 case × 3 策略 = 96 Trace | bounded Supervisor 在固定复杂任务中完成 `6/6`，固定单域路由为 `0/6` | 当前业务 API 已接 Supervisor、真实用户成功率 |
+| Docker 后端验收 | baseline `19/19`、Redis 故障 `18/18` | migration/seed/API/pgvector/cache fallback 的本地集成链可运行 | 生产 SLA、高可用或容量 |
+| 4D 本地观测 | Supervisor 32、关键词 RAG 12、上下文 40、Provider 故障 30 | 核心本地实现已接入版本化指标 runner | Docker pgvector、真实 LLM、客户数据和生产性能 |
 
-- 读取并理解项目提示词。
-- 创建 `docs` 文档：
-  - `PRD.md`
-  - `TECH_DESIGN.md`
-  - `API_SPEC.md`
-  - `DB_SCHEMA.md`
-  - `AGENT_WORKFLOW.md`
-  - `RESUME_NOTES.md`
-- 创建 `AGENTS.md` 协作说明。
-- 创建后端 FastAPI 最小项目。
-- 创建前端 Next.js App Router 最小项目。
-- 创建 `docker-compose.yml` 和 `.env.example`。
-- 创建 README 和简历表达章节。
+早期 16 条 `agent_harness_cases.json` + `mock_run_traces.json` 仍用于验证 Evaluator 能发现坏轨迹，但其中 `98.75%/93.75%/p95 260ms` 不再作为主简历指标。它们混合了故意失败 fixture 和人工 latency 字段，容易被误读成真实系统质量。
 
-## 验证状态
+建议的项目简历句子：
 
-- Python 语法校验通过：`python -m compileall backend\app backend\tests`。
-- 后端 TestClient 测试通过：`python -m pytest backend\tests -q`，结果为 `2 passed`。
-- FastAPI 前台启动命令可运行：`python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`。
-- 前端依赖未安装：`npm install` 在当前沙箱内超时，联网权限审核未返回。
-- Docker 未验证：当前环境未识别 `docker` 命令。
+```text
+设计并实现基于 Supervisor 编排模式的多 Agent 协作内核，包含分诊、用药和报告三个领域 Agent；建立分层上下文和记忆机制，解决任务恢复、长对话膨胀和家庭成员信息串用，通过 RAG 保留回答来源，并建立运行后自动评测和固定用例回归。
 
-## 第二阶段 2A 已完成
-
-- 新增 `backend/app/core/database.py`，提供 `Base`、`engine`、`SessionLocal`、`get_db`。
-- 新增 18 张 SQLAlchemy ORM 模型。
-- 新增根目录 `alembic.ini`、`backend/alembic/env.py`、`backend/alembic/versions/0001_initial_schema.py`。
-- 新增 `scripts/seed.py` 和 `scripts/__init__.py`。
-- 新增 `backend/tests/test_models.py` 和 `backend/tests/conftest.py`。
-- 更新 README、AGENTS 和 docs。
-
-## 第二阶段 2A 验证状态
-
-- `python -m compileall backend\app backend\tests scripts`: 通过。
-- `python -m pytest backend\tests -q`: 通过，结果为 `8 passed`。
-- `python scripts\seed.py`: 使用 SQLite 本地烟测库重复执行通过。
-- `alembic upgrade head`: 本机未安装 Alembic，且依赖安装联网审批未返回，未实际执行。
-
-## 第二阶段 2A.1 已完成
-
-- 合并 `hospital_AGENTS.md` 中的 Agent 项目规则到根目录 `AGENTS.md`，保留原工程分层、医疗安全和文档同步规则。
-- 新增 `docs/HOSPITAL_LANGFLOW_HARNESS_PLAN.md`，整理 Langflow-like trace / harness 落地计划。
-- 为 `AgentRun` 设计并落地 trace 字段：`started_at`、`ended_at`、`duration_ms`、`step_count`、`task_success`、`groundedness_score`、`hallucination_flag`、`human_confirmation_rate`。
-- 为 `AgentToolCall` 设计并落地 trace 字段：`agent_role`、`error_type`、`fallback_action`、`schema_valid`。
-- 新增迁移 `0002_add_agent_harness_trace_fields.py`，支持 upgrade/downgrade，不改写 `0001_initial_schema`。
-- 更新 seed 示例，包含成功工具调用和失败 fallback 工具调用。
-- 更新测试，覆盖新增字段、禁用字段、seed 幂等和迁移文件存在性。
-
-## 第二阶段 2A.1 简历表达边界
-
-可以写：
-
-- 设计并落地 Agent Harness 所需 trace 字段，覆盖 run 耗时、step 数、工具角色、schema 校验、错误类型和 fallback 动作。
-- 规划 ContextEnvelope、Tool Registry 与 Harness 指标体系，为后续 Multi-Agent 可回放、可观测和可评估打基础。
-
-不能写：
-
-- 已达成 `groundedness 100%`、`safety_recall 100%`、`schema_valid 95%+`、`p95_latency` 等真实指标。
-- 已实现 ToolRegistry 业务工具、Multi-Agent 编排、LangGraph 工作流或 Agent Harness 自动评估。
-
-真实指标必须等后续 harness、mock tools、评估用例和 `agent_eval_report.md` 跑通后再补。
-
-## 第二阶段 2A.2 已完成
-
-- 设计完整 Context Lifecycle：`Raw Conversation -> TaskContext Builder -> ContextEnvelope -> Role-specific Context View -> Tool Evidence / RAG Sources -> Run Summary -> Context Reset -> EvaluatorAgent Review -> Long-term Memory Write`。
-- 设计 Context Reset：run 结束后生成 RunSummary，清理临时 working context，保留工具证据、RAG source id、trace、FinalAnswer 和 eval 引用。
-- 设计 Context Compaction：旧对话只进入结构化摘要，事实保留 `source_id`，多成员按 `member_id` 隔离。
-- 新增独立 `EvaluatorAgent` 设计，明确其只在 FinalAnswer 后运行，只读 run 产物，不修改答案、不生成医疗建议、不写业务状态。
-- 定义 `ExpectedCase`、`EvaluationResult` 和 `agent_eval_report.md` 聚合维度。
-- 明确 `SafetyAgent` 负责运行时安全拦截，`EvaluatorAgent` 负责事后质量评估。
-- 修复 README “当前文件结构”区域混入代码审查文本的问题。
-
-## 第二阶段 2A.2 简历表达边界
-
-可以写：
-
-- 设计 Context Reset / Context Compaction，通过任务级摘要、source pointer 和 member isolation 控制 Multi-Agent 上下文污染。
-- 设计独立 post-run EvaluatorAgent 与 Agent Harness，覆盖任务成功、工具准确性、groundedness、schema、安全召回、人工确认、上下文隔离和延迟等评估维度。
-- 区分运行时 SafetyAgent 与事后 EvaluatorAgent，形成“执行前拦截 + 执行后评估”的安全质量架构。
-
-不能写：
-
-- 已实现或上线 EvaluatorAgent、AgentHarness、16 条自动评估用例或 `agent_eval_report.md` 生成器。
-- 已达到 100% safety recall、0 hallucination、100% groundedness 或任何 p95 latency 数值。
-- 已通过真实线上医疗安全效果验证。
-
-本阶段所有指标仍是“评估维度 / 目标指标”，不是实测结果。
-
-## 第二阶段 2A.2 修改与验证
-
-修改文件：`AGENTS.md`、`README.md`、`family_health_agent_project_prompt.md`、`docs/CONTEXT_MANAGEMENT.md`、`docs/EVALUATOR_AGENT.md`、`docs/HOSPITAL_LANGFLOW_HARNESS_PLAN.md`、`docs/AGENT_WORKFLOW.md`、`docs/TECH_DESIGN.md`、`docs/RESUME_NOTES.md`。
-
-文档检查命令：
-
-```powershell
-rg -n "Context Reset|Context Compaction|EvaluatorAgent|EvaluationResult" AGENTS.md README.md family_health_agent_project_prompt.md docs
+在 32 条本地固定用例中，Supervisor 完成全部 6 条复杂跨领域任务，固定单领域路由完成 0 条；工具调用准确率为 100%。固定 RAG 用例的 Recall@3 为 75%、Recall@5 为 100%。
 ```
 
-现有后端回归命令：
+简历正文只保留上述四项核心工作和两组质量指标。`308` 条测试、最近一次 `86%` 覆盖率和 `7` 条浏览器 E2E 可以放在项目成果最后一句；Docker 检查数、数据库表名、内部契约名和所有错误分类留给追问，不放进开场。
 
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q
+当前简历中的预问诊科室推荐准确率、报告字段提取准确率等空缺指标不应填入估计值。仓库当前固定 Harness 没有对应 gold set 和字段级评测，应该先删除占位符，等后续真实用例和评测闭环完成后再写。
+
+上下文和记忆目前可以写“实现分层机制和固定用例异常回归”。4D 本地 runner 已对 40 条合成用例执行 ContextManager compact/reset，但 PostgreSQL Checkpoint/Redis 恢复尚未进入同一报告，因此暂不把 `100%` 保留率或 `0` 泄漏率直接写进简历，也不能写“token 降幅”。下一步应完成 Docker 恢复测试并人工复核 badcase，再挑选一到两个有样本数和环境说明的指标。
+
+本轮生成的可编辑文字稿和 PDF 版本分别位于 `output/resume/` 与 `output/pdf/`。PDF 由 `scripts/build_resume_pdf.py` 生成，并按 PDF 技能要求完成单页渲染检查；原始桌面 PDF 未被覆盖。
+
+## 已实现、可以如实表达的内容
+
+- 设计并实现了面向家庭健康事务的 FastAPI / SQLAlchemy / Pydantic 分层后端基线。
+- 建立分层上下文和记忆机制：单次运行只保存临时状态，PostgreSQL 保存任务检查点和用户确认偏好，Redis 只做 TTL 缓存；任务结束后清理完整聊天和临时推理，并按家庭成员隔离来源。
+- 建立统一工具注册与调用机制，集中校验输入输出格式、角色权限、人工确认要求、超时重试和失败降级。
+- 实现档案、处方、药箱、库存和知识规则等只读查询工具；关键动作只生成本地待确认内容，并支持重复请求去重和审计。
+- 实现家庭、药箱、处方与购药记录、库存、知识检索和 Agent 审计的只读接口，使用独立的数据结构、稳定来源标识、统一错误响应和演示用户隔离。
+- 实现本地草稿创建、查询、确认和拒绝 API，以白名单状态机、幂等决策、成员隔离和 JSON 审计保证确认只改变本地状态。
+- 实现固定响应的本地 Agent Harness：覆盖固定用例、运行轨迹、规则评估、失败原因和汇总报告。
+- 区分运行时 Agent 安全和任务结束后的 Agent 评测，避免用事后评估代替动作发生前的安全拦截。
+- 实现混合检索：保留稳定的关键词检索基线，向量检索只返回资料位置，再从知识表读取正文；向量检索不可用时记录原因并降级。
+- 设计统一模型调用层，对模型输出做结构化校验和规则检查，对超时、返回格式错误和安全检查失败记录重试与降级过程；尚未进行真实线上模型质量评测。
+- 使用 LangGraph 实现有边界、可终止的固定领域业务状态图，串联资料查询、Agent 安全、人工确认和任务结束后的 Agent 评测；另实现并独立评测按需 Planner + bounded Supervisor 编排内核。
+- 实现 Agent 运行接口，记录任务运行和工具调用，支持家庭成员隔离、重复请求去重、确认后的同任务续跑和失败审计；不执行外部医疗动作。
+- 实现 Next.js 核心数据页面，统一处理加载、空数据和错误状态；切换家庭成员时取消旧请求，并再次校验返回数据所属成员。
+- 实现 Agent 对话与审计页面：展示待确认内容、最终答案、工具和 RAG 来源、安全标记、工具错误及单次评测结果；高风险请求被拦截后不提供继续执行入口。
+
+## 技术简历表述示例（不直接照读）
+
+```text
+设计并实现家庭健康事务 Agent 系统，通过结构化上下文、工具调用记录、家庭成员隔离、来源引用和人工确认，支持固定用例回放与 Agent 评测。
+
+建立分层上下文和记忆机制：LangGraph 保存单次运行状态，PostgreSQL 保存任务检查点和确认偏好，Redis 只做带 TTL 的短期缓存；任务结束后清理完整聊天和临时推理，医疗事实重新从业务数据源读取。
+
+建立统一工具注册与数据库适配层，为档案、处方、药箱、库存和安全规则提供可审计的只读查询；关键业务动作只生成本地待确认内容，不触发真实医院或药店提交。
+
+设计混合检索方案，以 PostgreSQL 关键词检索作为稳定基线，并预留向量检索能力；向量检索只返回资料位置，正文从知识表读取，异常时记录原因并降级。
+
+设计统一模型调用层，对模型输出做结构化校验和规则检查，并记录模型超时、接口错误、返回格式错误和安全检查失败后的重试与降级过程。
+
+使用 LangGraph 实现有边界、可终止的固定领域业务流程，把资料查询、Agent 安全、人工确认和任务结束后的 Agent 评测串联起来；另实现按需 Planner + bounded Supervisor 内核并保存可评测的结构化运行轨迹。
+
+实现 Agent 运行接口，将数据库查询、LangGraph 流程、任务运行记录和工具调用记录串联起来，支持运行回放、同任务续跑和重复请求去重。
+
+使用 Next.js、React 与 TypeScript 构建家庭档案、药箱、续方复诊和提醒等数据页面，统一处理异步请求状态；通过家庭成员上下文、请求取消和返回数据所属成员校验降低数据串扰风险。
+
+实现 Agent 对话与审计页面，将显式人工确认、事实来源、安全结果和运行轨迹串成可追踪交互；切换家庭成员时清理旧任务，高风险拦截不能通过前端确认绕过。
 ```
 
-本阶段未新增运行时代码，因此没有真实 evaluator 指标报告。
+## 面试时怎么讲
 
-## 关键约束
+下面这段是口述答案，不需要念 STAR 字母，也不需要先报技术栈：
 
-- 系统不是 AI 医生。
-- 不诊断、不自动开方、不修改医生处方。
-- 关键动作必须经过人工确认。
-- 工具调用必须纳入 `agent_tool_calls`。
-- MVP 只聚焦四个场景。
+“我做的是一个互联网医院家庭用药管理项目，主要解决慢病续方材料整理、家庭药箱、用药提醒和高风险问题拦截。这个项目不是让大模型当医生，而是让它在明确的业务边界里帮助用户整理信息和推进流程。”
 
-## 下一步
+“我主要负责后端和 Agent 流程。用户发起任务后，系统先识别是给哪位家庭成员办什么事，再从数据库或知识库查询处方、药箱、库存和规则。查到的事实都会保留来源，模型不能凭记忆补病史。涉及复诊、购药和提醒创建时，只先生成待确认内容；涉及停药、加量、减量、换药或严重症状时，会在动作发生前拦截。”
 
-该最小契约阶段已在 2B-1 完成。后续优先实现 deterministic fixture runner 和 EvaluationResult 计算，再接入真实 AgentHarness。
+“为了方便排错和评测，我还保存每次任务的运行轨迹，包括调用了什么工具、返回了什么、为什么失败。现在项目处于开发和固定用例验证阶段，还没有接入真实医院和药店，所以我会把已经完成的功能、正在验证的能力和后续计划分开讲，不会把设计目标说成线上结果。”
 
-## 阶段 2B-1 已完成
+准备时可以用“为什么做、我做了什么、怎么解决、结果怎样”检查有没有讲完整，但面试现场直接按上面三段自然说。只有面试官继续追问实现时，再展开 LangGraph、Pydantic、工具注册、RAG 或数据库表等技术细节。
 
-- 实现 ContextEnvelope、TaskState、ToolEvidenceRef、RAGSourceRef、RunSummary 和 RoleSpecificContextView。
-- 实现 ExpectedCase、ExpectedSource 和 EvaluationResult。
-- 使用 Pydantic 2.x 严格枚举、额外字段拒绝、run/member 隔离和用户确认 memory 校验。
-- 准备 16 条固定 fixture，覆盖 3 续方、3 复诊材料、3 提醒、4 高风险和 3 异常/隔离/无来源场景。
-- 新增测试，验证非法 intent/role、raw conversation 拒绝、fixture 加载、failure reasons、安全 flag 和成员隔离。
+## 4B 本地开发环境验证补充
 
-可以写：
+本次已在 Docker Desktop 的 PostgreSQL/Redis/backend/frontend 开发环境中真实执行 migration、幂等 seed、health、知识搜索、三条业务任务 API、并发确认和 Redis 故障回源 smoke。简历可以准确表达为“验证了 Docker Compose 本地开发链路、PostgreSQL migration/seed、pgvector 索引、Redis 故障回源和确认幂等边界”；不能表达为生产部署、临床验收、真实医院/药店接入或模型质量指标。真实 wall-clock 只来自本机一次验收，不能写成生产 p95。
 
-- 设计并实现 Agent Harness Pydantic 契约层，将 Context Reset、角色最小视图、证据引用和 post-run 评估输入输出固化为强类型 DTO。
-- 构建 16 条医疗业务固定评估用例，覆盖正常流程、高风险拦截、工具异常、无来源回答和跨成员串扰。
+Provider 相关亮点可以表述为“设计统一 Provider Adapter 契约和 mock/degraded 运行模式，所有外部结果保留成员与来源指针，并通过 Registry 做身份一致性校验”。不能表述为已经接入真实医院、药店或通知 Provider。
 
-不能写：
+4B 任务三可以表述为“统一 FastEmbed、PostgreSQL pgvector 和关键词降级的 RAG 链路，增加 embedding 模型/维度/schema/hash 校验、HNSW 索引迁移和可追溯 SourceRef”。任务十二已经在 Docker PostgreSQL 完成 deterministic 向量索引回归，但这仍不能声称真实 FastEmbed 语义召回质量。
 
-- 已实现真实 EvaluatorAgent、自动指标计算、模型评分或 `agent_eval_report.md`。
-- 已达到任何 safety recall、hallucination rate、groundedness 或 p95 latency 数值。
+4B 任务四可以表述为“把统一 Model Gateway 接入预问诊、慢病用药和报告解读三条业务子图，使用结构化 FinalAnswer、输出安全检查和 deterministic fallback”。可以说设计并实现了双模式接线，不能说真实模型质量、准确率或线上延迟已经验证。
 
-下一步：实现 deterministic fixture runner 和 EvaluationResult 计算规则，再评估是否需要模型辅助评分。
+4B 任务五现在可以如实表述为“实现结构化 ComplexityRoute、TaskPlan、AgentTaskResult、SupervisorDecision 和三阶段 SafetyDecision 契约，并用不依赖 LLM、数据库和业务工具的 deterministic Router 区分单领域直达与复杂跨领域任务”。
 
-## 阶段 2B-2 已完成
+4B 任务六现在可以如实表述为“实现三个确定性领域 Agent、一次性 Planner 和串行 bounded Supervisor：简单请求直达单一角色，复杂请求最多按 3 步串行执行，并对依赖、角色白名单、成员隔离、有限重试、降级、澄清和终止原因进行结构化校验”。这证明的是离线编排内核和契约回归，不代表真实 Provider、数据库、LLM 质量或三层安全确认已经完成。
 
-- 实现冻结 `RunTrace`、`ToolCallTrace`、`FinalAnswerTrace`、`SafetyTrace` 和 `RAGTrace`。
-- 实现不调用模型的 `DeterministicEvaluator`，按 ExpectedCase 检查 intent、member、工具、来源、安全、确认、schema 和隔离。
-- 实现 `HarnessRunner`，加载 16 对 case/trace，生成 EvaluationResult、聚合指标和 Markdown 报告。
-- mock traces 同时覆盖成功路径和 6 类故意失败：缺工具、缺安全标记、禁用短语、跨成员串扰、无来源硬答、缺人工确认。
-- 示例报告中的指标是固定 mock fixture 的计算结果，不是线上、生产或临床指标。
+4B 任务七现在可以如实表述为“实现 Request Safety、Action Policy 和 Final Output Safety 三层确定性门禁，并用 Pydantic 状态机约束本地 `DRAFT -> CONFIRMED -> EXECUTED`；首轮自动生成无外部副作用的草稿，确认续跑校验用户/成员/任务/版本/指纹/幂等作用域，重复确认可安全回放”。这证明的是新业务任务链路的安全与状态契约、离线回归和本地动作边界，不代表真实医院、药店或通知系统已经执行。
 
-可以写：
+任务八现在可以如实表述为“实现 PostgreSQL 权威 Task Checkpoint 与 Redis TTL 短期缓存回源；同一 task 下用两个独立 run 续跑，以 `parent_run_id`、checkpoint/confirmation version 和幂等键控制确认并发；确认后偏好写入绑定成员、来源版本和显式人工确认”。这证明的是状态持久化、恢复边界和本地确认审计，不代表真实医院、药店或通知系统已经执行。
 
-- 设计并实现 deterministic Agent Harness runner，通过冻结 RunTrace 与固定 ExpectedCase 对 Agent 输出进行可重复、可解释的规则评估。
-- 构建工具覆盖率、groundedness、安全召回、人工确认、上下文隔离与 p95 延迟聚合，并生成 Markdown 评估报告。
+任务九现在可以如实表述为“为 Tool Registry 和三类重点 Provider 建立统一错误分类、只读有限重试、逐次 attempt trace 与强 Pydantic 输出契约；参数/权限/schema/业务冲突和写操作不自动重试，Provider 降级不返回 data/SourceRef，也不伪造订单、预约或问诊提交成功”。这证明的是离线 mock/degraded/故障注入下的工程可靠性，不能写成已接入真实医院药店、达到某个 SLA 或线上 p95。
 
-不能写：
+任务十现在可以如实表述为“实现 keyword/vector 的 RRF rank 融合，保留原始分、rank、文档/分块/embedding schema 与 fallback 决策；过期向量来源必须回到 PostgreSQL 权威版本校验；处方和药箱查询在 SQL 同时约束用户、成员和资源，并用白名单 Observation 记录节点、工具、Provider、来源、重试、模型和可用 token 计数”。可以补充“通过旧资源 ID、伪造成员、Prompt 注入和缓存污染测试”，但不能写成真实语义召回率、零数据泄漏、线上 p95 或临床安全指标。
 
-- 已实现 LLM-as-a-Judge、真实在线 EvaluatorAgent 或临床安全评估。
-- mock fixture 报告中的数值代表生产环境效果。
-- 已达到 100% safety recall、0 hallucination 或任何线上 p95 指标。
+最终架构中已经实现、但需要区分运行接线状态的亮点只能这样表达：
 
-下一步：接入脱敏真实 RunTrace adapter、数据集版本号和 JSON/Markdown 双格式报告，再考虑对解释性质量使用可选 LLM evaluator。
+- “实现并独立评测简单任务直达、复杂任务由一次性 Planner 与串行 bounded Supervisor 协调的编排内核；当前业务 API 仍使用固定领域 LangGraph。”
+- “实现请求、动作和最终输出三层安全治理，并将 Agent 安全与只读 Agent 评测分离；确认状态机保证首轮自动草稿和确认后的本地状态迁移。”
+- “实现 Tool/Provider 可靠性、RRF/版本拒绝、成员隔离和脱敏 Observation 契约，并用 32 条固定业务用例扩展 deterministic Agent 评测。”
+- “实现同一模型/工具/RAG/Safety/确认/token 上限下的 Single-Agent、固定路由、bounded Supervisor 消融；固定集显示简单任务固定路由足够，复杂跨域任务由 Supervisor 提升角色与工具覆盖。”
 
-## 阶段 2B-3 已完成
+任务十一已有代码、测试和 deterministic 报告，因此可以写“实现消融评测”，但数字必须注明“32 条固定 deterministic fixture”。不能把 1.0000 Safety/隔离、fixture P95 或 `N/A` token/cost 写成生产指标。项目没有实现 MCP Server、OpenTelemetry/Jaeger、Agent 级并行或复杂自动重规划，不应为了增加技术名词写入简历。
 
-- 实现 `ContextManager`，支持 `build_envelope`、`build_role_view`、`compact`、`create_run_summary` 和 `reset_after_run`。
-- 实现 role-specific context view 裁剪：Planner 不看工具证据，业务 Agent 只看自身证据，SafetyAgent 看安全相关引用，EvaluatorAgent 不能获取业务上下文。
-- compact 保留 `source_id`、`tool_call_id` 和 `member_id`。
-- reset_after_run 生成 RunSummary，保留 ToolEvidence refs、RAG refs、FinalAnswer ref 和 EvaluationResult ref，清理候选推断和 working context。
-- 新增测试覆盖成员隔离、raw conversation 隔离、工具裁剪、compact、reset 和 invalid role。
+4C-3 可以如实表述为“使用 Playwright 在真实 Docker Compose 前后端上建立浏览器级回归，覆盖续方 DRAFT/确认续跑、用药提醒、复诊材料、高风险拦截、成员切换和 API 失败，7 条固定场景本机通过”。这里的 7/7 是 deterministic 本地演示链路的 E2E 证据，不是线上成功率、临床安全率或真实模型指标。实现细节见 [4C 浏览器 E2E 报告](browser_e2e_report.4c.md)。
 
-可以写：
+4C-4 可以如实表述为“设计并实现一键 MVP 收口脚本，串联 Docker 构建、PostgreSQL migration/seed、固定四场景 Runtime Demo、deterministic Agent Harness、A/B/C 消融和 Playwright 浏览器 E2E，并生成脱敏 closeout report”。本次本机证据为 Demo `4/4`、浏览器 `7/7` 和前后端 health `200`；这些是本地 deterministic 验收结果，不是生产可用率、临床安全率或线上 p95。
 
-- 实现 ContextManager 的 role-specific context view、Context Reset 和 Context Compaction 纯内存逻辑，控制 Multi-Agent 上下文污染。
+## 不能夸大的内容
 
-不能写：
+- 不要说已上线生产、接入真实医院/药店、自动开方、诊断或修改处方。
+- 不要把固定响应的本地 Agent Harness 说成真实大模型评测或临床评测。
+- 不要声称“安全召回率达到 100%”“零幻觉”或某个明确的 p95 延迟，除非有对应真实运行的评估报告和数据范围。
+- Agent 运行接口、运行记录持久化和前端核心页面已实现；4C-3/4C-4 已完成固定浏览器和 MVP 收口验证，但仍不是生产环境验证。
+- 知识库搜索已完成自动化与本地 PostgreSQL/Postman 验证，但不能把本地联调描述为生产检索质量或临床有效性验证。
+- 不要把 RAG 检索分数描述为医疗正确率，也不要把本地 deterministic provider 的结果描述成真实语义模型质量；当前代码已具备 FastEmbed + PostgreSQL pgvector 链路，但真实模型质量和线上检索指标仍未验证。
+- 不要把固定响应或模拟接口测试描述成真实大模型效果，也不要宣称模型准确率、安全率、成本或 p95 延迟。
 
-- 已实现数据库持久化上下文、LangGraph 真实编排、ToolRegistry 业务调用或长期记忆写入。
+## 4D-B 评测口径
 
-下一步：实现脱敏真实 run artifact 到 ContextEnvelope / RunTrace 的 adapter，并考虑将 reset state 持久化为审计报告。
+4D-A 的五组 gold 数据已完成审核并冻结 manifest。4D-B deterministic runner 已实现 manifest/hash 校验、数据契约检查、来源键检查、安全标签检查、上下文记忆标签检查和 Provider 故障策略检查，并生成 JSON/Markdown 报告。
 
-## 阶段 2C-1 已完成
-
-- 实现 Tool Registry 契约层：`ToolSpec`、`ToolExecutionContext`、`ToolResult`、`RetryPolicy` 和 `ToolPermissionScope`。
-- 实现 6 个 deterministic mock 工具。
-- `ToolRegistry.call` 统一处理工具存在性、角色权限、schema 校验、人工确认门和失败 fallback。
-- `ToolResult` 可映射为 `ToolCallTrace` 所需字段。
-
-可以写：
-
-- 设计并实现 Tool Registry 契约层，通过 ToolSpec / ToolExecutionContext / ToolResult 统一工具权限、schema 校验、人工确认和 trace 映射。
-
-不能写：
-
-- 已实现真实数据库查询工具、真实药店库存查询、真实复诊/购药/提醒提交。
-
-## 阶段 2C-2 已完成
-
-- 实现 mock Agent Harness Runtime，可串联 ContextManager、ToolRegistry、RunTrace 和 DeterministicEvaluator。
-- 支持单条 `run_case` 和批量 `run_all`，可回放 16 条固定 ExpectedCase fixture。
-- Runtime 通过 `ToolRegistry.call` 调用 mock tools，不直接调用 mock handler。
-- Runtime 从 `ToolResult` 构造 `ToolCallTrace`，并生成 `RAGTrace`、`SafetyTrace`、mock `FinalAnswerTrace` 和 `EvaluationResult`。
-- 新增测试覆盖正常续方、高风险安全、权限失败、缺工具失败、人工确认、成员隔离、trace 来源和无外部依赖。
-
-可以写：
-
-- 实现 mock Agent Harness Runtime，可回放 fixture 并生成 EvaluationResult，用于验证上下文、工具调用、trace 和评估链路。
-
-不能写：
-
-- 已接入真实业务数据库。
-- 已实现线上 Agent 评估。
-- mock runtime 指标代表真实 safety recall、hallucination rate、groundedness 或 p95 latency。
-- 已实现 LangGraph 真实业务编排或在线 EvaluatorAgent。
-
-下一步：实现 ToolResult / RunTrace 到持久化审计记录的 adapter，并为 mock runtime 增加 JSON/Markdown 双格式报告输出。
-
-## 阶段 2D-1 已完成
-
-- 实现健康档案、处方与购药记录、药箱、药店库存和安全知识库五类数据库只读工具。
-- service 层负责 ORM 查询与数据整形，tools 层负责 schema、权限、成员隔离、fallback 和 ToolRegistry 注册。
-- 缺失来源返回 `not_found`，不编造病史、处方、库存或安全规则。
-- 2C mock runtime 与 2D DB 工具联合测试可独立运行，工具契约保持向后兼容。
-
-可以写：
-
-- 实现 Agent ToolRegistry 的数据库只读适配层，将 ORM 事实来源封装为可校验、可审计、可回放的工具结果。
-
-不能写：
-
-- 已实现完整真实 Agent、线上医院系统、自动续方、自动下单或自动开方。
-- mock fixture 指标代表生产或临床效果。
-
-下一步：实现只创建待确认草稿的 `create_confirmation_draft`，所有关键动作继续由用户确认。
-
-## 阶段 2D-2 已完成
-
-- 实现 confirmation-gated 数据库草稿工具，覆盖续方、复诊、购药候选和提醒四类本地 draft。
-- 实现幂等重试、user/member 隔离、关联记录归属校验、action-role 权限和医疗越界文本阻断。
-- 未确认时零写入；成功结果明确 `external_action_status=not_submitted`。
-
-可以写：
-
-- 设计并实现带人工确认门、幂等控制和成员隔离的 Agent 草稿写入工具，将关键动作限制在本地 draft 状态。
-
-不能写：
-
-- 已提交真实复诊、完成购药下单、创建真实推送提醒或实现自动续方。
-- 已实现完整 FastAPI Agent API、LangGraph 工作流或生产级并发幂等。
-
-下一步：阶段 2E-1 基础读取 API。
+4D-B 本地观测 runner 还实际执行 32 次 bounded Supervisor、12 次关键词检索、40 次 ContextManager 和 30 次 Provider 故障注入。对应数字只允许称为“固定合成本地用例结果”；Docker pgvector、Checkpoint 恢复、真实回答质量、token 和成本仍为 `N/A`。简历不能把 `1.0000` 的数据契约结果写成模型准确率，也不应在 Docker/真实模型验证前把本地 `100%` Safety 或 RAG 指标当作最终成果。

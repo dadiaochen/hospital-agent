@@ -1,387 +1,221 @@
-# 互联网医院慢病续方与家庭用药管理 Agent 系统
+# 家庭健康服务 Multi-Agent
 
-这是一个面向互联网医院业务链路的家庭健康事务管理 Agent 项目。系统定位是长期健康管家，不是 AI 医生：不诊断、不自动开方、不修改医生处方，所有复诊、购药、提醒创建等关键动作都必须经过用户或医生确认。
+面向互联网医院慢病续方、用药提醒、预问诊和报告整理场景的工程化学习项目。项目重点不是堆叠 Agent 名词，而是实现一套可运行、可审计、可评测、可恢复的医疗业务辅助系统。
 
-当前完成到阶段 2D-2：已实现 confirmation-gated 数据库草稿写入工具，支持续方、复诊、购药候选和提醒四类本地 draft，并提供幂等、用户/成员隔离、关联记录校验和医疗安全阻断；仍未实现 FastAPI 业务 API、LangGraph 工作流、外部业务提交或真实在线 EvaluatorAgent。
+系统只做资料整理、流程辅助和确认前准备，不替代医生诊断、开方或调整用药。当前为本地开发与集成验收环境，未接入真实医院、药店、支付或通知系统，也不是生产医疗系统。
 
-## 技术栈
+## 项目亮点
 
-- Backend: Python 3.11, FastAPI, SQLAlchemy 2.x, Alembic, PostgreSQL, Redis, Pydantic, LangGraph, pytest
-- Frontend: TypeScript, Next.js App Router, Tailwind CSS
-- Infra: Docker, docker-compose, `.env.example`
+| 工程问题 | 当前实现 |
+| --- | --- |
+| 多 Agent 如何避免无限循环 | 简单任务直达领域 Agent；复杂任务由一次性 Planner 生成计划，再由串行 bounded Supervisor 按依赖和最大步数调度 |
+| 医疗动作如何避免越权 | 请求入口、动作执行前、最终输出前三层安全检查；受保护动作必须经过显式确认和幂等校验 |
+| 上下文如何避免跨成员污染 | `ContextEnvelope`、角色最小视图、Context Reset/Compaction；所有事实引用绑定 `member_id` 与来源 |
+| 中断任务如何恢复 | PostgreSQL 保存权威 Task Checkpoint，Redis 只做带 TTL 的短期缓存，缓存故障时回源 PostgreSQL |
+| RAG 如何保证可追溯 | PostgreSQL + pgvector、关键词降级、RRF 融合、版本校验和 `source_id` 引用 |
+| 外部依赖失败怎么办 | Tool Registry 和 Provider Registry 统一 timeout、有限重试、错误分类、降级结果与 attempt trace |
+| Agent 质量如何证明 | deterministic Evaluator、固定 gold 数据、32 条 A/B/C 消融 fixture、Docker/API/E2E 与本地观测 runner |
+| 没有模型 Key 能否运行 | 默认 deterministic Model Gateway；可选 OpenAI-compatible provider，未配置 Key 时前后端和测试仍可运行 |
 
-## 开发路线图
+## 系统架构
 
-[docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md) 是项目阶段编号、完成状态、后续顺序和 MVP 验收标准的唯一权威来源。其他文档只记录子系统设计或阶段历史，不单独新增阶段编号。
+```mermaid
+flowchart TB
+    UI["Next.js patient UI"] --> API["FastAPI API"]
+    API --> GUARD1["Request Safety Guard"]
+    GUARD1 --> FLOW["Current fixed-domain LangGraph workflow"]
+    FLOW --> CTX["ContextManager"]
+    FLOW --> TOOLS["Tool Registry"]
+    TOOLS --> DB["PostgreSQL + pgvector"]
+    TOOLS --> CACHE["Redis TTL cache"]
+    TOOLS --> PROVIDERS["Mock/degraded Providers"]
+    FLOW --> GUARD2["Action Policy Guard"]
+    GUARD2 --> CONFIRM["Draft + explicit confirmation"]
+    CONFIRM --> GUARD3["Final-output SafetyAgent"]
+    GUARD3 --> TRACE["Frozen RunTrace + EvaluationResult"]
 
-当前唯一下一阶段是 **2E-1：基础读取 API**。
-
-## 本地运行
-
-### 1. 准备环境变量
-
-```bash
-cp .env.example .env
+    ROUTER["Complexity Router"] -->|simple| DOMAIN["Domain Agent"]
+    ROUTER -->|complex| PLAN["One-shot Planner"]
+    PLAN --> SUP["Serial bounded Supervisor"]
+    SUP --> DOMAIN
 ```
 
-### 2. 启动 PostgreSQL 与 Redis
+业务角色保持精简：
 
-```bash
-docker compose up -d postgres redis
+- `TriageAgent`：结构化症状和红旗信号，提供就医/科室候选，不诊断。
+- `MedicationAgent`：整理处方、药箱、库存、续方材料和提醒草稿，不开方、不改剂量、不下单。
+- `ReportAgent`：解析医疗文档并提供有来源的通俗解释，不给诊断或治疗方案。
+- `SafetyAgent`：运行时安全拦截，属于治理层。
+- `EvaluatorAgent`：答案生成后的只读评测，不能修改答案或业务状态。
+
+> 重要边界：Router、Planner、bounded Supervisor 编排内核已实现、测试并完成 A/B/C 消融，但当前两个 HTTP 业务入口仍使用固定领域工作流，尚未统一接入该内核。仓库没有把“内核已实现”包装成“线上 API 已动态调度”。
+
+## 当前状态
+
+[开发总路线图](docs/DEVELOPMENT_ROADMAP.md) 是阶段编号、状态和实施顺序的唯一权威来源。
+
+- `4B` 后端工程能力：完成。
+- `4C` 患者端、黄金链路、浏览器 E2E 和固定演示：完成。
+- `4D-A` 五组 gold benchmark 数据：已审核并冻结。
+- `4D-B` 自动化评测与最终可复现指标：进行中。
+
+当前最重要的未完成项是：统一 HTTP 运行链与 bounded Supervisor、用 Docker PostgreSQL/pgvector 运行完整 4D 指标、验证 PostgreSQL Checkpoint/Redis 故障恢复、接入可选真实 LLM 后测量回答质量与 token/cost。完整清单见路线图的 `4D-B` 和本文“仍未完成”章节。
+
+## Docker 启动
+
+### 第一次启动
+
+1. 在 Windows 开始菜单搜索并打开 **Docker Desktop**。
+2. 等待 Docker Desktop 显示 **Engine running**。
+3. 打开 PowerShell，执行：
+
+```powershell
+Set-Location E:\project_code\hospital
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+docker compose config --quiet
+docker compose up -d --build --wait --wait-timeout 300
+docker compose ps
 ```
 
-### 3. 启动后端
+正常情况下，`postgres`、`redis`、`backend`、`frontend` 都会显示 `healthy`。然后打开：
 
-```bash
-cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+- 患者端：<http://localhost:3000>
+- Agent 黄金链路：<http://localhost:3000/agent>
+- Swagger API：<http://localhost:8000/docs>
+- 后端健康检查：<http://localhost:8000/health>
+
+Agent 运行在 `backend` 容器内，不需要单独启动 Agent 容器。
+
+### 以后启动与关闭
+
+未修改代码、依赖或 Compose 配置时：
+
+```powershell
+Set-Location E:\project_code\hospital
+docker compose start
+docker compose ps
 ```
 
-后端地址：
+日常关闭并保留数据库：
 
-- API: `http://localhost:8000`
-- Swagger: `http://localhost:8000/docs`
-- Health: `http://localhost:8000/health`
-
-### 4. 启动前端
-
-```bash
-cd frontend
-npm install
-npm run dev
+```powershell
+docker compose stop
 ```
 
-前端地址：`http://localhost:3000`
+代码、依赖或配置发生变化时：
 
-### 5. 使用 Docker 启动全栈
-
-```bash
-docker compose up --build
+```powershell
+docker compose up -d --build --wait --wait-timeout 300
 ```
 
-## 数据库迁移与 Seed
+不要把 `docker compose down -v` 当作普通关闭命令，它会删除本地 PostgreSQL/Redis volume。完整的 Docker Desktop 点击步骤、首次启动、日常启动、日志和排错见 [本地环境与部署指南](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)。
 
-安装后端依赖并执行迁移：
+## 配置与密钥
 
-```bash
-cd backend
-pip install -r requirements.txt
-cd ..
-python -m alembic upgrade head
+本地配置从模板创建：
+
+```powershell
+Copy-Item .env.example .env
 ```
 
-阶段 2A.1 新增迁移 `backend/alembic/versions/0002_add_agent_harness_trace_fields.py`，只补充 `agent_runs` 和 `agent_tool_calls` 的 trace / harness 字段，不改写 `0001_initial_schema`。
+- `.env.example` 只保存可公开的变量名和本地默认值，可以提交。
+- `.env`、`.env.local`、`.env.production` 等本机配置已被 Git 忽略。
+- API Key、真实密码、Token 和患者数据不得写入代码、fixture、报告或 Git。
+- 默认 `MODEL_PROVIDER=deterministic`，不需要模型 Key。
+- 真实模型只允许通过服务端环境变量配置，详见 [LLM 配置](docs/LLM_CONFIGURATION.md)。
 
-写入 seed 数据：
+## 本地验证
 
-```bash
-python scripts/seed.py
-```
+2026-07-31 发布前复验：
 
-seed 会创建或更新用户、家庭成员、健康档案、处方、购药记录、药箱、药店库存、知识库规则，以及示例 `agent_runs` / `agent_tool_calls` 审计记录。
+| 验证层 | 结果 | 真实性边界 |
+| --- | ---: | --- |
+| 后端 pytest | `308 passed` | 本地自动化，含 SQLite 隔离测试和契约/异常分支 |
+| 前端 Vitest | `25 passed` | 组件与 API client 测试 |
+| TypeScript | `passed` | `tsc --noEmit` |
+| Next.js build | `passed` | 本地生产构建 |
+| 浏览器 E2E | 最近一次 `7 passed` | Docker + Microsoft Edge，本轮未因 Docker Desktop 未启动而重跑 |
+| Docker 后端验收 | 最近一次 baseline `19/19`、Redis 故障 `18/18` | 本机集成证据，不是生产 SLO |
 
 运行后端测试：
 
 ```powershell
+Set-Location E:\project_code\hospital
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q
+.\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider --basetemp=output\pytest-all
 ```
 
-## 当前文件结构
+运行前端验证：
+
+```powershell
+Set-Location E:\project_code\hospital\frontend
+npm test
+npm run typecheck
+npm run build
+```
+
+完整 MVP 收口：
+
+```powershell
+Set-Location E:\project_code\hospital
+.\scripts\closeout_4c.ps1
+```
+
+测试分层、Windows 临时目录权限处理和 review 方法见 [测试指南](docs/TESTING_GUIDE.md)。
+
+## 项目结构
 
 ```text
-.
-├── docs/
-│   ├── AGENT_WORKFLOW.md
-│   ├── API_SPEC.md
-│   ├── CONTEXT_MANAGEMENT.md
-│   ├── DB_SCHEMA.md
-│   ├── DEVELOPMENT_ROADMAP.md
-│   ├── EVALUATOR_AGENT.md
-│   ├── HOSPITAL_LANGFLOW_HARNESS_PLAN.md
-│   ├── PRD.md
-│   ├── RESUME_NOTES.md
-│   └── TECH_DESIGN.md
-├── backend/
-│   ├── alembic/
-│   ├── app/
-│   │   ├── agent/
-│   │   │   ├── context_schemas.py
-│   │   │   ├── context_manager.py
-│   │   │   ├── eval_schemas.py
-│   │   │   ├── evaluator.py
-│   │   │   ├── harness_runtime.py
-│   │   │   ├── harness_runner.py
-│   │   │   └── run_trace_schemas.py
-│   │   ├── api/
-│   │   ├── core/
-│   │   ├── models/
-│   │   ├── rag/
-│   │   ├── safety/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   │   ├── agent_tool_query_service.py
-│   │   │   └── confirmation_draft_service.py
-│   │   └── tools/
-│   │       ├── confirmation_tools.py
-│   │       ├── db_tools.py
-│   │       ├── mock_tools.py
-│   │       ├── registry.py
-│   │       ├── tool_registry.py
-│   │       └── tool_schemas.py
-│   └── tests/
-│       ├── fixtures/agent_harness_cases.json
-│       ├── fixtures/mock_run_traces.json
-│       ├── test_agent_contract_schemas.py
-│       ├── test_context_manager.py
-│       ├── test_deterministic_evaluator.py
-│       ├── test_harness_runner.py
-│       ├── test_harness_runtime.py
-│       ├── test_db_backed_tools.py
-│       └── test_confirmation_draft_tool.py
-├── frontend/
-│   ├── app/
-│   ├── components/
-│   └── lib/
-├── scripts/
-│   └── seed.py
-├── .env.example
-├── AGENTS.md
-├── alembic.ini
-├── docker-compose.yml
-├── family_health_agent_project_prompt.md
-└── README.md
+hospital/
+├─ backend/
+│  ├─ app/
+│  │  ├─ api/          # HTTP 入参、出参和依赖注入
+│  │  ├─ schemas/      # Pydantic DTO
+│  │  ├─ models/       # SQLAlchemy ORM
+│  │  ├─ services/     # 业务逻辑
+│  │  ├─ tools/        # Agent 工具与权限
+│  │  ├─ providers/    # 外部系统适配与可靠性
+│  │  ├─ agent/        # LangGraph、上下文、评测和 Harness
+│  │  ├─ rag/          # 关键词、向量、RRF 和来源
+│  │  ├─ safety/       # 医疗安全与确认规则
+│  │  └─ core/         # 配置、数据库、日志和异常
+│  ├─ alembic/         # 线性数据库迁移
+│  └─ tests/           # 单元、集成、契约与固定 fixture
+├─ frontend/           # Next.js 患者端与 Playwright E2E
+├─ scripts/            # seed、验收、benchmark 和一键收口
+├─ docs/               # 设计、接口、部署、评测和学习文档
+├─ docker-compose.yml
+└─ .env.example
 ```
 
-## 第一阶段已完成
+## 核心文档
 
-- 创建产品、技术、API、数据库、Agent 工作流和恢复说明文档。
-- 创建 FastAPI 最小可启动服务。
-- 创建后端分层目录：`api/services/models/schemas/tools/agent/rag/safety/core`。
-- 创建 MCP-like Tool Registry 的最小契约骨架。
-- 创建 FamilyHealthAgent 占位类，保留 LangGraph 工作流节点设计。
-- 创建 Next.js App Router 最小可启动前端和主要业务路由占位。
-- 创建 Dockerfile、docker-compose、`.env.example`。
-- 创建最小健康检查测试。
+- [文档导航](docs/README.md)
+- [唯一开发总路线图](docs/DEVELOPMENT_ROADMAP.md)
+- [技术设计](docs/TECH_DESIGN.md)
+- [API 规范](docs/API_SPEC.md)
+- [Agent 架构](docs/AGENT_ARCHITECTURE.md)
+- [上下文与记忆](docs/CONTEXT_MANAGEMENT.md)
+- [RAG 检索](docs/RAG_RETRIEVAL.md)
+- [安全策略](docs/SAFETY_POLICY.md)
+- [测试指南](docs/TESTING_GUIDE.md)
+- [核心代码走读](docs/learning/17_CORE_CODE_WALKTHROUGH.md)
 
-## 第二阶段 2A 已完成
+## 仍未完成
 
-- 新增 `app.core.database`，提供 `Base`、`engine`、`SessionLocal`、`get_db`。
-- 新增 18 张 SQLAlchemy ORM 模型，对齐用户、家庭成员、药箱、处方、购药、药店、复诊方案、提醒、知识库和 Agent 日志。
-- 新增 Alembic 配置和首个迁移 `0001_initial_schema`。
-- 新增 `scripts/seed.py`，可重复写入 MVP 模拟数据。
-- 新增模型测试，覆盖 metadata、关键字段、医疗安全禁用字段和 seed 幂等性。
+- 将 bounded Supervisor 内核统一接入当前 HTTP 业务运行链，删除或迁移两套兼容运行入口。
+- 配置并验证真实 OpenAI-compatible LLM；未提供 Key 时，回答质量、token 和成本指标保持 `N/A`。
+- 用 Docker PostgreSQL + pgvector 跑完 4D RAG gold，而不是只依赖本地关键词/SQLite 观测。
+- 将真实冻结 RunTrace、Checkpoint 恢复、Provider attempt 和重复 wall-clock 运行接入统一 benchmark report。
+- 接入真实医院、药店、文档解析或通知 Provider，并完成 sandbox 契约验收。
+- 建设生产认证、权限、秘密管理、HTTPS、监控告警、备份恢复、CI/CD 和合规流程。
 
-## 第二阶段 2A.1 已完成
+这些是明确的工程缺口，不影响本地学习、deterministic 演示和自动化回归，但在完成前不能描述为生产系统或真实医疗服务。
 
-- 合并 Multi-Agent 角色边界、ContextEnvelope、Tool Registry、安全与幻觉控制、Agent Harness 验收规则到根目录 `AGENTS.md`。
-- 新增 `docs/HOSPITAL_LANGFLOW_HARNESS_PLAN.md`，整理 Langflow-like trace / harness 落地计划。
-- 为 `AgentRun` 补充 `started_at`、`ended_at`、`duration_ms`、`step_count`、`task_success`、`groundedness_score`、`hallucination_flag`、`human_confirmation_rate`。
-- 为 `AgentToolCall` 补充 `agent_role`、`error_type`、`fallback_action`、`schema_valid`。
-- 新增 Alembic 迁移 `0002_add_agent_harness_trace_fields.py`，不改写 `0001_initial_schema`。
-- 更新 seed 示例和测试，保留人工确认与医疗安全边界。
+## 医疗安全边界
 
-阶段 2A.1 运行方式：
-
-```powershell
-python -m alembic upgrade head
-python scripts/seed.py
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q
-```
-
-## 第二阶段 2A.2 已完成
-
-- 新增 `docs/CONTEXT_MANAGEMENT.md`，定义 Context Lifecycle、TaskContext Builder、Role-specific Context View、RunSummary、Context Reset / Compaction 和长期记忆写入门槛。
-- 新增 `docs/EVALUATOR_AGENT.md`，定义独立 post-run EvaluatorAgent、ExpectedCase、EvaluationResult 和 AgentHarness 报告聚合方式。
-- 更新 Multi-Agent 角色边界，明确 SafetyAgent 负责运行时安全拦截，EvaluatorAgent 负责事后质量评估。
-- 更新 Harness、工作流、技术设计、简历说明、项目提示词和项目规则。
-- 修复“当前文件结构”区域混入代码审查文本和代码片段的格式污染。
-- 未修改后端模型、Alembic migration、`scripts/seed.py`、ToolRegistry 业务工具、Multi-Agent 运行代码、EvaluatorAgent 代码或前端。
-
-阶段 2A.2 文档检查：
-
-```powershell
-rg -n "Context Reset|Context Compaction|EvaluatorAgent|EvaluationResult" AGENTS.md README.md family_health_agent_project_prompt.md docs
-```
-
-## 阶段 2B-1 已完成
-
-- 新增 `backend/app/agent/context_schemas.py`：`TaskState`、`ToolEvidenceRef`、`RAGSourceRef`、`ContextEnvelope`、`RoleSpecificContextView`、`RunSummary` 等上下文契约。
-- 新增 `backend/app/agent/eval_schemas.py`：`ExpectedCase`、`ExpectedSource` 和 `EvaluationResult` 评估契约。
-- 所有契约默认 `extra="forbid"`，角色视图不能携带 `raw_conversation` 等未声明字段。
-- ContextEnvelope、角色视图和 RunSummary 校验 tool/RAG 引用的 `run_id` 与 `member_id` 隔离。
-- `memory_refs` 只允许用户确认的内容，拒绝未经确认的模型推断。
-- 新增 16 条固定 Harness fixture：3 条续方、3 条复诊材料、3 条提醒、4 条高风险医疗、3 条工具异常/隔离/无来源。
-- 新增契约测试，覆盖实例化、非法 intent/role、raw conversation、fixture 加载、failure reasons、memory 门槛、成员隔离和安全 flag。
-- 本阶段未新增 API、数据库表或迁移，也未实现真实 AgentHarness 或 EvaluatorAgent。
-
-阶段 2B-1 验证命令：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q
-python -m compileall backend\app backend\tests
-```
-
-## Context 与评估架构
-
-```text
-Raw Conversation
-  -> TaskContext Builder
-  -> ContextEnvelope
-  -> Role-specific Context View
-  -> Tool Evidence / RAG Sources
-  -> FinalAnswer
-  -> Run Summary
-  -> Context Reset
-  -> EvaluatorAgent Review
-  -> Long-term Memory Write
-```
-
-- 每次 run 结束后生成 RunSummary 并清理临时 working context。
-- Tool Evidence、RAG source id、trace、FinalAnswer 和 eval 引用必须保留。
-- 同一任务允许 compaction，但事实保留 source pointer；不相关任务和成员切换必须 reset。
-- 未经用户确认的模型推断不得写入长期 memory。
-- EvaluatorAgent 只读 run 产物，不修改用户答案，不生成医疗建议，不写业务状态。
-
-## 阶段 2B-2 已完成
-
-- 新增冻结的 `RunTrace`、`ToolCallTrace`、`FinalAnswerTrace`、`SafetyTrace` 和 `RAGTrace`。
-- 新增 `DeterministicEvaluator`，以明确规则计算 intent/member、工具覆盖、来源、schema、安全召回、人工确认、上下文隔离和延迟结果。
-- 新增 `HarnessRunner`，加载 16 条 ExpectedCase 与 16 条 mock RunTrace，输出 EvaluationResult 列表和聚合指标。
-- 新增 `mock_run_traces.json`，包含成功路径以及缺工具、缺安全标记、禁用短语、成员串扰、无来源硬答和缺确认提示等故意失败路径。
-- 新增 `docs/agent_eval_report.example.md`。报告中的数值来自 deterministic mock fixtures，不是生产或临床效果指标。
-- Evaluator 只读冻结 trace，不调用 LLM、数据库、API、ToolRegistry 或 LangGraph，也不修改 FinalAnswer。
-
-运行 deterministic Harness：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m app.agent.harness_runner
-```
-
-运行完整验证：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q
-python -m compileall backend\app backend\tests
-```
-
-Harness 报告测试直接校验内存中的 Markdown 渲染结果及已提交示例报告，不依赖 pytest `tmp_path` 或 Windows 用户临时目录。这样文件系统权限问题不会被误判为 evaluator / runner 逻辑失败。
-
-## 阶段 2B-3 已完成
-
-- 新增 `backend/app/agent/context_manager.py`，实现纯内存 ContextManager。
-- `build_envelope` 根据用户输入摘要、任务信息、工具证据引用、RAG 来源引用和安全标记构造 `ContextEnvelope`。
-- `build_role_view` 按角色裁剪 `RoleSpecificContextView`，不暴露完整 raw conversation；EvaluatorAgent 不能获取业务执行上下文。
-- `compact` 支持同一 `task_id` / `member_id` 的上下文压缩，并保留 `source_id`、`tool_call_id` 和 `member_id`。
-- `create_run_summary` 基于 `ContextEnvelope`、`RunTrace`、`FinalAnswerTrace` 和 `EvaluationResult` 生成 `RunSummary`。
-- `reset_after_run` 清理临时 working context，只保留 RunSummary、ToolEvidence refs、RAG refs、FinalAnswer ref 和 EvaluationResult ref。
-- 新增 `backend/tests/test_context_manager.py`，覆盖构造、角色裁剪、成员隔离、compact、reset 和 EvaluatorAgent 拒绝进入业务上下文。
-- 本阶段不调用 LLM、数据库、API、ToolRegistry 或 LangGraph。
-
-阶段 2B-3 验证命令：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q
-python -m compileall backend\app backend\tests
-```
-
-## 阶段 2C-1 已完成
-
-- 新增 `backend/app/tools/tool_schemas.py`，定义 `ToolSpec`、`ToolExecutionContext`、`ToolResult`、`RetryPolicy` 和 `ToolPermissionScope`。
-- 新增 `backend/app/tools/tool_registry.py`，实现工具注册、查询、角色可用工具列表和 `ToolRegistry.call`。
-- 新增 `backend/app/tools/mock_tools.py`，提供 6 个 deterministic mock 工具：健康档案、处方、药箱、药店库存、安全知识和确认草稿。
-- `ToolRegistry.call` 统一校验工具存在性、`allowed_tools`、角色权限、输入/输出 schema、handler 异常和人工确认门。
-- `ToolResult` 可映射为 `ToolCallTrace` 所需字段。
-- mock 工具不访问数据库、不调用 API、不调用 LLM，不返回诊断、自动开方或剂量调整建议。
-
-## 阶段 2C-2 已完成
-
-- 新增 `backend/app/agent/harness_runtime.py`，实现最小 `AgentHarnessRuntime`。
-- 新增 `HarnessRuntimeResult` 和 `HarnessRuntimeBatchResult`，保存 `ContextEnvelope`、角色视图、`ToolResult`、`RunTrace` 和 `EvaluationResult`。
-- Runtime 默认通过 `ContextManager.build_envelope` 构造上下文，通过 `ContextManager.build_role_view` 构造角色视图。
-- Runtime 根据 `ExpectedCase.expected_required_tools` 调用 mock `ToolRegistry.call`，不直接调用 mock handler。
-- Runtime 将 `ToolResult` 转成 `ToolCallTrace`，并构造 `RAGTrace`、`SafetyTrace` 和 mock `FinalAnswerTrace`。
-- Runtime 使用 `DeterministicEvaluator.evaluate` 生成 `EvaluationResult`，不是手写成功结果。
-- `run_all` 可运行 16 条 fixture，并复用 `HarnessRunner.aggregate` 聚合指标。
-- 新增 `backend/tests/test_harness_runtime.py`，覆盖正常续方、高风险安全、权限失败、缺工具失败、确认门、成员隔离、trace 来源、批量运行和无外部依赖。
-
-聚合指标中文解释：
-
-- `task_success_rate`：任务成功率。
-- `tool_call_accuracy_avg`：预期工具调用覆盖率平均值。
-- `groundedness_rate`：答案依据覆盖率。
-- `schema_valid_rate`：结构化契约合法率。
-- `hallucination_rate`：幻觉或禁用表达触发率。
-- `safety_recall_rate`：安全标记召回率。
-- `human_confirmation_rate`：需要人工确认时确认提示覆盖率。
-- `context_isolation_pass_rate`：成员上下文隔离通过率。
-- `p95_latency_ms`：mock 运行延迟的 95 分位值。
-
-阶段 2C-2 验证命令：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q
-python -m compileall backend\app backend\tests
-```
-
-本阶段 runtime 指标只代表 deterministic mock fixtures 的回放结果，不代表真实线上、生产或临床效果。
-
-## 阶段 2D-1 已完成
-
-- 新增 `backend/app/services/agent_tool_query_service.py`，负责五类 SQLAlchemy 只读查询和数据整形。
-- 新增 `backend/app/tools/db_tools.py`，通过既有 `ToolRegistry.call` 注册健康档案、处方、药箱、药店库存和安全知识工具。
-- 数据库工具复用 2C 的工具契约、角色权限、`allowed_tools`、schema 校验、人工确认字段和 Trace 映射。
-- 缺少成员、药品、库存或知识来源时返回 `not_found` 与 fallback，不让模型补全事实。
-- 新增 `backend/tests/test_db_backed_tools.py`，覆盖成功查询、缺数据、schema、权限、成员隔离、安全文本和只读边界。
-- 本阶段不实现 `create_confirmation_draft`，不写业务状态，不新增 API、迁移或 ORM 字段，也不调用 LangGraph、LLM 或外部服务。
-
-阶段 2D-1 验证命令：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q
-python -m compileall backend\app backend\tests
-```
-
-## 阶段 2D-2 已完成
-
-- 新增 `backend/app/services/confirmation_draft_service.py`，使用现有 ORM 表创建续方、复诊、购药候选和提醒草稿。
-- 新增 `backend/app/tools/confirmation_tools.py`，通过 `ToolRegistry.call` 执行角色、`allowed_tools`、schema 和人工确认门校验。
-- 未确认调用不会执行 handler 或写数据库；确认后只创建 `status="draft"` 的本地记录。
-- 草稿保留 `created_by_run_id`、幂等键、用户/成员和本地确认审计；`external_action_status` 固定为 `not_submitted`。
-- 重复幂等键返回已有草稿；跨用户、跨成员、错误关联记录和越权角色会被拒绝。
-- 医疗越界文本会进入 SafetyAgent fallback，不写草稿。
-- 本阶段未修改 ORM、Alembic、seed、API 或前端，也未调用 LangGraph、LLM 或外部服务。
-
-阶段 2D-2 验证命令：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests -q
-python -m compileall backend\app backend\tests
-```
-
-## 项目亮点与简历描述
-
-项目描述：基于互联网医院问诊、处方、药店审核、购药履约链路，设计家庭健康管家 Agent，帮助用户整理慢病续方、复诊材料、家庭药箱、用药提醒和 Agent 执行记录。
-
-技术栈：FastAPI、SQLAlchemy、PostgreSQL、Redis、Pydantic、LangGraph、Next.js、TypeScript、Tailwind CSS、Docker。
-
-核心职责：负责后端分层架构、Multi-Agent 角色边界、医疗安全策略、ContextManager、Context Reset / Compaction、Tool Registry、数据库读写工具适配与人工确认门，以及 Agent Harness 的强类型契约、mock runtime、确定性评估规则和固定用例回放。
-
-面试讲解稿：项目重点不是让模型替代医生，而是把模型放在可审计、可确认、可回放、可评估的业务流程中。SafetyAgent 在运行时拦截高风险请求，EvaluatorAgent 在答案生成后检查证据、确认和成员隔离，两者职责分离。
-
-简历表达边界：可以写“设计了 Context Reset / Context Compaction / EvaluatorAgent / Agent Harness”。当前没有真实 eval report，因此不能声称达到 100% safety recall、0 hallucination、100% groundedness 或任何 p95 latency 数值；这些只能写为目标指标或评估维度。
-
-## 下一阶段建议
-
-按 [总开发路线图](docs/DEVELOPMENT_ROADMAP.md)，下一步进入阶段 2E-1：使用 FastAPI 暴露家庭成员、药箱、处方、购药记录、知识库和 Agent run 的基础读取 API；不在读取 API 阶段实现 LangGraph 或复杂写入流程。
+- 不诊断、不开方、不修改医生处方。
+- 不建议用户自行停药、加量、减量或换药。
+- 复诊、购药和提醒执行等受保护动作必须显式确认。
+- 无 DB、Provider 或 RAG 来源时，不编造病史、库存、处方或医疗规则。
+- mock/degraded Provider、本机延迟和 deterministic fixture 指标不代表真实外部系统、临床正确率或生产性能。

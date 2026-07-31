@@ -1,2 +1,54 @@
-"""RAG interfaces will start with keyword retrieval in a later phase."""
+from app.rag.retrieval_schemas import (
+    RetrievedChunk,
+    RetrievalRequest,
+    RetrievalResult,
+    VectorMatch,
+)
+from app.rag.retriever import (
+    HybridRetriever,
+    KeywordRetriever,
+    Retriever,
+    SQLAlchemyKnowledgeStore,
+    VectorSearchBackend,
+    create_knowledge_retriever,
+)
+from app.rag.embedding_provider import (
+    EMBEDDING_SCHEMA_VERSION,
+    DeterministicHashEmbeddingProvider,
+    EmbeddingProvider,
+    FastEmbedEmbeddingProvider,
+)
+from app.rag.vector_store import (
+    KnowledgeEmbeddingIndexer,
+    PgVectorSearchBackend,
+)
+from app.rag.embedding import (
+    DeterministicHashEmbedding,
+    FastEmbedEmbedding,
+    create_embedding_provider,
+)
+from app.rag.indexer import index_knowledge
+
+__all__ = [
+    "HybridRetriever",
+    "EMBEDDING_SCHEMA_VERSION",
+    "DeterministicHashEmbeddingProvider",
+    "EmbeddingProvider",
+    "FastEmbedEmbeddingProvider",
+    "KnowledgeEmbeddingIndexer",
+    "KeywordRetriever",
+    "RetrievedChunk",
+    "RetrievalRequest",
+    "RetrievalResult",
+    "Retriever",
+    "SQLAlchemyKnowledgeStore",
+    "PgVectorSearchBackend",
+    "VectorMatch",
+    "VectorSearchBackend",
+    "create_knowledge_retriever",
+    "DeterministicHashEmbedding",
+    "FastEmbedEmbedding",
+    "create_embedding_provider",
+    "index_knowledge",
+]
 

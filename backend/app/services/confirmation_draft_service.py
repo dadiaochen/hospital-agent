@@ -47,6 +47,25 @@ _FORBIDDEN_MEDICAL_ACTIONS = (
     "停药",
     "换药",
 )
+_TRUSTED_EVIDENCE_KEYS = frozenset(
+    {
+        "content",
+        "document_content",
+        "explanation_boundary",
+        "image_quality",
+        "knowledge",
+        "knowledge_evidence",
+        "medicine_box",
+        "parsed_content",
+        "profile",
+        "prescriptions",
+        "safety_note",
+        "safety_notes",
+        "source_metadata",
+        "source_refs",
+        "sources",
+    }
+)
 
 
 class ConfirmationDraftServiceError(ValueError):
@@ -69,7 +88,7 @@ def create_confirmation_draft(
     member_id: str,
     action_type: ConfirmationDraftAction,
     idempotency_key: str,
-    run_id: str,
+    run_id: str | None,
     summary: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
@@ -93,6 +112,7 @@ def create_confirmation_draft(
         "user_id": user_id,
         "member_id": member_id,
         "summary": summary,
+        "created_via": "agent_tool" if run_id is not None else "api",
         "local_confirmation_recorded": True,
         "external_action_status": "not_submitted",
     }
@@ -110,10 +130,8 @@ def create_confirmation_draft(
         db.flush()
         db.refresh(draft)
     except ConfirmationDraftServiceError:
-        db.rollback()
         raise
     except SQLAlchemyError as exc:
-        db.rollback()
         raise ConfirmationDraftServiceError(
             "failed to persist confirmation draft",
             error_type="database_write_error",
@@ -133,6 +151,7 @@ def _build_draft(
     audit: dict[str, Any],
 ):
     confirmed_at = utc_now()
+    audit["draft_creation_confirmed_at"] = confirmed_at.isoformat()
     common = {
         "status": "draft",
         "need_human_confirmation": True,
@@ -383,7 +402,10 @@ def _required_mapping(
 
 
 def _reject_unsafe_medical_actions(summary: str, payload: dict[str, Any]) -> None:
-    rendered = f"{summary} {payload}".lower()
+    # Retrieved policy text may quote forbidden actions as examples of what
+    # the system must reject.  Scan user/action fields, not trusted evidence
+    # bodies, so safety documentation does not block an otherwise safe draft.
+    rendered = f"{summary} {_render_action_fields(payload)}".lower()
     matched = next(
         (phrase for phrase in _FORBIDDEN_MEDICAL_ACTIONS if phrase in rendered),
         None,
@@ -394,6 +416,19 @@ def _reject_unsafe_medical_actions(summary: str, payload: dict[str, Any]) -> Non
             error_type="medical_safety_violation",
             fallback_action="route_to_safety_agent",
         )
+
+
+def _render_action_fields(value: Any, *, key: str | None = None) -> str:
+    if key is not None and key.casefold() in _TRUSTED_EVIDENCE_KEYS:
+        return ""
+    if isinstance(value, dict):
+        return " ".join(
+            f"{field} {_render_action_fields(item, key=str(field))}"
+            for field, item in value.items()
+        )
+    if isinstance(value, (list, tuple, set)):
+        return " ".join(_render_action_fields(item) for item in value)
+    return str(value)
 
 
 def _datetime_to_str(value: datetime | None) -> str | None:

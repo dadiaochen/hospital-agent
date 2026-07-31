@@ -5,7 +5,7 @@
 - 每次任务只能完成用户明确指定的阶段目标。
 - `docs/DEVELOPMENT_ROADMAP.md` 是阶段编号、状态和顺序的唯一权威来源。
 - 未先更新总路线图，不允许临时新增阶段编号或改变后续阶段顺序。
-- README、`NEXT_STEPS.md` 和各子系统设计只能引用总路线图，不得维护相互竞争的阶段计划。
+- README 和各子系统设计只能引用总路线图，不得维护相互竞争的阶段计划。
 - 不允许跨阶段实现未要求的功能。
 - 数据库阶段不写复杂 API。
 - API 阶段不写复杂 Agent 工作流。
@@ -19,7 +19,7 @@
 - 不允许实现自动开方能力。
 - 不允许实现修改医生处方能力。
 - 不允许生成建议用户自行加量、减量、停药、换药的逻辑。
-- 复诊申请、购药方案、提醒创建等关键动作必须有 human confirmation 字段。
+- 复诊申请、购药、提醒执行等关键动作必须经过显式 human confirmation；无外部副作用的本地草稿可以自动创建。
 - 医疗敏感输出必须经过 safety check。
 - 数据库中禁止出现 `auto_prescribe`、`diagnosis_by_ai`、`ai_dosage_change` 等字段。
 
@@ -57,7 +57,12 @@
 - `docs/TECH_DESIGN.md`
 - `docs/API_SPEC.md`
 - `docs/DB_SCHEMA.md`
-- `docs/AGENT_WORKFLOW.md`
+- `docs/BUSINESS_WORKFLOWS.md`
+- `docs/AGENT_ARCHITECTURE.md`
+- `docs/RAG_RETRIEVAL.md`
+- `docs/TOOL_CONTRACTS.md`
+- `docs/SAFETY_POLICY.md`
+- `docs/EVALUATOR_AGENT.md`
 - `docs/RESUME_NOTES.md`
 - 项目 md 文档
 
@@ -69,6 +74,8 @@
 - 测试方式；
 - 下一步建议；
 - 与简历描述相关的项目亮点。
+
+面经术语规则：面试经验文档中的名词必须采用目标岗位面试中实际会使用的说法，不能直接把代码类名、内部模块名或直译词当作面试术语。例如正式实现名 `SafetyAgent` 在面经中统一表达为“Agent 安全”，不得写成“安全代理”、`safeagent` 或“safe 代理”；正式评测实现统一表达为“Agent 评测”。架构文档和代码可以保留正式标识符，但面经和简历口述必须使用面试口径。自我介绍和项目介绍可以在准备时按 STAR 检查结构，但口头答案不得朗读 STAR 字母或英文标签，也不得把技术栈、内部类名和字段名当成开场介绍。
 
 ## 6. 输出格式
 
@@ -90,21 +97,24 @@
 
 ## 8. Multi-Agent 角色边界
 
-- `Planner`: 只负责识别 `intent`、`member_id`、`action_type`、缺失槽位和 `required_tools`，不直接生成医疗建议。
-- `ProfileAgent`: 只读取家庭成员档案、慢病标签、过敏史和安全备注，不能凭模型记忆补全病史。
-- `RefillAgent`: 只基于处方、药箱和购药记录整理续方材料草稿，不能开方或改剂量。
-- `PharmacyAgent`: 只查询库存、配送/自提候选方案和补货信息，不能替代用户下单。
-- `ReminderAgent`: 只生成提醒草稿，提醒创建必须经过用户确认。
+- `Router`: 只判断任务是单领域直达还是复杂跨领域；简单请求不得为展示架构而强制进入 Supervisor。
+- `TaskPlanner`: 只为复杂跨领域任务生成一次结构化 `WorkflowPlan`，识别目标、成员、依赖、缺失槽位和所需能力，不参与逐步调度。
+- `Supervisor`: 只负责串行执行既定计划，选择下一个满足依赖的领域 Agent，并执行有限重试、降级和终止；不得改写用户目标、扩展计划、直接调用业务工具或跳过治理节点。
+- `TriageAgent`: 只负责症状结构化、红旗信号整理和就医/科室候选，不做诊断。
+- `MedicationAgent`: 负责处方、药箱、库存、续方材料和提醒草稿；不得开方、改剂量或替用户下单。
+- `ReportAgent`: 负责医疗文档解析、指标结构化和有来源的通俗解释；不得给出诊断或治疗方案。
 - `SafetyAgent`: 拦截停药、加量、换药、严重症状、越权查询和跳过确认等高风险请求。
 - `EvaluatorAgent`: 只在用户答案生成后读取 run 产物并执行事后质量评估，不参与业务执行，不修改用户答案，不生成医疗建议，不写业务状态。
 
 `SafetyAgent` 与 `EvaluatorAgent` 不得混用：`SafetyAgent` 是运行时安全拦截器，必须在高风险输出或动作发生前介入；`EvaluatorAgent` 是 post-run 只读评估器，只记录答案生成后的质量与失败原因。
 
+`Supervisor` 属于业务执行层；`SafetyAgent` 和 `EvaluatorAgent` 属于治理层。治理节点只能由 LangGraph 固定边调用，不能成为 Supervisor 的可选路由目标，也不能因 Supervisor 判断“任务已完成”而被跳过。
+
 ## 9. ContextEnvelope 上下文管理
 
 不要把完整聊天历史直接传给所有 Agent。上下文必须遵循以下生命周期：
 
-`Raw Conversation -> TaskContext Builder -> ContextEnvelope -> Role-specific Context View -> Tool Evidence / RAG Sources -> Run Summary -> Context Reset -> EvaluatorAgent Review -> Long-term Memory Write`
+`Raw Conversation -> TaskContext Builder -> ContextEnvelope -> Role-specific Context View -> Tool Evidence / RAG Sources -> Run Summary -> Context Reset -> EvaluatorAgent Review -> Confirmed Preference Write`
 
 其中用户答案在业务 Agent 完成工具证据和 RAG 引用整理后生成；`RunSummary`、`Context Reset` 和 `EvaluatorAgent Review` 都发生在该答案生成之后。每轮运行必须生成结构化 `ContextEnvelope`：
 
@@ -145,8 +155,17 @@ Context Compaction 规则：
 - 旧对话只能进入结构化摘要，不能把完整聊天历史广播给所有 Agent，也不能把未确认的模型推断写成事实。
 - 每条事实必须保留 `source_id`、来源类型和对应 `member_id`；摘要不得抹掉来源指针。
 - 处方、库存、病史等事实必须来自 DB/API 工具输出，不能来自模型记忆。
-- 长期记忆只保存用户确认后的提醒偏好、草稿状态和常用视图。
+- PostgreSQL 只保存用户明确确认的偏好、Task Checkpoint 和确认记录；草稿状态属于业务状态，不叫模型长期记忆。
 - 多成员任务必须按 `member_id` 分区压缩和引用，禁止跨成员合并事实。
+
+分层状态与记忆规则：
+
+- Working State 只服务单次 run，保存 `WorkflowState`、当前 `ContextEnvelope`、角色最小视图和临时节点结果；run 后按 Context Reset 清理。
+- Task Checkpoint 保存可中断续跑所需的结构化 `RunSummary`、确认状态和冻结产物引用；PostgreSQL 是唯一权威来源。
+- Redis 只保存带 TTL 的短期任务缓存并用于多实例协调；故障或未命中时必须回源 PostgreSQL，不得成为事实来源。
+- 用户偏好只保存用户明确确认的长期设置，必须绑定 `user_id + member_id + source_id + consent/version`；模型推断、原始对话和医疗结论不得写入。
+- 处方、过敏史、检查报告、药箱库存等属于权威业务数据，不属于 Agent 长期记忆；每次任务必须经 DB/Provider 工具重新读取。
+- 医疗知识库是版本化 RAG 数据源，不得与个人长期记忆共用 namespace、索引或写入策略。
 
 ## 10. Tool Registry 与 Trace 记录
 
@@ -171,9 +190,34 @@ Context Compaction 规则：
 
 ## 12. Agent Harness 验收
 
-- 首批评估至少覆盖 16 条用例：正常续方、复诊材料、用药提醒、高风险医疗、工具异常和跨成员串扰。
+- 当前基线保留 16 条 deterministic 固定用例；4B 最终验收硬门槛为至少 32 条高质量用例，覆盖单领域、跨领域、澄清、高风险、RAG、Provider 异常、成员攻击和确认并发。
 - `EvaluatorAgent` 是 post-run agent，只允许读取 `RunTrace`、`ContextEnvelope`、`ToolEvidence`、`RAGSources`、`FinalAnswer` 和 `ExpectedCase`。
 - `EvaluatorAgent` 输出 `EvaluationResult`，至少包含 `task_success`、`tool_call_accuracy`、`groundedness`、`schema_valid`、`hallucination_detected`、`safety_recall`、`human_confirmation_required`、`human_confirmation_present`、`context_isolation_passed`、`latency_ms` 和 `failure_reasons`。
 - `EvaluatorAgent` 不允许修改用户答案，不允许生成医疗建议，不允许调用业务工具或写业务状态。
 - 后续 `AgentHarness` 汇总多个 `EvaluationResult` 生成 `agent_eval_report.md`，聚合 `task_success`、`tool_call_accuracy`、`groundedness`、`schema_valid`、`hallucination_rate`、`safety_recall`、`human_confirmation_rate`、`context_isolation_pass_rate` 和 `p95_latency`。
 - 未真实跑出的指标只能写为“设计/定义/目标”，不能写成已达成结果。
+
+## 13. LangGraph 工作流规则
+
+- 正式业务工作流必须是有界、可终止的状态图；MVP 不实现依赖模型自我判断的无限循环。
+- 简单单领域请求由 Router 直接进入一个领域 Agent；只有复杂跨领域任务才调用 `TaskPlanner` 产生一次结构化 `WorkflowPlan`，再进入 bounded Supervisor。
+- `Supervisor` 只消费 `WorkflowPlan`、最小任务状态和各角色的结构化结果，输出受 Pydantic 约束的调度决策；任何模型路由建议都必须经过角色白名单、工具权限、依赖关系和最大步数校验。
+- 业务角色完成后必须把结构化结果交回 Supervisor；角色之间不得直接互调，不允许模型产生未注册角色、任意 handoff 或无限循环。
+- 每个业务角色必须从 `ContextManager` 获取最小视图，并且只能通过 `ToolRegistry` 调用工具；节点不得直接调用数据库、service handler 或外部 API。
+- 所有用户可见模型输出必须通过 `ModelGateway` 的目标 Pydantic schema 与输出安全检查；失败的 provider 原始文本不能进入 FinalAnswer。
+- 安全治理必须包含请求入口、动作执行前和最终输出前三层固定检查。阻断型安全标记出现时，不得创建草稿或执行动作。
+- `SafetyAgent` 与 `EvaluatorAgent` 必须通过图的固定治理边执行，不得由 Supervisor 选择、移除或绕过。
+- 首次 run 可以自动创建无外部副作用的本地 `DRAFT`；用户确认的是执行。确认必须创建同一 `task_id` 下的新 run，从 PostgreSQL checkpoint 恢复并重新读取可变事实。
+- 工作流必须冻结 FinalAnswer 与 RunTrace，再执行 RunSummary / Context Reset，最后由 DeterministicEvaluator 只读评估并回填引用。
+- 不实现 Agent 级并行调度、MCP Server、OpenTelemetry/Jaeger 或复杂自动重规划。领域 Agent 内部仅允许对相互独立的只读 Provider、DB 和 RAG 查询做受控异步并发。
+
+## 14. Model Gateway
+
+- 模型 provider、base URL、Key、模型名和 timeout 只能来自服务端环境变量，不能由 API 请求或 Agent prompt 覆盖。
+- 自动测试和无 Key 环境默认使用 deterministic provider，不得把网络模型作为测试前置条件。
+- Provider 原始文本必须先经过 JSON 解析、目标 Pydantic schema 和 model-output safety check，全部通过后才能进入 Agent 状态。
+- provider timeout、HTTP/response 错误、schema 失败和 safety 失败必须记录 attempt trace；配置 fallback 时使用同一输出契约重试。
+- fallback 也失败时返回无 output 的结构化失败，不允许把未校验原始文本交给 Agent。
+- Model Gateway 的规则检查不替代 SafetyAgent；SafetyAgent 仍负责工作流运行时的医疗风险拦截和人工确认判断。
+- 真实模型只能在固定候选集合内做结构化决策；Pydantic、角色/工具白名单、成员权限和安全规则必须在模型之后再次校验。
+- LLM Judge 只允许作为离线辅助实验，不进入运行链路，也不作为 4B 最终验收硬门槛。

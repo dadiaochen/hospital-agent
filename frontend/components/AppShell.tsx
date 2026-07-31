@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { navigationItems } from "@/lib/navigation";
+import { MemberSwitcher } from "@/components/MemberSwitcher";
+import { Navigation } from "@/components/Navigation";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -8,36 +9,40 @@ type AppShellProps = {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="min-h-screen bg-[#f7faf9] text-ink">
-      <header className="border-b border-[#d9e5e1] bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-medium text-clinic">FamilyHealthAgent</p>
-            <h1 className="text-2xl font-semibold tracking-normal">家庭健康事务管理控制台</h1>
-          </div>
-          <div className="rounded-md border border-[#d9e5e1] px-3 py-2 text-sm text-[#475569]">
-            Phase 1 Skeleton
+    <div className="min-h-screen bg-[#fffdf7] text-ink">
+      <header className="border-b border-[#eadfca] bg-[#fffaf0]/95 backdrop-blur">
+        <div className="mx-auto flex max-w-[1440px] flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
+          <Link aria-label="返回患者端首页" className="group flex items-center gap-3" href="/">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#f7b928] text-sm font-black text-[#553507] shadow-sm transition group-hover:-rotate-3">
+              FH
+            </span>
+            <span>
+              <span className="block text-xs font-bold uppercase tracking-[0.2em] text-[#b26c09]">
+                FamilyHealthAgent
+              </span>
+              <span className="mt-1 block text-xl font-bold tracking-tight text-[#173c38]">
+                家庭健康事务
+              </span>
+            </span>
+          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="hidden rounded-full bg-[#fff0c2] px-3 py-2 text-xs font-semibold text-[#80530b] lg:inline-flex">
+              仅生成本地草稿，不执行外部提交
+            </span>
+            <MemberSwitcher />
           </div>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-6 px-5 py-6 lg:grid-cols-[220px_1fr]">
-        <nav className="h-fit rounded-md border border-[#d9e5e1] bg-white p-3">
-          <div className="grid gap-1">
-            {navigationItems.map((item) => (
-              <Link
-                className="rounded-md px-3 py-2 text-sm font-medium text-[#334155] hover:bg-mist hover:text-clinic"
-                href={item.href}
-                key={item.href}
-              >
-                {item.label}
-              </Link>
-            ))}
+      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[224px_minmax(0,1fr)]">
+        <aside className="h-fit rounded-2xl border border-[#eadfca] bg-white p-3 shadow-sm">
+          <Navigation />
+          <div className="mt-3 rounded-xl bg-[#fff7df] p-3 text-xs leading-5 text-[#80602b]">
+            系统只整理信息和生成草稿，不诊断、不开方、不修改医生处方。
           </div>
-        </nav>
+        </aside>
         <main>{children}</main>
       </div>
     </div>
   );
 }
-

@@ -29,6 +29,7 @@ class AgentRun(IDMixin, TimestampMixin, Base):
 
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     member_id: Mapped[str | None] = mapped_column(ForeignKey("family_members.id"), index=True)
+    parent_run_id: Mapped[str | None] = mapped_column(ForeignKey("agent_runs.id"), index=True)
     user_goal: Mapped[str] = mapped_column(Text, nullable=False)
     intent: Mapped[str | None] = mapped_column(String(80), index=True)
     status: Mapped[str] = mapped_column(String(40), default="created", nullable=False)
