@@ -193,17 +193,20 @@ Deterministic Evaluator 是正式核心。任务十一已经使用 32 条冻结�
 
 任务十一的 P50/P95 使用冻结 fixture latency，不能当作真实服务 wall-clock。deterministic provider 未返回 usage，因此 `token_usage_available=false`，token 和 billed cost 为 `N/A`，运行器禁止合成这些指标。任务十二已在本机 Docker PostgreSQL/Redis/FastAPI/Next.js 栈补充真实运行验收；baseline 19/19、Redis 故障回源 18/18，详见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。
 
+4D-B 进一步增加本地观测 runner：实际执行 bounded Supervisor、`KeywordRetriever`、ContextManager 和 ProviderRegistry 故障注入，再生成版本化报告。该层使用合成 fixture 和内存 SQLite，用于验证实现与指标公式接线；它不替代 Docker PostgreSQL/pgvector、Checkpoint/Redis 恢复、真实 HTTP 或真实 LLM 评测。对应缺失指标继续为 `N/A`。
+
 ## 14. 当前实现与目标差异
 
 | 当前实现 | 4B 目标 | 对应任务 |
 | --- | --- | --- |
-| 任务五 deterministic Router + 任务六三领域 Agent/串行 Supervisor | 三层治理包围的完整业务状态图 | 5–7 |
+| deterministic Router + 三领域 Agent/串行 Supervisor 内核已独立实现和评测，但两个 HTTP 入口仍走各自固定领域链 | 将当前 HTTP Runtime 统一到 bounded Supervisor 与固定治理边 | 4D 后续工程收口 |
 | 任务六领域编排默认 deterministic | 领域决策可选 model-assisted，始终受约束 | 后续 Provider/模型增强 |
 | 新业务链路已自动生成本地 DRAFT，确认后执行本地状态迁移；旧 Runtime 保留兼容 | 任务八已落地 PG 权威 checkpoint + Redis TTL cache/协调 | 8 |
 | `TaskCheckpointService` 写入不可变 checkpoint，`TaskCheckpointCache` 校验作用域和版本；确认 run 使用最小投影 | 后续任务九的 Tool/Provider 可靠性和真实外部联调 | 8–9 |
 | 三个重点 Provider 已具备强 schema、有限重试、attempt/source/degraded 测试；其他 mock 兼容保留 | 任务十已补 RAG、隔离和 Observation；外部 Provider 仍待真实联调 | 9–12 |
 | RRF、过期向量拒绝、攻击式隔离、白名单 Observation 和 32 条 A/B/C Harness 已实现 | 本机 Docker PostgreSQL/Redis 与 wall-clock 已验收，结果不等于生产 SLO | 12 |
 | 16 条历史契约 + 9 条 runtime 场景 + 32 条任务十一业务 fixture | 三条业务 API、RAG 索引、Redis 回源和并发状态机已完成真实 smoke | 12 |
+| 4D-B 已观测本地 Supervisor、关键词 RAG、ContextManager 和 Provider fault | Docker pgvector、Checkpoint/Redis、HTTP 重复运行和可选真实 LLM 仍待统一报告 | 4D-B |
 
 ## 15. 数据库迁移链
 

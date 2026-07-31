@@ -125,3 +125,9 @@ Evaluator 可以读取冻结的 SafetyTrace、`confirmation_state`、最终答�
 ## 4B 任务十二：Evaluator 的边界
 
 任务十二的 `scripts/task12_acceptance.py` 是操作员级 Docker/HTTP/数据库验收，不是新的 LLM Judge，也不改变 Deterministic Evaluator 的只读约束。它检查 migration、seed、RAG 数据、API、Redis 回源和确认并发；不会修改 FinalAnswer，不会调用业务 Tool，不会生成医疗建议。任务十二的本机 wall-clock 不能替代 Harness 的固定指标，也不能作为临床或生产质量结论。
+
+## 4D-B 本地观测层
+
+`LocalObservedBenchmarkRunner` 把 4D-A gold 数据投影为四组本地观测：bounded Supervisor `RunTrace`、关键词 RAG 排名、ContextManager compact/reset 结果和 Provider attempt trace。它仍然只把冻结产物交给 deterministic 规则计算，不使用 LLM Judge，也不能修改 FinalAnswer 或业务状态。
+
+[4D-B 本地观测报告](local_benchmark_report.4d.md) 使用合成 fixture 和内存 SQLite。报告中的 Safety、RAG、上下文和 Provider 数字只属于这组固定本地样本；真实 LLM 回答质量、token/cost、Docker pgvector 和 PostgreSQL/Redis Checkpoint 恢复保持 `N/A`，直到相应运行产物真正接入。

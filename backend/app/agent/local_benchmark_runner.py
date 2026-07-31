@@ -7,11 +7,9 @@ turns deterministic output into a claim about real-model answer quality.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import platform
-from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import fmean
@@ -92,7 +90,7 @@ class LocalObservedBenchmarkRunner:
     def run(self) -> tuple[LocalObservationBundle, BenchmarkReport]:
         """Execute all local components and calculate metrics from observations."""
 
-        manifest, raw_manifest, manifest_hash = self.contract_runner.load_manifest()
+        manifest, _, manifest_hash = self.contract_runner.load_manifest()
         datasets = self.contract_runner.load_datasets(manifest)
         local_rag_cases = self.load_local_rag_cases()
 
@@ -128,13 +126,19 @@ class LocalObservedBenchmarkRunner:
         self,
         bundle: LocalObservationBundle,
         report: BenchmarkReport,
+        *,
+        markdown_path: Path | None = None,
     ) -> tuple[Path, Path, Path]:
         """Persist machine-readable observations and human-readable reports."""
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         observation_path = self.output_dir / "local_observations.4d.json"
         report_json_path = self.output_dir / "local_benchmark_report.4d.json"
-        report_markdown_path = self.project_root / "docs" / "local_benchmark_report.4d.md"
+        report_markdown_path = (
+            markdown_path
+            or self.project_root / "docs" / "local_benchmark_report.4d.md"
+        )
+        report_markdown_path.parent.mkdir(parents=True, exist_ok=True)
         observation_path.write_text(
             json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
@@ -151,6 +155,10 @@ class LocalObservedBenchmarkRunner:
 
     def _run_agent_observations(self) -> tuple[LocalAgentObservation, ...]:
         harness = AblationHarnessRunner(self.business_fixture_path)
+        _, cases = harness.load_suite()
+        relevant_sources = {
+            case.case_id: case.relevant_rag_source_ids for case in cases
+        }
         observed = harness.run_strategy_observed("bounded_supervisor")
         results: list[LocalAgentObservation] = []
         for result, execution_latency_ms in observed:
@@ -191,7 +199,7 @@ class LocalObservedBenchmarkRunner:
                     strategy="bounded_supervisor",
                     run_trace=trace,
                     evaluation=evaluation,
-                    relevant_rag_source_ids=tuple(result.trace.ranked_rag_source_ids),
+                    relevant_rag_source_ids=tuple(relevant_sources[result.case_id]),
                     ranked_rag_source_ids=tuple(result.trace.ranked_rag_source_ids),
                     cited_source_ids=tuple(result.trace.cited_source_ids),
                     fixture_latency_ms=original_trace.latency_ms,
@@ -228,6 +236,13 @@ class LocalObservedBenchmarkRunner:
                     )
                     latency_ms = max(1, round((perf_counter() - started) * 1000))
                     ranked_source_ids = tuple(source.source_id for source in result.sources)
+                    ranked_source_names = tuple(source.source for source in result.sources)
+                    source_versions = {
+                        source.source_id: (
+                            f"document={source.document_version};chunk={source.chunk_version}"
+                        )
+                        for source in result.sources
+                    }
                     cited_source_ids = ranked_source_ids[:1]
                     observations.append(
                         LocalRAGObservation(
@@ -239,6 +254,8 @@ class LocalObservedBenchmarkRunner:
                             expected_source_id=case.expected_source_id,
                             expected_source=case.expected_source,
                             ranked_source_ids=ranked_source_ids,
+                            ranked_source_names=ranked_source_names,
+                            source_versions=source_versions,
                             cited_source_ids=cited_source_ids,
                             fallback_used=result.fallback_used,
                             fallback_reason=result.fallback_reason,
@@ -661,19 +678,17 @@ class LocalObservedBenchmarkRunner:
                 "ratio",
                 "Write fault cases with an unintended retry; lower is better.",
             ),
-            self._mean_optional_metric(
+            self._percentile_metric(
                 "latency_p50_ms",
-                self._percentile([item.execution_latency_ms for item in agents], 0.50),
-                "ms",
+                [item.execution_latency_ms for item in agents],
+                0.50,
                 "Local wall-clock measurement around deterministic bounded Supervisor execution.",
-                scalar=True,
             ),
-            self._mean_optional_metric(
+            self._percentile_metric(
                 "latency_p95_ms",
-                self._percentile([item.execution_latency_ms for item in agents], 0.95),
-                "ms",
+                [item.execution_latency_ms for item in agents],
+                0.95,
                 "Local wall-clock p95; not a production latency SLO.",
-                scalar=True,
             ),
             self._mean_optional_metric(
                 "average_input_tokens",
@@ -766,13 +781,9 @@ class LocalObservedBenchmarkRunner:
         values: list[float] | float | None,
         unit: str,
         notes: str,
-        *,
-        scalar: bool = False,
     ) -> BenchmarkMetric:
         if values is None:
             rendered: list[float] = []
-        elif scalar:
-            rendered = [float(values)] if isinstance(values, (float, int)) else []
         else:
             rendered = values if isinstance(values, list) else [float(values)]
         return BenchmarkMetric(
@@ -792,6 +803,25 @@ class LocalObservedBenchmarkRunner:
         ordered = sorted(values)
         rank = max(1, math.ceil(fraction * len(ordered)))
         return float(ordered[rank - 1])
+
+    @classmethod
+    def _percentile_metric(
+        cls,
+        name: str,
+        values: list[float],
+        fraction: float,
+        notes: str,
+    ) -> BenchmarkMetric:
+        value = cls._percentile(values, fraction)
+        return BenchmarkMetric(
+            name=name,
+            value=value,
+            status="measured" if value is not None else "not_available",
+            metric_type="runtime_observation",
+            sample_count=len(values),
+            unit="ms",
+            notes=notes,
+        )
 
     @staticmethod
     def _provider_error_type(fault: str) -> str:

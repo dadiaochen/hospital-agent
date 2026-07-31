@@ -78,6 +78,8 @@ class LocalRAGObservation(FrozenTraceModel):
     expected_source_id: NonEmptyStr
     expected_source: NonEmptyStr
     ranked_source_ids: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    ranked_source_names: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    source_versions: dict[NonEmptyStr, NonEmptyStr] = Field(default_factory=dict)
     cited_source_ids: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     fallback_used: bool = False
     fallback_reason: NonEmptyStr | None = None
@@ -88,6 +90,10 @@ class LocalRAGObservation(FrozenTraceModel):
 
     @model_validator(mode="after")
     def validate_rag_evidence(self) -> "LocalRAGObservation":
+        if len(self.ranked_source_ids) != len(self.ranked_source_names):
+            raise ValueError("RAG source ids and names must have the same length")
+        if set(self.source_versions) - set(self.ranked_source_ids):
+            raise ValueError("RAG source versions must belong to recorded sources")
         if set(self.cited_source_ids) - set(self.ranked_source_ids):
             raise ValueError("RAG citations must come from the recorded ranking")
         return self

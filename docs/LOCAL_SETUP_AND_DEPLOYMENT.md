@@ -1,6 +1,6 @@
 # 本地环境、启动与部署指南
 
-本文面向第一次运行 Python 项目的开发者，回答四个问题：环境装在哪里、配置写在哪里、项目如何启动、当前是否已经能生产部署。
+本文面向第一次运行 Python 项目的开发者，回答五个问题：Docker Desktop 在哪里点、环境装在哪里、第一次怎么启动、以后怎么启动和关闭、当前是否已经能生产部署。
 
 > 完整学习、migration、seed、Swagger/Postman 和前后端联调统一使用 Docker Desktop 中的 PostgreSQL/Redis。SQLite 仅用于 pytest 隔离测试，或 Docker 暂不可用时的临时排错；它不能替代 PostgreSQL 联调。本仓库仍是本地开发演示，不是生产部署方案。
 
@@ -12,48 +12,84 @@
 
 下面十步不要求你先理解 Docker 内部原理。先完成一次成功启动，再回头学习后续章节：
 
-1. 打开 Docker Desktop，等首页显示 Docker Engine 正在运行。
-2. 打开一个新的 PowerShell，不要在 `frontend` 或 `backend` 子目录执行。
-3. 进入仓库根目录并在缺少配置时创建本机 `.env`：
+1. 点击 Windows 左下角“开始”，输入 `Docker Desktop`，点击带 Docker 图标的应用。
+2. 如果第一次打开出现许可协议，阅读后点击接受；如果询问是否使用 WSL 2，保持 WSL 2 backend。
+3. 等待 Docker Desktop 完成启动。任务栏右下角会出现 Docker 图标，应用窗口应显示 **Engine running**。如果仍显示 `Starting`，不要执行 Compose 命令。
+4. 第一次拉取镜像前，可以点击右上角齿轮 **Settings -> Resources -> Advanced**，把 **Disk image location** 设置为 `E:\DockerData`，点击 **Apply & restart**。如果你的版本没有这个选项，就保留 Docker 默认路径，不要手工移动系统文件。
+5. 打开一个新的 PowerShell：点击 Windows“开始”，输入 `PowerShell`，点击“Windows PowerShell”或“终端”。不要在 `frontend` 或 `backend` 子目录执行。
+6. 进入仓库根目录并在缺少配置时创建本机 `.env`：
 
 ```powershell
 Set-Location E:\project_code\hospital
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-4. 检查 Compose 配置能否解析：
+7. 检查 Docker 引擎和 Compose 配置：
 
 ```powershell
+docker version
 docker compose config --quiet
 ```
 
-5. 构建并启动 PostgreSQL、Redis、FastAPI 和 Next.js：
+`docker version` 必须同时显示 Client 和 Server。只有 Client、没有 Server，通常表示 Docker Desktop 还没启动完成。
+
+8. 第一次构建并启动 PostgreSQL、Redis、FastAPI 和 Next.js：
 
 ```powershell
 docker compose up -d --build --wait --wait-timeout 300
 ```
 
-6. 查看状态。`postgres`、`redis`、`backend`、`frontend` 都应显示 `healthy`：
+第一次会下载基础镜像、安装依赖、构建前后端镜像、执行 Alembic migration 和幂等 seed，因此通常比以后启动慢。
+
+9. 查看状态。`postgres`、`redis`、`backend`、`frontend` 都应显示 `healthy`：
 
 ```powershell
 docker compose ps
 ```
 
-7. 检查后端是否真正响应：
+10. 浏览器依次打开患者端 <http://localhost:3000>、Agent 页面 <http://localhost:3000/agent>、接口文档 <http://localhost:8000/docs> 和健康检查 <http://localhost:8000/health>。
 
-```powershell
-(Invoke-WebRequest http://localhost:8000/health).Content
-```
+在 `/agent` 选择“正常续方”，先观察 `DRAFT`，再勾选确认并续跑；这会同时经过前端、HTTP API、数据库、Agent 工作流和确认状态机。Agent 运行在 `backend` 容器中，不存在需要额外点击启动的 Agent 服务。
 
-8. 浏览器依次打开患者端 <http://localhost:3000>、Agent 页面 <http://localhost:3000/agent> 和接口文档 <http://localhost:8000/docs>。
-9. 在 `/agent` 选择“正常续方”，先观察 `DRAFT`，再勾选确认并续跑；这会同时经过前端、HTTP API、数据库、Agent 工作流和确认状态机。
-10. 学习结束后停止全部服务，但保留 PostgreSQL 数据：
+学习结束后执行：
 
 ```powershell
 docker compose stop
 ```
 
-下次只需在仓库根目录执行 `docker compose start`。如果代码或依赖有变化，再执行第 5 步重新构建。
+这会停止四个容器，但保留 PostgreSQL/Redis volume。确认 PowerShell 已返回提示符后，可以点击任务栏右下角 Docker 图标，再点击 **Quit Docker Desktop**；如果稍后还要使用其他 Docker 项目，也可以让 Docker Desktop 保持运行。
+
+### 0.0.1 这是第一次启动吗
+
+以下任一情况按“第一次或重新构建”处理：
+
+- 第一次克隆仓库。
+- 还没有项目 `.env`。
+- 还没有构建本项目镜像。
+- `Dockerfile`、依赖、migration、seed、Compose 或环境变量发生变化。
+
+使用：
+
+```powershell
+docker compose up -d --build --wait --wait-timeout 300
+```
+
+已经成功运行过、只是在昨天执行了 `docker compose stop`，并且代码和配置没有变化时，属于日常启动：
+
+```powershell
+docker compose start
+docker compose ps
+```
+
+| 场景 | 命令 | 数据是否保留 |
+| --- | --- | --- |
+| 第一次启动或代码/依赖改变 | `docker compose up -d --build --wait --wait-timeout 300` | 保留 |
+| 日常继续使用 | `docker compose start` | 保留 |
+| 日常关闭 | `docker compose stop` | 保留 |
+| 删除容器但保留 named volume | `docker compose down` | 保留 |
+| 完全重置本地数据 | `docker compose down -v` | **删除，谨慎使用** |
+
+下面保留分步骤说明和排错依据。
 
 ### 0.1 第一次准备
 

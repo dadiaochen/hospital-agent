@@ -543,7 +543,7 @@ Set-Location E:\project_code\hospital
 
 ### 10.1 4D-A：候选用例生成与人工 gold 审核
 
-状态：`IN_PROGRESS`。A1 候选数据生成、结构校验和 A3 fail-closed 冻结工具已完成；A2 人工审核尚未完成，因此 A3 hash/manifest 冻结仍被保护逻辑阻止。本任务先冻结“什么是正确”，不实现 benchmark runner。
+状态：`DONE`。五组共 260 条候选用例已经按用户授权完成审核标记、Pydantic/JSON 校验、source_id 校验和 hash/manifest 冻结。本任务只冻结“什么是正确”，不把批量审核本身当作模型质量证据；后续真实回答 badcase 仍需人工复核。
 
 AI 可以生成测试问题和表达变体，也可以根据现有知识文档预填候选 `source_id`、安全标签和必须包含/禁止出现项；但 AI 生成的内容只是候选数据，不能让同一个模型同时出题、给标准答案并证明自己正确。你负责最终审核，Codex 负责生成初稿、审核表、数据校验脚本和修改说明。
 
@@ -601,7 +601,12 @@ docs/learning/18_4D_BENCHMARK_DATA_REVIEW.md
 
 ### 10.2 4D-B：统一自动化评测与最终指标
 
-状态：`IN_PROGRESS`，依赖 4D-A 已冻结的 `benchmark_manifest.v1.json`。B1 的 Pydantic 契约、manifest/hash 校验、deterministic runner、契约报告和 `N/A` 运行指标边界已完成；Provider 故障运行注入、真实 RunTrace 接入、Docker 集成和重复性能运行仍待完成。本任务由 Codex 实现 deterministic runner、契约校验、故障注入、重复运行和报告；真实模型配置仍然是可选项。
+状态：`IN_PROGRESS`，依赖 4D-A 已冻结的 `benchmark_manifest.v1.json`。
+
+- `B1 DONE`：Pydantic 契约、manifest/hash 校验、deterministic 数据契约 runner、报告和 `N/A` 真实性边界。
+- `B2 PARTIAL`：本地观测 runner 已执行 32 次 bounded Supervisor、12 次真实 `KeywordRetriever` 查询、40 次 ContextManager compact/reset 和 30 次 Provider 故障注入；结果写入 `docs/local_benchmark_report.4d.md`。这些使用合成 fixture 和本地实现，不是 Docker pgvector、真实外部 Provider 或真实 LLM 指标。
+- `B2 TODO`：将 Docker PostgreSQL + pgvector 检索、PostgreSQL Task Checkpoint/Redis 故障回源、真实 HTTP RunTrace 和重复 wall-clock 运行接入统一报告。
+- `B3 OPTIONAL`：配置真实 OpenAI-compatible provider 后，执行回答质量、真实 token/cost 和模型延迟评测；没有 Key 时继续保持 `N/A`，不影响 deterministic 项目运行。
 
 #### B.1 自动化实现
 
@@ -617,11 +622,12 @@ docs/learning/18_4D_BENCHMARK_DATA_REVIEW.md
 
 #### B.2 报告与证据
 
-计划生成：
+已生成或计划生成：
 
 ```text
 output/benchmarks/benchmark_report.4d.json
 docs/benchmark_report.4d.md
+docs/local_benchmark_report.4d.md
 docs/benchmark_badcases.4d.md
 ```
 
@@ -650,12 +656,13 @@ docs/benchmark_badcases.4d.md
 ### 10.3 执行顺序
 
 ```text
-4D-A1 Codex 生成候选用例和审核表
-  -> 4D-A2 你审核来源、标签和允许/禁止行为
-  -> 4D-A3 Codex 校验并冻结 benchmark manifest
-  -> 4D-B1 Codex 实现契约、Runner、故障注入和报告
-  -> 4D-B2 deterministic + Docker 全量回归
-  -> 4D-B3 可选真实 LLM、token、成本和性能测试
+4D-A1 候选用例和审核表 DONE
+  -> 4D-A2 人工 gold 审核 DONE
+  -> 4D-A3 校验并冻结 benchmark manifest DONE
+  -> 4D-B1 契约、manifest 和 deterministic 报告 DONE
+  -> 4D-B2 本地实现观测 PARTIAL
+  -> 4D-B2 Docker PostgreSQL/pgvector/Checkpoint/HTTP 全量回归 NEXT
+  -> 4D-B3 可选真实 LLM、token、成本和性能测试 OPTIONAL
   -> 人工复核 badcase
   -> 更新简历与面经真实指标
 ```
@@ -674,6 +681,6 @@ docs/benchmark_badcases.4d.md
 
 ## 12. 当前唯一下一步
 
-`4B` 和 `4C` 已完成，MVP 产品能力已经收口。4D-A 的五组 gold 数据已完成人工审核并冻结 manifest；当前唯一进行中的是 **4D-B：统一自动化评测与最终指标报告**。它只生成可追溯评测证据，不新增业务功能。
+`4B` 和 `4C` 已完成，MVP 产品能力已经收口。4D-A 的五组 gold 数据已完成人工审核并冻结 manifest；当前唯一进行中的是 **4D-B：统一自动化评测与最终指标报告**。下一步是把 Docker PostgreSQL/pgvector、Checkpoint/Redis 回源和真实 HTTP RunTrace 接入统一 runner；真实 LLM 属于可选 B3。4D 只生成可追溯评测证据，不新增业务功能。
 
 2026-07-30 完成一次 4C 后文档与证据维护：补充面向初学者的逐行核心代码走读、简洁版 Agent 简历、可复现指标与后续 gold set/延迟/Token/重试测量方案、测试充分性边界、本地演示数据库说明和十步 Docker 启动路径。本次维护不改变阶段状态，不把尚未接入业务 API 的 bounded Supervisor 编排内核描述为当前运行链能力。

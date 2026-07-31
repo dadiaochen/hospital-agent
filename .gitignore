@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 __pycache__/
@@ -9,6 +11,8 @@ __pycache__/
 .coverage
 htmlcov/
 .tmp/
+.cache/
+.test-tmp*/
 node_modules/
 .next/
 out/

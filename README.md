@@ -1,261 +1,221 @@
 # 家庭健康服务 Multi-Agent
 
-面向互联网医院家庭健康场景的本地可运行项目，覆盖慢病续方与提醒、预问诊/导诊、医疗报告整理和高风险医疗请求拦截。系统只做资料整理、流程辅助和确认前准备，不替代医生诊断、开方或调整用药。
+面向互联网医院慢病续方、用药提醒、预问诊和报告整理场景的工程化学习项目。项目重点不是堆叠 Agent 名词，而是实现一套可运行、可审计、可评测、可恢复的医疗业务辅助系统。
 
-项目仍处于开发与本地验收阶段，未接入真实医院、药店、支付或通知系统，也未上线生产环境。
+系统只做资料整理、流程辅助和确认前准备，不替代医生诊断、开方或调整用药。当前为本地开发与集成验收环境，未接入真实医院、药店、支付或通知系统，也不是生产医疗系统。
 
-## 当前进度
+## 项目亮点
 
-[开发总路线图](docs/DEVELOPMENT_ROADMAP.md) 是阶段、状态和顺序的唯一权威来源。`4B` 后端和 `4C` 患者端 MVP 已完成：
+| 工程问题 | 当前实现 |
+| --- | --- |
+| 多 Agent 如何避免无限循环 | 简单任务直达领域 Agent；复杂任务由一次性 Planner 生成计划，再由串行 bounded Supervisor 按依赖和最大步数调度 |
+| 医疗动作如何避免越权 | 请求入口、动作执行前、最终输出前三层安全检查；受保护动作必须经过显式确认和幂等校验 |
+| 上下文如何避免跨成员污染 | `ContextEnvelope`、角色最小视图、Context Reset/Compaction；所有事实引用绑定 `member_id` 与来源 |
+| 中断任务如何恢复 | PostgreSQL 保存权威 Task Checkpoint，Redis 只做带 TTL 的短期缓存，缓存故障时回源 PostgreSQL |
+| RAG 如何保证可追溯 | PostgreSQL + pgvector、关键词降级、RRF 融合、版本校验和 `source_id` 引用 |
+| 外部依赖失败怎么办 | Tool Registry 和 Provider Registry 统一 timeout、有限重试、错误分类、降级结果与 attempt trace |
+| Agent 质量如何证明 | deterministic Evaluator、固定 gold 数据、32 条 A/B/C 消融 fixture、Docker/API/E2E 与本地观测 runner |
+| 没有模型 Key 能否运行 | 默认 deterministic Model Gateway；可选 OpenAI-compatible provider，未配置 Key 时前后端和测试仍可运行 |
 
-- 任务 1：Git 线性历史，`DONE`。
-- 任务 2：Alembic 迁移链与向量维度冲突，`DONE`。
-- 任务 3：FastEmbed + PostgreSQL pgvector + 关键词降级，`DONE`。
-- 任务 4：新业务 Model Gateway 双模式接线，`DONE`。
-- 任务 5：最终契约与复杂度路由，`DONE`。
-- 任务 6：三领域 Agent 与 bounded Supervisor，`DONE`。
-- 任务 7：三层安全与确认状态机，`DONE`。
-- 任务 8：分层状态与两次 run 续跑，`DONE`。
-- 任务 9：Tool 与三类 Provider 可靠性，`DONE`。
-- 任务 10：RAG、成员隔离与可观测性补强，`DONE`。
-- 任务 11：32 条 Harness 与消融实验，`DONE`。
-- 任务 12：PostgreSQL/Redis/Docker 后端验收，`DONE`；baseline 19/19、Redis 故障回源 18/18。
-- 任务 13：4B 文档与 Git 收口，`DONE`。
-- 产品阶段：`4C DONE`，患者端、黄金链路、浏览器 E2E 和固定演示均已完成，MVP 业务功能在此收口。`4D-A` 五组 gold 数据已经审核并冻结；当前唯一进行中的是 `4D-B` 自动化评测和简历指标报告，不新增业务能力。
-- 4D-B 当前可运行 [Benchmark 使用指南](docs/4D_B_BENCHMARK_GUIDE.md) 中的 deterministic runner；它只报告数据契约和策略一致性，真实回答质量、RAG Recall、Safety recall、延迟、token 和成本仍保持 `N/A`。
-
-当前代码仍保留旧 Agent Runtime 和旧确认草稿 API 的兼容流程；新业务任务链路已经使用任务七的三层 Safety Guard、自动本地 `DRAFT` 和 `DRAFT -> CONFIRMED -> EXECUTED` 状态机。任务八已将 PostgreSQL Task Checkpoint 设为权威源，Redis 仅做带 TTL 的短期投影并在 miss/过期/不可用时回源；任务十一已完成 32 条 deterministic Harness 和 A/B/C 同条件消融，任务十二已在本机 Docker 栈完成真实迁移、RAG、API、Redis 故障回源和并发确认验收，任务十三已完成 4B 文档与 Git 收口。
-
-## 已实现基线
-
-- FastAPI、Pydantic、SQLAlchemy、Alembic 和 PostgreSQL 分层后端。
-- 家庭成员、健康档案、药箱、处方、购药记录、库存、知识检索和 Agent 审计 API。
-- Tool Registry、成员隔离、结构化 Context/RunTrace、Context Reset/Compaction 和 deterministic Evaluator。
-- LangGraph 有界工作流、运行时 Agent 安全、人工确认兼容流程与冻结运行产物。
-- FastEmbed + pgvector 向量检索、关键词降级、索引版本校验和 `SourceRef` 溯源。
-- deterministic / OpenAI-compatible Model Gateway；无 Key 时仍可本地运行。
-- 任务六确定性编排内核：简单任务直达领域 Agent，复杂任务一次性规划并由 bounded Supervisor 串行执行；无 LLM/数据库/业务工具副作用。
-- 任务七安全确认治理：Request/Action/Final Output 三层门禁、自动本地 `DRAFT`、作用域/版本/幂等校验和确认续跑；外部状态始终为 `not_submitted`。
-- 任务八分层状态：Alembic `0007_task_checkpoint_state` 持久化 Task Checkpoint、确认记录和已确认偏好；同一 task 使用两个独立 run，Redis 缓存失效时回源 PostgreSQL，确认版本采用乐观并发校验。
-- 任务九 Tool/Provider 可靠性：统一 validation/permission/not-found/timeout/rate-limit/provider-unavailable/business-conflict/schema/internal 分类；只读可恢复错误有限重试，写工具和不可恢复错误不重试；三类重点 Provider 保留 attempt、成员和来源审计。
-- 任务十 RAG/隔离/可观测性：hybrid 检索使用 RRF 融合 rank 并保留两路原始分、版本和 fallback；过期向量来源被拒绝；成员资源 SQL、Tool 身份和 Redis 缓存均做作用域校验；冻结 Observation 只保留排障白名单字段。
-- 任务十一 deterministic Harness：32 条业务 fixture 按八类覆盖，A/B/C 共生成 96 份冻结 `RunTrace`；统一聚合工具 exact-match、路由顺序、重复调用、Safety、隔离、RAG Recall@3/@5、引用和 fixture latency。
-- 任务十二真实本机验收：Docker PostgreSQL/Redis/FastAPI/Next.js 健康，Alembic `0007`、幂等 seed、512 维 pgvector 索引、三条业务 API、Redis 故障 PostgreSQL 回源和并发确认通过；结果见 [任务十二后端验收报告](docs/task12_backend_acceptance_report.4b.md)。
-- mock/degraded Provider Adapter、三条新业务任务 API 和 Next.js 演示页面。
-- Docker Compose 本地 PostgreSQL、Redis、FastAPI、Next.js 演示链路。
-- 4C-3 浏览器 E2E：Playwright 使用本机 Edge 访问真实 Docker 前后端，7 条场景全部通过；报告见 [4C 浏览器 E2E 报告](docs/browser_e2e_report.4c.md)。
-- 4C-4 最终收口：一键脚本串联 Docker 构建、migration/seed、四场景 Demo、deterministic Harness、A/B/C 消融和浏览器 E2E；运行记录见 [4C-4 MVP 收口报告](docs/mvp_closeout_report.4c.md)。
-
-历史 16 条契约基线见 [Agent 评测报告](docs/AGENT_EVAL_REPORT.md)，4B 的 32 条同条件 A/B/C 结果见 [任务十一消融报告](docs/agent_ablation_report.4b.md)。两者都是 deterministic 固定轨迹指标，不是临床效果、真实模型准确率或线上延迟。
-
-## 最终设计与当前接线
-
-当前 Docker 业务 API 使用固定领域 LangGraph；下面右侧的 Router/Planner/Supervisor 是已经实现、测试并完成消融的编排内核，目前尚未接入该 API。两条链共享结构化契约、安全边界和评测思想，但不能把“内核已实现”说成“API 已动态调度”。
-
-仓库还有一条兼容链：患者端 `/agent` 当前调用 `/api/agent-runs`，由 `AgentRuntimeService + LangGraphAgentWorkflow` 执行；4B 新业务入口 `/api/business-tasks` 则使用 `BusinessTaskService + FamilyHealthProductWorkflow`。浏览器 E2E 验证前者，任务十二后端验收覆盖后者。两套入口是项目演进结果，不应包装成一条已经完全统一的 Supervisor 运行链。
+## 系统架构
 
 ```mermaid
 flowchart TB
-    subgraph Runtime["当前 Docker API 运行链"]
-        A["FastAPI request"] --> G1["Request Safety Guard"]
-        G1 --> W["Fixed-domain LangGraph"]
-        W --> T["Tool Registry / Providers / RAG"]
-        T --> G2["Action Policy Guard"]
-        G2 --> F["Draft and FinalAnswer"]
-        F --> G3["Final-output SafetyAgent"]
-        G3 --> Z["Freeze artifacts and deterministic evaluation"]
-    end
+    UI["Next.js patient UI"] --> API["FastAPI API"]
+    API --> GUARD1["Request Safety Guard"]
+    GUARD1 --> FLOW["Current fixed-domain LangGraph workflow"]
+    FLOW --> CTX["ContextManager"]
+    FLOW --> TOOLS["Tool Registry"]
+    TOOLS --> DB["PostgreSQL + pgvector"]
+    TOOLS --> CACHE["Redis TTL cache"]
+    TOOLS --> PROVIDERS["Mock/degraded Providers"]
+    FLOW --> GUARD2["Action Policy Guard"]
+    GUARD2 --> CONFIRM["Draft + explicit confirmation"]
+    CONFIRM --> GUARD3["Final-output SafetyAgent"]
+    GUARD3 --> TRACE["Frozen RunTrace + EvaluationResult"]
 
-    subgraph Kernel["独立编排内核与消融链"]
-        Q["ComplexityRoutingRequest"] --> R["Complexity Router"]
-        R -->|simple| D["One domain Agent"]
-        R -->|complex| P["One-shot TaskPlanner"]
-        P --> S["Serial bounded Supervisor"]
-        S --> D
-        D --> H["Frozen result / Ablation Harness"]
-    end
+    ROUTER["Complexity Router"] -->|simple| DOMAIN["Domain Agent"]
+    ROUTER -->|complex| PLAN["One-shot Planner"]
+    PLAN --> SUP["Serial bounded Supervisor"]
+    SUP --> DOMAIN
 ```
 
-最终业务 Agent 只有三个：
+业务角色保持精简：
 
-- `TriageAgent`：症状结构化、红旗信号和就医/科室候选，不诊断。
-- `MedicationAgent`：处方、药箱、库存、续方材料和提醒草稿，不开方、不改剂量、不下单。
-- `ReportAgent`：医疗文档解析、指标结构化和有来源解释，不给诊断或治疗方案。
+- `TriageAgent`：结构化症状和红旗信号，提供就医/科室候选，不诊断。
+- `MedicationAgent`：整理处方、药箱、库存、续方材料和提醒草稿，不开方、不改剂量、不下单。
+- `ReportAgent`：解析医疗文档并提供有来源的通俗解释，不给诊断或治疗方案。
+- `SafetyAgent`：运行时安全拦截，属于治理层。
+- `EvaluatorAgent`：答案生成后的只读评测，不能修改答案或业务状态。
 
-在独立编排内核中，简单请求直接进入一个领域 Agent，复杂跨领域请求才使用一次性 Planner 和串行 bounded Supervisor。当前 API 仍按 `business_domain` 进入固定领域节点。SafetyAgent 与 EvaluatorAgent 属于治理层，由状态图固定调用，不是 Supervisor 可选择的业务角色。
+> 重要边界：Router、Planner、bounded Supervisor 编排内核已实现、测试并完成 A/B/C 消融，但当前两个 HTTP 业务入口仍使用固定领域工作流，尚未统一接入该内核。仓库没有把“内核已实现”包装成“线上 API 已动态调度”。
 
-状态采用最终分层方案：LangGraph Working State 只服务单次 run；PostgreSQL 权威保存 Task Checkpoint、确认记录和用户偏好；Redis 只做带 TTL 的短期缓存与多实例协调，故障时回源 PostgreSQL；医疗知识使用独立 PostgreSQL + pgvector。系统不保存长期完整聊天，也不建立个人健康向量记忆。
+## 当前状态
 
-## 快速运行
+[开发总路线图](docs/DEVELOPMENT_ROADMAP.md) 是阶段编号、状态和实施顺序的唯一权威来源。
 
-推荐使用 Docker Compose 一键启动 PostgreSQL、Redis、FastAPI backend 和 Next.js frontend。详细安装、WSL 2、Docker 数据目录和故障排查见 [本地环境与部署](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)。PowerShell 从仓库根目录执行：
+- `4B` 后端工程能力：完成。
+- `4C` 患者端、黄金链路、浏览器 E2E 和固定演示：完成。
+- `4D-A` 五组 gold benchmark 数据：已审核并冻结。
+- `4D-B` 自动化评测与最终可复现指标：进行中。
+
+当前最重要的未完成项是：统一 HTTP 运行链与 bounded Supervisor、用 Docker PostgreSQL/pgvector 运行完整 4D 指标、验证 PostgreSQL Checkpoint/Redis 故障恢复、接入可选真实 LLM 后测量回答质量与 token/cost。完整清单见路线图的 `4D-B` 和本文“仍未完成”章节。
+
+## Docker 启动
+
+### 第一次启动
+
+1. 在 Windows 开始菜单搜索并打开 **Docker Desktop**。
+2. 等待 Docker Desktop 显示 **Engine running**。
+3. 打开 PowerShell，执行：
 
 ```powershell
 Set-Location E:\project_code\hospital
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+docker compose config --quiet
 docker compose up -d --build --wait --wait-timeout 300
 docker compose ps
 ```
 
-打开：
+正常情况下，`postgres`、`redis`、`backend`、`frontend` 都会显示 `healthy`。然后打开：
 
-- 患者端：`http://localhost:3000`
-- Agent 黄金链路：`http://localhost:3000/agent`
-- Swagger：`http://localhost:8000/docs`
-- 后端健康检查：`http://localhost:8000/health`
+- 患者端：<http://localhost:3000>
+- Agent 黄金链路：<http://localhost:3000/agent>
+- Swagger API：<http://localhost:8000/docs>
+- 后端健康检查：<http://localhost:8000/health>
 
-Agent 运行在 `backend` 容器内，不存在单独的 `agent` 容器；前端 `/agent` 发起请求后，由 FastAPI backend 执行 Agent 工作流。
+Agent 运行在 `backend` 容器内，不需要单独启动 Agent 容器。
 
-查看日志：
+### 以后启动与关闭
 
-```powershell
-docker compose logs -f backend
-docker compose logs -f frontend
-```
-
-只结束后端但保留数据库、Redis 和前端：
+未修改代码、依赖或 Compose 配置时：
 
 ```powershell
-docker compose stop backend
+Set-Location E:\project_code\hospital
+docker compose start
+docker compose ps
 ```
 
-结束全部容器但保留数据：
+日常关闭并保留数据库：
 
 ```powershell
 docker compose stop
 ```
 
-默认 `MODEL_PROVIDER=deterministic`，不需要 API Key。真实模型和向量 RAG 配置见 [LLM 配置](docs/LLM_CONFIGURATION.md) 与 [RAG 设计](docs/RAG_RETRIEVAL.md)。
-
-## 测试
+代码、依赖或配置发生变化时：
 
 ```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-$env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-all'
-New-Item -ItemType Directory -Force output | Out-Null
-python -m pytest backend\tests -q -p no:cacheprovider --basetemp=output\pytest-all
-python -m compileall backend\app backend\tests
-
-Set-Location frontend
-npm test
-npm run typecheck
-npm run build
-$env:E2E_BROWSER_CHANNEL='msedge'
-npm run test:e2e
+docker compose up -d --build --wait --wait-timeout 300
 ```
 
-Windows 默认临时目录或旧 `__pycache__` 出现 `PermissionError` 时，使用 `output` 下新的 `--basetemp` 和 `PYTHONPYCACHEPREFIX`，不要复用无权限目录。完整分层测试和 review 清单见 [测试指南](docs/TESTING_GUIDE.md)。
+不要把 `docker compose down -v` 当作普通关闭命令，它会删除本地 PostgreSQL/Redis volume。完整的 Docker Desktop 点击步骤、首次启动、日常启动、日志和排错见 [本地环境与部署指南](docs/LOCAL_SETUP_AND_DEPLOYMENT.md)。
 
-生成 Python 分支覆盖率报告：
+## 配置与密钥
+
+本地配置从模板创建：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+- `.env.example` 只保存可公开的变量名和本地默认值，可以提交。
+- `.env`、`.env.local`、`.env.production` 等本机配置已被 Git 忽略。
+- API Key、真实密码、Token 和患者数据不得写入代码、fixture、报告或 Git。
+- 默认 `MODEL_PROVIDER=deterministic`，不需要模型 Key。
+- 真实模型只允许通过服务端环境变量配置，详见 [LLM 配置](docs/LLM_CONFIGURATION.md)。
+
+## 本地验证
+
+2026-07-31 发布前复验：
+
+| 验证层 | 结果 | 真实性边界 |
+| --- | ---: | --- |
+| 后端 pytest | `308 passed` | 本地自动化，含 SQLite 隔离测试和契约/异常分支 |
+| 前端 Vitest | `25 passed` | 组件与 API client 测试 |
+| TypeScript | `passed` | `tsc --noEmit` |
+| Next.js build | `passed` | 本地生产构建 |
+| 浏览器 E2E | 最近一次 `7 passed` | Docker + Microsoft Edge，本轮未因 Docker Desktop 未启动而重跑 |
+| Docker 后端验收 | 最近一次 baseline `19/19`、Redis 故障 `18/18` | 本机集成证据，不是生产 SLO |
+
+运行后端测试：
 
 ```powershell
 Set-Location E:\project_code\hospital
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-$env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-coverage'
-.\.venv\Scripts\python.exe -m coverage run --branch --source=backend/app -m pytest backend\tests -q -p no:cacheprovider --basetemp=output\pytest-coverage
-.\.venv\Scripts\python.exe -m coverage report
+.\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider --basetemp=output\pytest-all
 ```
 
-2026-07-30 本机复验结果为：后端 `297 passed`，Python 应用代码分支感知覆盖率 `86%`；前端 Vitest `25 passed`、Playwright 浏览器 E2E `7 passed`；32 条固定场景在三种编排策略下生成 96 条消融 trace。它们是本地 deterministic / 集成测试证据，不代表真实患者、线上 LLM 或临床效果。
+运行前端验证：
 
-浏览器 E2E 必须在 Docker Compose 已健康启动时执行。默认使用 Windows 已安装的 Microsoft Edge，不额外下载浏览器；测试报告和失败截图/trace 写入被 Git 忽略的 `var/playwright-report` 与 `var/playwright-test-results`。
+```powershell
+Set-Location E:\project_code\hospital\frontend
+npm test
+npm run typecheck
+npm run build
+```
 
-完整 MVP 收口可以从仓库根目录一键执行：
+完整 MVP 收口：
 
 ```powershell
 Set-Location E:\project_code\hospital
 .\scripts\closeout_4c.ps1
 ```
 
-脚本要求 Docker Desktop、项目 `.venv`、`frontend/node_modules` 和 Windows Edge 已准备好；执行结果写入被 Git 忽略的 `var/closeout/`。
+测试分层、Windows 临时目录权限处理和 review 方法见 [测试指南](docs/TESTING_GUIDE.md)。
 
-任务六编排层也可以单独回归：
+## 项目结构
 
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests\test_domain_orchestration.py backend\tests\test_orchestration_contracts.py backend\tests\test_complexity_router.py -q -p no:cacheprovider --basetemp=var\pytest\4b-task6
+```text
+hospital/
+├─ backend/
+│  ├─ app/
+│  │  ├─ api/          # HTTP 入参、出参和依赖注入
+│  │  ├─ schemas/      # Pydantic DTO
+│  │  ├─ models/       # SQLAlchemy ORM
+│  │  ├─ services/     # 业务逻辑
+│  │  ├─ tools/        # Agent 工具与权限
+│  │  ├─ providers/    # 外部系统适配与可靠性
+│  │  ├─ agent/        # LangGraph、上下文、评测和 Harness
+│  │  ├─ rag/          # 关键词、向量、RRF 和来源
+│  │  ├─ safety/       # 医疗安全与确认规则
+│  │  └─ core/         # 配置、数据库、日志和异常
+│  ├─ alembic/         # 线性数据库迁移
+│  └─ tests/           # 单元、集成、契约与固定 fixture
+├─ frontend/           # Next.js 患者端与 Playwright E2E
+├─ scripts/            # seed、验收、benchmark 和一键收口
+├─ docs/               # 设计、接口、部署、评测和学习文档
+├─ docker-compose.yml
+└─ .env.example
 ```
 
-任务七安全和确认状态机可以单独回归：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests\test_safety_confirmation.py backend\tests\test_business_task_api.py -q -p no:cacheprovider --basetemp=var\pytest\4b-task7
-```
-
-任务八分层状态和确认版本可以单独回归：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests\test_business_task_api.py backend\tests\test_task_checkpoint_cache.py -q -p no:cacheprovider --basetemp=var\pytest\4b-task8
-```
-
-任务九 Tool 与 Provider 可靠性可以单独回归：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m pytest backend\tests\test_provider_adapters.py backend\tests\test_provider_reliability.py backend\tests\test_tool_registry.py backend\tests\test_business_task_api.py -q -p no:cacheprovider --basetemp=output\pytest-task9
-```
-
-任务十 RAG、隔离和 Observation 可以单独回归：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-$env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-task10'
-python -m pytest backend\tests\test_agent_contract_schemas.py backend\tests\test_hybrid_rag.py backend\tests\test_vector_rag.py backend\tests\test_db_backed_tools.py backend\tests\test_task_checkpoint_cache.py backend\tests\test_model_gateway.py backend\tests\test_task10_observability.py backend\tests\test_business_task_api.py backend\tests\test_runtime_e2e_harness.py -q --basetemp output\pytest-task10
-```
-
-任务十一 32 条 Harness 与消融报告：
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path 'backend').Path
-python -m app.agent.ablation_harness
-python -m pytest backend\tests\test_ablation_harness.py -q -p no:cacheprovider --basetemp output\pytest-task11
-```
-
-任务十二真实后端验收：
-
-```powershell
-$env:RAG_VECTOR_ENABLED='true'
-$env:RAG_EMBEDDING_PROVIDER='deterministic'
-$env:RAG_EMBEDDING_MODEL='deterministic-hash-v1'
-$env:RAG_EMBEDDING_DIMENSIONS='512'
-docker compose up -d --build --wait --wait-timeout 300
-.\.venv\Scripts\python.exe scripts\task12_acceptance.py --require-vector
-```
-
-这组命令使用临时 PowerShell 环境变量，不修改 `.env`。Redis 故障回源检查见 [本地环境与部署](docs/LOCAL_SETUP_AND_DEPLOYMENT.md) 和验收报告；它只验证本机开发环境，不代表生产可用性或临床指标。
-
-## 文档入口
+## 核心文档
 
 - [文档导航](docs/README.md)
 - [唯一开发总路线图](docs/DEVELOPMENT_ROADMAP.md)
 - [技术设计](docs/TECH_DESIGN.md)
+- [API 规范](docs/API_SPEC.md)
 - [Agent 架构](docs/AGENT_ARCHITECTURE.md)
-- [业务流程](docs/BUSINESS_WORKFLOWS.md)
-- [API 文档](docs/API_SPEC.md)
-- [数据库设计](docs/DB_SCHEMA.md)
-- [上下文管理](docs/CONTEXT_MANAGEMENT.md)
+- [上下文与记忆](docs/CONTEXT_MANAGEMENT.md)
 - [RAG 检索](docs/RAG_RETRIEVAL.md)
 - [安全策略](docs/SAFETY_POLICY.md)
-- [Agent 评测](docs/EVALUATOR_AGENT.md)
-- [开发者指南](docs/DEVELOPER_GUIDE.md)
-- [学习路线](docs/learning/README.md)
+- [测试指南](docs/TESTING_GUIDE.md)
 - [核心代码走读](docs/learning/17_CORE_CODE_WALKTHROUGH.md)
-- [简历与面试口径](docs/RESUME_NOTES.md)
-- [任务八交付报告](docs/task8_state_checkpoint_report.4b.md)
-- [任务九交付报告](docs/task9_tool_provider_reliability_report.4b.md)
-- [任务十交付报告](docs/task10_rag_isolation_observability_report.4b.md)
-- [任务十一消融报告](docs/agent_ablation_report.4b.md)
-- [任务十二后端验收报告](docs/task12_backend_acceptance_report.4b.md)
-- [任务十三 4B 收口报告](docs/task13_4b_closeout_report.md)
-- [4C-3 浏览器 E2E 报告](docs/browser_e2e_report.4c.md)
-- [4C-4 MVP 收口报告](docs/mvp_closeout_report.4c.md)
 
-## 边界
+## 仍未完成
 
-- 不诊断、不开方、不修改医生处方，不建议自行停药、加量、减量或换药。
-- 本地草稿不等于医院提交、药店下单、提醒推送或真实服务完成。
-- mock Provider 不代表真实外部系统已经接入。
-- deterministic fixture 指标不代表线上模型、用户采纳、临床安全或真实性能。
-- 4B 任务十一至十三和 4C 的 deterministic、Docker、浏览器 E2E 与 Git 收口证据均已生成。不能把 fixture latency 或本机 wall-clock 写成线上检索、临床安全或生产性能结果。
+- 将 bounded Supervisor 内核统一接入当前 HTTP 业务运行链，删除或迁移两套兼容运行入口。
+- 配置并验证真实 OpenAI-compatible LLM；未提供 Key 时，回答质量、token 和成本指标保持 `N/A`。
+- 用 Docker PostgreSQL + pgvector 跑完 4D RAG gold，而不是只依赖本地关键词/SQLite 观测。
+- 将真实冻结 RunTrace、Checkpoint 恢复、Provider attempt 和重复 wall-clock 运行接入统一 benchmark report。
+- 接入真实医院、药店、文档解析或通知 Provider，并完成 sandbox 契约验收。
+- 建设生产认证、权限、秘密管理、HTTPS、监控告警、备份恢复、CI/CD 和合规流程。
+
+这些是明确的工程缺口，不影响本地学习、deterministic 演示和自动化回归，但在完成前不能描述为生产系统或真实医疗服务。
+
+## 医疗安全边界
+
+- 不诊断、不开方、不修改医生处方。
+- 不建议用户自行停药、加量、减量或换药。
+- 复诊、购药和提醒执行等受保护动作必须显式确认。
+- 无 DB、Provider 或 RAG 来源时，不编造病史、库存、处方或医疗规则。
+- mock/degraded Provider、本机延迟和 deterministic fixture 指标不代表真实外部系统、临床正确率或生产性能。

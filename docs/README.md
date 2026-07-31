@@ -1,6 +1,6 @@
-# 项目文档导航
+# 开发文档导航
 
-本文只负责导航，不维护阶段状态。阶段编号、任务状态、实施顺序和最终验收只看 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)。
+这个文件不是第二份项目首页：仓库根目录 [README](../README.md) 面向 GitHub 访客；本文面向开发者，只负责导航，不维护阶段状态。阶段编号、任务状态、实施顺序和最终验收只看 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)。
 
 ## 新开发者阅读顺序
 
@@ -62,6 +62,7 @@
 - [task13_4b_closeout_report.md](task13_4b_closeout_report.md)：4B 任务十三文档、测试和 Git 收口报告。
 - [browser_e2e_report.4c.md](browser_e2e_report.4c.md)：4C-3 Playwright 浏览器 E2E 验收报告。
 - [mvp_closeout_report.4c.md](mvp_closeout_report.4c.md)：4C-4 最终 MVP 收口报告。
+- [local_benchmark_report.4d.md](local_benchmark_report.4d.md)：4D-B 本地 Supervisor、关键词 RAG、ContextManager 和 Provider 故障注入观测；不代表真实 LLM 或 Docker pgvector 指标。
 - `provider_adapter_validation_report.4b.md`、`model_gateway_report.4b.md`、`vector_rag_report.4a.md`：对应局部能力的本地验证记录。
 - `mvp_demo_report.3d.md`：3D 固定演示快照。
 - `agent_eval_report.example.md`：由测试生成的示例格式，代码依赖该路径，不能当真实报告。
@@ -88,4 +89,5 @@
 ## 当前评测文档
 
 - [4D-B Benchmark 使用指南](4D_B_BENCHMARK_GUIDE.md)：冻结 gold 数据、deterministic runner、报告和指标边界。
-- [4D-B 报告](benchmark_report.4d.md)：当前本机 deterministic 数据契约报告；其中运行时质量指标仍为 `N/A`。
+- [4D-B 数据契约报告](benchmark_report.4d.md)：冻结 fixture、manifest 和规则完整性报告。
+- [4D-B 本地观测报告](local_benchmark_report.4d.md)：使用本地合成数据执行实现代码；真实 LLM、Docker pgvector 和 checkpoint 恢复指标仍保持 `N/A`。

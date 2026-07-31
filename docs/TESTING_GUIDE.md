@@ -273,3 +273,12 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 ```
 
 它会校验五组 fixture 的 manifest hash，并生成 `output/benchmarks/benchmark_report.4d.json`、`docs/benchmark_report.4d.md` 和 `docs/benchmark_badcases.4d.md`。报告中的 `dataset_contract` 是评测数据准备情况，不能当成模型准确率；真实回答质量、RAG Recall、Safety recall、延迟、token 和 cost 在没有运行观测时保持 `N/A`。完整说明见 [4D-B Benchmark 使用指南](4D_B_BENCHMARK_GUIDE.md)。
+
+继续执行本地实现观测：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+.\.venv\Scripts\python.exe scripts\run_4d_local_benchmark.py
+```
+
+本地 runner 实际执行 32 次 bounded Supervisor、12 次 `KeywordRetriever`、40 次 ContextManager compact/reset 和 30 次 ProviderRegistry 故障注入，并生成 [本地观测报告](local_benchmark_report.4d.md)。这些测试使用合成数据和内存 SQLite；Docker PostgreSQL/pgvector、Checkpoint/Redis 回源、真实回答质量、token 和 cost 仍必须单独接入，不能混入同一指标。

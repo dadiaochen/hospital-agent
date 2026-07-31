@@ -120,15 +120,15 @@ class AblationHarnessRunner:
     def run_strategy_observed(
         self,
         strategy: AblationStrategy,
-    ) -> tuple[tuple[AblationCaseResult, int], ...]:
+    ) -> tuple[tuple[AblationCaseResult, float], ...]:
         """Run one policy and return each result with local wall-clock latency."""
 
         fairness, cases = self.load_suite()
-        observed: list[tuple[AblationCaseResult, int]] = []
+        observed: list[tuple[AblationCaseResult, float]] = []
         for case in cases:
             started = perf_counter()
             result = self._evaluate_case(case, strategy, fairness)
-            elapsed_ms = max(1, round((perf_counter() - started) * 1000))
+            elapsed_ms = max(0.001, (perf_counter() - started) * 1000)
             observed.append((result, elapsed_ms))
         return tuple(observed)
 
