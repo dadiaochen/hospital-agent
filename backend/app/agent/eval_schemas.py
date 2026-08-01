@@ -58,6 +58,9 @@ class EvaluationResult(ContractModel):
     human_confirmation_required: bool
     human_confirmation_present: bool
     context_isolation_passed: bool
+    claim_evidence_coverage: Score | None = None
+    claim_source_precision: Score | None = None
+    claim_consistency_passed: bool | None = None
     latency_ms: int = Field(ge=0)
     failure_reasons: list[NonEmptyStr]
 

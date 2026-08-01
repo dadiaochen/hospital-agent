@@ -99,7 +99,7 @@
 
 - `Router`: 只判断任务是单领域直达还是复杂跨领域；简单请求不得为展示架构而强制进入 Supervisor。
 - `TaskPlanner`: 只为复杂跨领域任务生成一次结构化 `WorkflowPlan`，识别目标、成员、依赖、缺失槽位和所需能力，不参与逐步调度。
-- `Supervisor`: 只负责串行执行既定计划，选择下一个满足依赖的领域 Agent，并执行有限重试、降级和终止；不得改写用户目标、扩展计划、直接调用业务工具或跳过治理节点。
+- `Supervisor`: 只负责执行一次性 Planner 冻结的有界 DAG，选择依赖已满足的领域步骤，对相互独立的只读步骤做受控并行，并执行有限重试、降级和终止；不得改写用户目标、扩展计划、直接调用业务工具、并发写操作或跳过治理节点。
 - `TriageAgent`: 只负责症状结构化、红旗信号整理和就医/科室候选，不做诊断。
 - `MedicationAgent`: 负责处方、药箱、库存、续方材料和提醒草稿；不得开方、改剂量或替用户下单。
 - `ReportAgent`: 负责医疗文档解析、指标结构化和有来源的通俗解释；不得给出诊断或治疗方案。
@@ -190,18 +190,20 @@ Context Compaction 规则：
 
 ## 12. Agent Harness 验收
 
-- 当前基线保留 16 条 deterministic 固定用例；4B 最终验收硬门槛为至少 32 条高质量用例，覆盖单领域、跨领域、澄清、高风险、RAG、Provider 异常、成员攻击和确认并发。
-- `EvaluatorAgent` 是 post-run agent，只允许读取 `RunTrace`、`ContextEnvelope`、`ToolEvidence`、`RAGSources`、`FinalAnswer` 和 `ExpectedCase`。
+- 保留早期 16 条 evaluator 失败识别用例、32 条编排消融用例和 260 条 v1 专项 gold；4D-B 最终评测集为 300 个 WorldState、每个 4 条表达，共 1200 条 v2 Query。
+- `EvaluatorAgent` 是 post-run agent，只允许读取 `RunTrace`、`ContextEnvelope`、`ToolEvidence`、`RAGSources`、`FinalAnswer`、`FinalClaim` 和 `ExpectedCase`。
 - `EvaluatorAgent` 输出 `EvaluationResult`，至少包含 `task_success`、`tool_call_accuracy`、`groundedness`、`schema_valid`、`hallucination_detected`、`safety_recall`、`human_confirmation_required`、`human_confirmation_present`、`context_isolation_passed`、`latency_ms` 和 `failure_reasons`。
 - `EvaluatorAgent` 不允许修改用户答案，不允许生成医疗建议，不允许调用业务工具或写业务状态。
 - 后续 `AgentHarness` 汇总多个 `EvaluationResult` 生成 `agent_eval_report.md`，聚合 `task_success`、`tool_call_accuracy`、`groundedness`、`schema_valid`、`hallucination_rate`、`safety_recall`、`human_confirmation_rate`、`context_isolation_pass_rate` 和 `p95_latency`。
 - 未真实跑出的指标只能写为“设计/定义/目标”，不能写成已达成结果。
+- v2 数据必须按 base WorldState 拆分 development、validation 和 holdout；同一 WorldState 的表达不得跨 split。
+- Gold 必须来自冻结业务状态和人工审核，不能从本次 Agent 输出反向生成；AI 只允许生成表达变体和候选标签。
 
 ## 13. LangGraph 工作流规则
 
 - 正式业务工作流必须是有界、可终止的状态图；MVP 不实现依赖模型自我判断的无限循环。
 - 简单单领域请求由 Router 直接进入一个领域 Agent；只有复杂跨领域任务才调用 `TaskPlanner` 产生一次结构化 `WorkflowPlan`，再进入 bounded Supervisor。
-- `Supervisor` 只消费 `WorkflowPlan`、最小任务状态和各角色的结构化结果，输出受 Pydantic 约束的调度决策；任何模型路由建议都必须经过角色白名单、工具权限、依赖关系和最大步数校验。
+- `Supervisor` 只消费冻结 DAG、最小任务状态和各角色的结构化结果，输出受 Pydantic 约束的调度决策；任何模型路由建议都必须经过角色白名单、工具权限、依赖关系、最大步数和最大并行数校验。
 - 业务角色完成后必须把结构化结果交回 Supervisor；角色之间不得直接互调，不允许模型产生未注册角色、任意 handoff 或无限循环。
 - 每个业务角色必须从 `ContextManager` 获取最小视图，并且只能通过 `ToolRegistry` 调用工具；节点不得直接调用数据库、service handler 或外部 API。
 - 所有用户可见模型输出必须通过 `ModelGateway` 的目标 Pydantic schema 与输出安全检查；失败的 provider 原始文本不能进入 FinalAnswer。
@@ -209,7 +211,10 @@ Context Compaction 规则：
 - `SafetyAgent` 与 `EvaluatorAgent` 必须通过图的固定治理边执行，不得由 Supervisor 选择、移除或绕过。
 - 首次 run 可以自动创建无外部副作用的本地 `DRAFT`；用户确认的是执行。确认必须创建同一 `task_id` 下的新 run，从 PostgreSQL checkpoint 恢复并重新读取可变事实。
 - 工作流必须冻结 FinalAnswer 与 RunTrace，再执行 RunSummary / Context Reset，最后由 DeterministicEvaluator 只读评估并回填引用。
-- 不实现 Agent 级并行调度、MCP Server、OpenTelemetry/Jaeger 或复杂自动重规划。领域 Agent 内部仅允许对相互独立的只读 Provider、DB 和 RAG 查询做受控异步并发。
+- 最终 UnifiedHealthGraph 对依赖已满足、相互独立、只读且无副作用的领域 Agent 步骤执行有界 fan-out/fan-in；确认、写操作、Checkpoint、Safety 和 Evaluator 节点必须串行。
+- 并行结果必须按 `step_id` 使用确定性 reducer 合并，并保留 member/source/attempt；禁止共享可变业务状态、无边界 Agent 并行、写操作并发和运行时复杂自动重规划。
+- `all_history` 只允许作为测试环境中的合成数据评测基线，并且仍按 user/member 隔离；生产默认使用 `dependency_only` Role-specific Context View。
+- 不实现 MCP Server、OpenTelemetry/Jaeger 或依赖模型自由循环的复杂自动重规划。
 
 ## 14. Model Gateway
 
@@ -220,4 +225,4 @@ Context Compaction 规则：
 - fallback 也失败时返回无 output 的结构化失败，不允许把未校验原始文本交给 Agent。
 - Model Gateway 的规则检查不替代 SafetyAgent；SafetyAgent 仍负责工作流运行时的医疗风险拦截和人工确认判断。
 - 真实模型只能在固定候选集合内做结构化决策；Pydantic、角色/工具白名单、成员权限和安全规则必须在模型之后再次校验。
-- LLM Judge 只允许作为离线辅助实验，不进入运行链路，也不作为 4B 最终验收硬门槛。
+- LLM Judge 只允许作为离线辅助实验，不进入运行链路，也不作为 4D-B 最终验收硬门槛。

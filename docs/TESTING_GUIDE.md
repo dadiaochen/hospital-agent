@@ -15,6 +15,7 @@
 | Harness | `test_deterministic_evaluator.py`、`test_harness_runner.py`、`test_harness_runtime.py` | 固定用例回放、评估规则和汇总报告。 |
 | RAG | `test_hybrid_rag.py` | 固定安全/SOP 召回、来源版本、向量回填、去重和失败降级。 |
 | Model Gateway | `test_model_gateway.py` | deterministic 基线、HTTP adapter、schema、安全、超时和 fallback trace。 |
+| 4D-B3 真实模型评测 | `test_real_llm_benchmark.py` | live 开关、usage/cost/p95 聚合、草稿快照、pass/fail 规范化、pending 阻断、证据防篡改和 final manifest。 |
 | LangGraph 工作流 | `test_langgraph_workflow.py` | 四场景路由、确认不可绕过、安全拦截、成员隔离、来源保留、reset/eval 与模型失败。 |
 | Agent Runtime API | `test_agent_runtime_api.py` | 真实 DB tools、run/tool-call 持久化、冻结回放、幂等、续跑、隔离、安全与失败审计。 |
 | 4B 任务七安全确认 | `test_safety_confirmation.py`、`test_business_task_api.py` | Request/Action/Final Output 三层门禁、自动 DRAFT、状态迁移、重复确认、作用域/版本/幂等冲突和本地执行边界。 |
@@ -43,7 +44,7 @@ python -m pytest backend\tests\test_harness_runner.py backend\tests\test_determi
 python -m app.agent.harness_runner
 ```
 
-第二条命令会按固定 fixtures 重算 `docs/agent_eval_report.example.md`；面试和简历使用的指标解释、限制条件与本次回放记录见 [AGENT_EVAL_REPORT.md](AGENT_EVAL_REPORT.md)。不要把 fixture 中的 `latency_ms` 当成真实 wall-clock benchmark，也不要把 confirmation presence 当成人工采纳率。
+第二条命令会按固定 fixtures 重算 `docs/agent_eval_report.example.md`。当前主要编排证据见 [32 条消融报告](agent_ablation_report.4b.md)，4D 本地实现观测见 [本地 Benchmark 报告](local_benchmark_report.4d.md)。不要把 fixture 中的 `latency_ms` 当成真实 wall-clock benchmark，也不要把 confirmation presence 当成人工采纳率。
 
 任务七安全确认回归：
 
@@ -107,12 +108,12 @@ $env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-coverage'
 .\.venv\Scripts\python.exe -m coverage report --skip-covered --show-missing
 ```
 
-2026-07-30 本机证据：
+当前本机证据：
 
 | 层级 | 结果 | 解释边界 |
 | --- | --- | --- |
-| 后端 pytest | `297 passed` | 自动化断言通过，不等于临床正确率 |
-| branch-aware coverage | `86%` | Python 语句与分支覆盖，不等于业务场景覆盖 |
+| 后端 pytest | 以当前命令输出为准；B2.5 新增评测专项 `18 passed` | 自动化断言通过，不等于临床正确率 |
+| branch-aware coverage | 最近一次 `86%`（2026-07-30） | Python 语句与分支覆盖，不等于业务场景覆盖；未与本轮 356 条测试重新联跑 |
 | 前端 Vitest | `25 passed` | jsdom 组件和 API client 行为 |
 | 浏览器 E2E | `7 passed` | Edge 访问真实 Docker 前后端黄金链 |
 | 编排 Harness | 32 case / 96 Trace | deterministic 三策略公平消融 |
@@ -120,7 +121,18 @@ $env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-coverage'
 
 覆盖率低于整体水平的区域包括旧兼容 Service、真实 FastEmbed/向量存储异常路径、CLI/Demo 失败分支和生产防御性异常。业务场景还缺少真实 LLM 多次采样、中文错别字/口语/方言、真实语义检索 gold set、外部 Provider 契约漂移、认证渗透、长期负载和备份恢复。32 条 fixture 对 MVP 方法验证足够，但不足以宣称生产或医疗质量；新增用例应来自真实 bad case，而不是机械复制现有 case。
 
-面向简历的下一轮质量、延迟、Token 成本和故障恢复测量，不复用 fixture 中的模拟延迟。人工数据规模、运行次数、价格输入和用户协作清单见 [简历与面试表达 5.2](learning/05_RESUME_AND_INTERVIEW.md#52-下一轮简历指标怎么测)。在 gold set 和真实模型 usage 准备完成前，报告中的这些字段必须保持 `N/A`。
+面向简历的下一轮质量、延迟、Token 成本和故障恢复测量，不复用 fixture 中的模拟延迟。当前 260 条 4D-A 数据是五组专项 gold，不是 260 个端到端 WorldState；4D-B2.1 已完成 UnifiedHealthGraph 统一入口，4D-B2.2 已完成有界 DAG 并行和评测专用 `all_history` 基线，4D-B2.3 已完成 FinalClaim/AnswerEnvelope/Trace v2，4D-B2.4 已生成但尚待审核/物化的 300 个 WorldState 和 1200 条 v2 Query，B2.5 已完成内存 preview Materializer、九层 grader 和统一 Runner。下一步是人工审核、真实 PostgreSQL/Provider/RAG 物化和 Docker 统一执行。在真实运行产物和模型 usage 准备完成前，对应字段必须保持 `N/A`。
+
+运行 B2.5 本地 preview：
+
+```powershell
+Set-Location E:\project_code\hospital
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+.\.venv\Scripts\python.exe -B -m app.agent.v2_eval_runner --project-root (Resolve-Path '.') --max-cases 1200 --allow-pending-review --output-dir output\benchmarks\v2
+```
+
+该命令会显式允许 `pending_review` 数据进入 preview，并输出 `agent_eval_report.v2.preview.json` 与 Markdown。
+它只测试数据契约、隔离、九层 grader 和报告聚合，不访问 PostgreSQL、Provider、RAG 或 LLM；preview 数字不能写进简历。
 
 ## 如何 review 一个改动
 
@@ -218,7 +230,7 @@ python -m pytest `
 - 状态：PostgreSQL checkpoint、Redis 命中/失效/不可用回源、两次独立 run、并发确认和幂等 replay。
 - Provider：三类重点 Provider 的 timeout、retry、schema、权限、成员和来源转换。
 - RAG：FastEmbed/pgvector、关键词降级、RRF、版本错配、来源支持和成员隔离。
-- Harness：至少 32 条固定用例，并对单 Agent、固定路由和 bounded Supervisor 做同条件 A/B/C 消融。
+- Harness：保留 32 条 v1 固定用例做快速 A/B/C 回归；最终用 300 个 WorldState、1200 条 v2 Query 做统一图、串行/并行和上下文 A/B/C/D 消融。
 
 其中任务九 Provider 离线可靠性、任务十 RAG/隔离/Observation、任务十一 32 条 deterministic Harness 和任务十二本机 Docker 后端验收已完成。任务十二报告记录 baseline 19/19、Redis 故障回源 18/18，以及本机 wall-clock 样本；这些结果仍不能写成生产 SLO、临床安全指标或真实模型质量。
 
@@ -260,9 +272,33 @@ docker compose up -d --build --wait --wait-timeout 300
 
 ## 4B 任务十三收口回归
 
-任务十三完成时的复核结果为后端 `297 passed`、`compileall` 通过，前端 Vitest `23 passed`、TypeScript typecheck 和 Next.js production build 通过。4C 收口后前端用例已增长到 `25 passed`，并新增 `7 passed` 的 Playwright 浏览器 E2E；历史报告保留当时快照，当前数字以本节顶部 2026-07-30 复验为准。
+任务十三完成时的历史复核结果为后端 `297 passed`、`compileall` 通过，前端 Vitest `23 passed`、TypeScript typecheck 和 Next.js production build 通过。4C 收口后前端用例增长到 `25 passed`，并新增 `7 passed` 的 Playwright 浏览器 E2E；历史报告保留当时快照，当前数字以本节顶部的最新证据表为准。
 
 ## 4D-B Benchmark
+
+### 4D-B2.6 real integration and Docker evidence
+
+The B2.6 entry points are deliberately separate from the B2.5 synthetic
+preview:
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+.\.venv\Scripts\python.exe scripts\run_4d_b26_docker_regression.py --start
+.\.venv\Scripts\python.exe scripts\run_4d_b26_ablation.py --max-cases 16 --split development
+.\.venv\Scripts\python.exe scripts\run_4d_b26_ablation.py --mode integration --identity-map var\demo\v2_identity_map.local.json --max-cases 1 --split development --output-dir var\demo\4d-b26-ablation-integration
+```
+
+The real v2 integration command requires a local, ignored identity map and a
+PostgreSQL session. It must use `--allow-pending-review` only for local
+debugging. The map cannot be committed because it binds synthetic benchmark
+IDs to local demo rows. See [4D-B2.6 integration status](4D_B2.6_INTEGRATION_STATUS.md)
+for the complete command and source mapping rules.
+
+The Docker report currently records `19/19` checks passed. The first real v2
+integration sample also passed all nine deterministic graders, but both are
+local evidence. Formal quality, RAG, safety, latency, token and cost metrics
+remain unavailable until the 300 WorldState/1200 Query data is human-reviewed
+and the three splits are run with complete identity/source maps.
 
 4D-A gold 数据冻结后，运行 deterministic benchmark：
 

@@ -47,7 +47,7 @@ FastAPI Swagger 位于 `http://localhost:8000/docs`。root 与 health response �
 
 ## 4. 2E-1 学习 API：知识库搜索
 
-`GET /api/knowledge/search` 已完成 DTO、service 查询、路由接入、统一 `422` 和专用 API 测试。无命中返回 `200 + items=[]`，每个命中项包含 `knowledge:{document_id}:{chunk_id}` 来源指针。完整代码阅读、Swagger/Postman 和测试复盘见 [06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md](learning/06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md)。
+`GET /api/knowledge/search` 已完成 DTO、service 查询、路由接入、统一 `422` 和专用 API 测试。无命中返回 `200 + items=[]`，每个命中项包含 `knowledge:{document_id}:{chunk_id}` 来源指针。完整代码阅读、Swagger/Postman 和测试复盘见 [API 开发教程](learning/API_DEVELOPMENT_TUTORIAL.md)。
 
 ## 5. 2E-2 草稿 API
 
@@ -122,7 +122,7 @@ draft -> rejected
 
 Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider 的未校验原始文本。2G-2 Agent Runtime 只通过 Gateway 获得结构化结果，并持久化脱敏 Trace；Router 不能直接调用模型 HTTP endpoint。
 
-4B 任务五新增的 `ComplexityRoute`、`TaskPlan`、`AgentTaskResult`、`SupervisorDecision` 和三阶段 `SafetyDecision`，以及任务六的 `OrchestrationRunResult`，都是内部 Python 契约，不新增 HTTP endpoint。任务六的 deterministic 编排内核目前由测试直接调用；业务 API 暂不暴露其内部 Planner/Supervisor 决策，后续要在安全、checkpoint 和错误映射验收后再公开稳定的路由/冻结产物字段。
+4B 任务五新增的 `ComplexityRoute`、`TaskPlan`、`AgentTaskResult`、`SupervisorDecision` 和三阶段 `SafetyDecision`，以及任务六的 `OrchestrationRunResult`，仍然不是独立 HTTP endpoint。4D-B2.1 已由 `UnifiedHealthGraph` 将 `/api/business-tasks` 接入这条编排边界；4D-B2.2 又将 `execution_mode`、`context_mode` 和 `parallel_batches` 写入冻结 `run_trace.orchestration`；4D-B2.3 进一步在业务冻结产物中加入 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`；4D-B2.4 已生成独立的 300/1200 v2 评测文件；B2.5 已在 `backend/app/agent/` 增加内存 Materializer、九类 grader 和 preview Runner；B2.6 又增加了离线的 PostgreSQL shadow transaction、Provider sandbox、case-scoped RAG 和真实图执行适配器，但这些仍不是 HTTP endpoint。业务响应只返回经过校验的 route/plan/decision/domain-result 投影，不直接暴露原始请求或内部临时状态；Docker 19/19 已通过，完整 300/1200 正式评测仍需人工审核后运行。
 
 ## 8. 2G-2 Agent Runtime API
 
@@ -268,3 +268,5 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 ## 4B 任务十二：API 真实运行边界
 
 任务十二没有新增 HTTP 路径，而是通过 `scripts/task12_acceptance.py` 对现有 `/health`、`/api/family-members`、三类 `/api/business-tasks` 操作和 `/api/knowledge/search` 做 Docker smoke。验收确认业务接口仍返回结构化 DTO、缺少知识查询参数映射为 422、重复确认只执行一次；Redis 不可用时，业务 API 从 PostgreSQL 恢复权威 checkpoint。该脚本不调用 LLM 或真实外部 Provider。
+
+4D-B3 的真实模型 runner 是离线评测脚本，不新增 HTTP endpoint。它的审核队列会保存脱敏 `ConfirmationDraftSnapshot`，证明 shadow run 生成了本地草稿但没有提交外部提醒；正常业务 API 的 `confirmation_draft` 字段和 Task Checkpoint 才是可供前端展示、查询和确认的业务契约。

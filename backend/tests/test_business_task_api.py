@@ -102,8 +102,27 @@ def test_chronic_care_task_waits_then_resumes_after_confirmation(
     assert first["task"]["member_id"] == FATHER_ID
     assert all(ref["member_id"] == FATHER_ID for ref in first["source_refs"])
     assert first["run_trace"]["run_id"] == first["run_id"]
+    assert first["run_trace"]["trace_schema_version"] == "4d-b2.3"
+    answer_envelope = first["run_trace"]["final_answer"]["answer_envelope"]
+    assert answer_envelope["member_id"] == FATHER_ID
+    assert answer_envelope["claims"]
+    assert all(
+        claim["subject_id"] == FATHER_ID
+        for claim in answer_envelope["claims"]
+    )
+    orchestration = first["run_trace"]["orchestration"]
+    assert orchestration["route"]["target_role"] == "MedicationAgent"
+    assert orchestration["plan"] is None
+    assert "unified_complexity_router" in {
+        item["node_name"]
+        for item in first["run_trace"]["observations"]
+        if item["event_type"] == "node"
+    }
     assert first["run_summary"]["task_id"] == first["task"]["id"]
     assert first["evaluation_result"]["context_isolation_passed"] is True
+    assert first["evaluation_result"]["claim_evidence_coverage"] == 1.0
+    assert first["evaluation_result"]["claim_source_precision"] == 1.0
+    assert first["evaluation_result"]["claim_consistency_passed"] is True
     assert first["model_call_trace"]["requested_provider"] == "deterministic"
     assert first["model_call_trace"]["effective_provider"] == "deterministic"
     assert first["model_call_trace"]["success"] is True
@@ -281,6 +300,9 @@ def test_high_risk_request_is_blocked_before_business_tools(
     )
     assert payload["tool_calls"] == []
     assert payload["need_human_confirmation"] is True
+    assert payload["run_trace"]["final_answer"]["answer_envelope"][
+        "action_status"
+    ] == "awaiting_confirmation"
 
 
 def test_provider_mode_is_explicitly_degraded_when_no_sandbox_adapter_exists(

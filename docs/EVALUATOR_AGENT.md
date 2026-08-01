@@ -44,7 +44,7 @@ SafetyAgent 与它不能互相替代：前者在风险动作前拦截，后者�
 
 当前 HarnessRunner 批量加载 16 个固定 ExpectedCase 和对应 mock RunTrace，并聚合：任务成功率、工具准确度平均、groundedness、schema 有效率、幻觉率、安全召回、确认提示率、隔离通过率和 p95 延迟。
 
-4B 任务六新增的 `OrchestrationRunResult` 只记录 deterministic Planner/Supervisor 的路由、步骤、Agent 结果和终止原因；它不是 `EvaluationResult`，也不会替代冻结后的 RunTrace、FinalAnswer 和 Safety 产物。后续 Harness 可以把这些结构化结果适配为 RunTrace，但当前不把任务六的占位结果写成真实业务质量指标。
+4B 任务六新增的 `OrchestrationRunResult` 只记录 deterministic Planner/Supervisor 的路由、步骤、Agent 结果和终止原因；它不是 `EvaluationResult`，也不会替代冻结后的 RunTrace、FinalAnswer 和 Safety 产物。4D-B2.1 已由 `UnifiedHealthGraph` 把经过作用域校验的投影写入同一次 `RunTrace.orchestration`；它仍不等于真实业务质量指标，必须与 Tool/RAG/Safety/FinalAnswer 产物一起评估。
 
 产品升级后的 Agent Harness 还需要增加六项 RAG 指标：
 
@@ -61,9 +61,9 @@ SafetyAgent 与它不能互相替代：前者在风险动作前拦截，后者�
 
 示例见 [agent_eval_report.example.md](agent_eval_report.example.md)。其中数值是故意包含成功与失败路径的 mock fixtures 计算结果，不能用于宣称生产、临床或真实模型指标。
 
-当前工作区已经用同一批固定 fixtures 执行了一次可复现回放，结果记录在 [AGENT_EVAL_REPORT.md](AGENT_EVAL_REPORT.md)。16 条轨迹得到的必需工具覆盖率为 `98.75%`，关键事实来源覆盖率为 `93.75%`，高风险安全召回率为 `93.75%`，成员隔离通过率为 `93.75%`，schema 通过率为 `100%`。这些数值描述的是流程契约和评估器对固定轨迹的判断；其中的失败轨迹是为了验证评估器能否发现问题而故意保留的，不能直接解释为线上任务成功率或模型答案准确率。
+早期 16 条 fixtures 仍用于测试 Evaluator 能否识别缺工具、无来源、高风险漏拦截、缺确认和成员串扰，但不再维护单独的阶段报告。当前主要编排证据是 [32 条 A/B/C 消融报告](agent_ablation_report.4b.md)，本地实现观测见 [4D-B 报告](local_benchmark_report.4d.md)。这些结果仍不能解释为线上任务成功率、模型答案准确率或临床安全率。
 
-简历中可以使用“16 条 deterministic + mock 固定用例、必需工具覆盖率 98.8%、高风险规则召回率 93.8%、成员隔离通过率 93.8%”这一组口径，但不要把确认提示出现率写成“人工采纳率”，也不要把 fixture 延迟 p95 写成真实服务响应延迟。答案语义正确率、工具参数准确率、人工采纳、token 成本和真实延迟需要额外的 gold set、用户事件、provider usage 和 benchmark 才能计算。
+早期 16 条 deterministic + mock 用例只用于证明 Evaluator 能识别故意注入的失败，不再作为最终简历指标。答案语义正确率、工具参数准确率、人工采纳、token 成本和真实延迟必须由 4D-B 的 v2 数据、真实运行产物、provider usage 和 benchmark 计算。
 
 ## 5. 当前实现与最终交付
 
@@ -71,7 +71,7 @@ SafetyAgent 与它不能互相替代：前者在风险动作前拦截，后者�
 
 现有运行时已经把 EvaluationResult 与冻结 RunTrace 一起持久化和查询。Evaluator 没有数据库 Session、Tool Registry 或 state writer；持久化由 AgentRuntimeService 在评估返回后完成，因此评估器不能修改答案和业务状态。
 
-4B 最终验收会扩展 `ExpectedCase`、`RAGTrace` 和报告聚合并真实计算新增指标。当前仍不是临床质量评估；LLM Judge 即使加入，也只能作为离线辅助实验，不能进入运行链路，不能替代引用、成员隔离、Agent 安全和人工确认的确定性校验，也不是验收硬门槛。
+4D-B2.3 已将端到端业务冻结产物扩展为 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`，并由确定性规则计算 Claim 来源覆盖、来源精度和正文一致性。后续 4D-B 仍需接入 300/1200 数据、RAG 排名、Provider attempts 和报告聚合来真实计算完整指标。当前仍不是临床质量评估；LLM Judge 即使加入，也只能作为离线辅助实验，不能进入运行链路，不能替代引用、成员隔离、Agent 安全和人工确认的确定性校验，也不是验收硬门槛。
 
 4B 新业务运行还会保存脱敏的 `ModelCallTrace`，其中的 provider、schema、safety、fallback 和耗时可作为评测输入；任务八另外冻结 `checkpoint_version`、`confirmation_version`、`checkpoint_source`、`parent_run_id` 和恢复来源指针，Evaluator 可以读取这些字段判断两次 run 和成员隔离是否成立。Evaluator 仍只读冻结的最终答案和运行产物，不读取 Key、完整 prompt 或 provider 原始文本，也不负责判断真实模型的临床质量。
 
@@ -89,9 +89,9 @@ Evaluator 可以读取冻结的 SafetyTrace、`confirmation_state`、最终答�
 
 任务八的 checkpoint/cache 恢复由业务 service 在 Evaluator 之前完成。Evaluator 只能读取 PostgreSQL 已冻结的 `RunTrace`、`RunSummary`、`TaskCheckpoint` 投影和 `EvaluationResult` 引用；它不能从 Redis 取唯一事实、刷新缓存、写确认记录或写偏好。Redis miss/回源本身是运行时 trace 证据，不是 Evaluator 的业务动作。
 
-## 6. 4B 最终 Harness 硬门槛
+## 6. 4B 历史 Harness 基线
 
-最终固定集至少 32 条高质量用例，分组如下：
+4B 用 32 条高质量用例完成了第一轮编排消融，分组如下：
 
 | 类别 | 数量 | 重点 |
 | --- | ---: | --- |
@@ -104,15 +104,15 @@ Evaluator 可以读取冻结的 SafetyTrace、`confirmation_state`、最终答�
 | 成员攻击与串扰 | 3 | user/member/trace/source 全链路隔离 |
 | 确认、重复与并发 | 2 | 两次独立 run、幂等和状态条件更新 |
 
-32 条通过后，新增用例只来自真实联调失败、review 发现和回归缺陷；不为凑数字盲目扩到 48 条。
+这 32 条用例继续作为快速回归集，但不再是最终数据规模，也不能替代 4D-B 的 300 个 WorldState、1200 条 v2 Query。
 
-为回答“多 Agent 是否真的有价值”，同一批 ExpectedCase、工具、知识版本、模型配置和超时预算要运行三组消融：
+4B 为回答“多 Agent 是否真的有价值”，在同一批 ExpectedCase、工具、知识版本、模型配置和超时预算上运行三组消融：
 
 - A：单 Agent 基线。
 - B：固定规则路由到领域 Agent。
 - C：简单请求直达、复杂请求使用 bounded Supervisor 的最终方案。
 
-比较任务成功、工具调用、groundedness、安全召回、隔离、确认正确性、延迟、token/调用次数和失败原因分布。只有真实报告可以支撑“C 优于 A/B”的结论；设计文档本身不能。
+这组结果只证明串行编排内核在固定复杂任务上的角色和工具覆盖。4D-B 将在 UnifiedHealthGraph 和同一批 v2 WorldState 上升级为 A/B/C/D 四种模式，额外比较自动路由、DAG 并行以及 `all_history` 与 `dependency_only`；只有最终报告可以支撑质量、延迟和 token 的比较结论。
 
 任务九已经为后续 32 条 Harness 冻结 Tool/Provider 的 `attempts`、`error_type`、`error_category`、`retryable`、`degraded`、`fallback_reason` 和来源字段。Evaluator 只能读取这些最终产物判断重试是否超界、失败是否错误地产生来源、写工具是否重复；它不能重新调用 Provider 或改变降级结果。当前 45 条定向测试是可靠性契约回归，不是任务十一的完整 Harness 指标。
 
@@ -120,14 +120,32 @@ Evaluator 可以读取冻结的 SafetyTrace、`confirmation_state`、最终答�
 
 任务十一现已完成。`business_harness_cases.4b.json` 固定 32 条 case，`AblationHarnessRunner` 为三种策略生成 96 份冻结 `RunTrace` 并继续调用既有 `DeterministicEvaluator`。额外的消融投影只计算角色覆盖/顺序、工具集合与参数 exact-match、不必要 handoff、重复调用、治理覆盖、RAG Recall@3/@5、引用正确率和 fixture latency；它不能修改 `FinalAnswerTrace`，也不会重新调用业务系统。
 
-[任务十一消融报告](agent_ablation_report.4b.md) 是 deterministic/mock 架构回归证据。报告中固定路由的复杂任务完成率为 0.0000，bounded Supervisor 为 1.0000，但这只说明该固定集中的跨域覆盖差异；Safety、成员隔离和 RAG 三组保持一致，不能归因给 Supervisor。真实模型 token/cost 没有 usage，因此保持 `N/A`。
+[任务十一消融报告](agent_ablation_report.4b.md) 是 deterministic/mock 架构回归证据。报告中固定路由的复杂任务完成率为 0.0000，bounded Supervisor 为 1.0000，但这只说明该固定集中的跨域覆盖差异；Safety、成员隔离和 RAG 三组保持一致，不能归因给 Supervisor。该消融报告本身没有真实模型 usage；真实 token/cost 使用独立 B3 报告，不能混算。
 
 ## 4B 任务十二：Evaluator 的边界
 
 任务十二的 `scripts/task12_acceptance.py` 是操作员级 Docker/HTTP/数据库验收，不是新的 LLM Judge，也不改变 Deterministic Evaluator 的只读约束。它检查 migration、seed、RAG 数据、API、Redis 回源和确认并发；不会修改 FinalAnswer，不会调用业务 Tool，不会生成医疗建议。任务十二的本机 wall-clock 不能替代 Harness 的固定指标，也不能作为临床或生产质量结论。
 
+## 4D-B2.6 真实集成层
+
+4D-B2.6 增加了 `PostgresV2Materializer`、`ScopedPostgresRetriever`、`ScopedProviderSandbox` 和 `UnifiedHealthGraphIntegrationExecutor`。它们把一条 v2 case 放入 PostgreSQL shadow transaction，调用真实 UnifiedHealthGraph，并把工具、RAG、Provider attempt、Safety、Claim 和数据库草稿投影成同一个冻结 `RunTrace`。评测仍由 deterministic grader 只读执行，不能修改 FinalAnswer 或业务状态。
+
+Docker 全链路本机证据为 `19/19` 通过；第一条真实 integration sample 的九层 grader 全部通过。由于 v2 数据仍是 `pending_review`，这两个结果只能写成 local evidence/preview，不能写成最终回答质量、RAG Recall 或 Safety recall。A/B/C/D 的默认脚本也是 synthetic preview；真实对比必须为每个 condition 使用同一 manifest 和不同 `EvalRuntimeOptions` 创建真实 graph executor。
+
+完整运行命令和身份映射规则见 [4D-B2.6 集成状态](4D_B2.6_INTEGRATION_STATUS.md)。
+
+## 4D-B3 真实模型观测层
+
+4D-B3 的 `RealLLMBenchmarkRunner` 只在显式 `--live` 且配置完整时调用真实模型。它不把 provider 原文交给 Evaluator，而是读取同一冻结 `RunTrace` 中的脱敏 model Observation，聚合真实 provider 是否生效、fallback、usage、模型延迟和完整工作流 p95。审核队列还保存只读 `ConfirmationDraftSnapshot`，让人工审核者能确认草稿编号、摘要、关键提醒字段、成员和动作正确，且外部动作仍为 `not_submitted`；它不保存完整医疗 payload。
+
+报告中的 `deterministic_contract_pass_rate` 仍只是九层规则通过率；`human_reviewed_answer_quality` 在 badcase 审核完成前固定为 `N/A`。审核完成后，finalizer 校验 report id、query 顺序和不可变证据，再按人工 pass/fail 计算并冻结该指标。当前 8 条 development 样本为 8/8，但只表示 FinalAnswer 与草稿/来源快照在该固定集内通过人工复核，不代表临床正确率。Evaluator 仍不能修改答案或业务状态。
+
 ## 4D-B 本地观测层
 
-`LocalObservedBenchmarkRunner` 把 4D-A gold 数据投影为四组本地观测：bounded Supervisor `RunTrace`、关键词 RAG 排名、ContextManager compact/reset 结果和 Provider attempt trace。它仍然只把冻结产物交给 deterministic 规则计算，不使用 LLM Judge，也不能修改 FinalAnswer 或业务状态。
+`LocalObservedBenchmarkRunner` 把 4D-A gold 数据投影为四组本地观测：bounded Supervisor `RunTrace`、关键词 RAG 排名、ContextManager compact/reset 结果和 Provider attempt trace。4D-B2.1 之后，患者端业务的冻结 `RunTrace` 也包含 `orchestration` 投影，可以检查 Router、Plan、Supervisor decision 和领域 Agent result。它仍然只把冻结产物交给 deterministic 规则计算，不使用 LLM Judge，也不能修改 FinalAnswer 或业务状态。
 
-[4D-B 本地观测报告](local_benchmark_report.4d.md) 使用合成 fixture 和内存 SQLite。报告中的 Safety、RAG、上下文和 Provider 数字只属于这组固定本地样本；真实 LLM 回答质量、token/cost、Docker pgvector 和 PostgreSQL/Redis Checkpoint 恢复保持 `N/A`，直到相应运行产物真正接入。
+当前 260 条 4D-A gold 是五组专项数据，不是 260 个端到端 WorldState。4D-B2.1 已建立 UnifiedHealthGraph 接入边界，4D-B2.2 已实现 bounded DAG 并行和仅评测可用的 `all_history` 模式，4D-B2.3 已把 FinalClaim/AnswerEnvelope/Trace v2 接入业务冻结产物，4D-B2.4 已生成 300 个 WorldState/1200 条 v2 Query，4D-B2.5 已完成隔离内存物化、九类确定性 grader 和 preview runner。数据仍待人工审核，preview 不代表业务质量；下一步是把同一接口接到 PostgreSQL/Provider/RAG 和真实 UnifiedHealthGraph。完整执行顺序和指标门槛见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。
+
+[4D-B 本地观测报告](local_benchmark_report.4d.md) 使用合成 fixture 和内存 SQLite，因此该报告中的 Safety、RAG、上下文和 Provider 数字只属于固定本地样本，真实 LLM 与 Docker 指标保持 `N/A`。后续 B2.6/B3 已分别补充 Docker 集成和 8 条真实模型固定样本证据，但不能把不同报告的样本与指标混算。
+
+最终 v2 Evaluator 读取同一次 UnifiedHealthGraph run 冻结的 `RunTrace`、`FinalAnswer`、`FinalClaim`、Tool/Provider attempts、RAG 排名、Context/Checkpoint 和数据库状态投影。B2.5 的 `SyntheticProjectionExecutor` 先从 Gold 生成同形状的冻结产物，只用于验证 grader 和报告管线；评分器必须保持确定性和只读。LLM Judge 只允许离线辅助分析，不修改硬门槛，也不能回写答案或业务状态。

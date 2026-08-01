@@ -4,7 +4,7 @@
 
 系统把大模型放在受契约约束的业务流程中，而不是直接连接医疗问答。每个用户可见结果都要具备明确身份作用域、业务事实、RAG 来源、安全决策、确认状态、运行轨迹和事后评测。
 
-本文同时标注当前实现和 4B 最终目标；阶段状态只看 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)。
+本文同时标注当前实现和 4D-B 收口目标；阶段状态只看 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)。
 
 ## 2. 总体分层
 
@@ -102,13 +102,13 @@ Context、路由、计划、Supervisor、Agent result、Tool、Trace 和 Evaluat
 选择 LangGraph 是因为业务需要显式状态、条件边、中断后续跑和可测试终止条件，不是为了展示框架名称。
 
 - 简单请求走固定直达边。
-- 复杂请求由一次性 Planner 产生最多 3 步计划。
-- Supervisor 串行选择 ready step，不自由重规划。
+- 复杂请求由一次性 Planner 产生有最大步骤数和最大并行数的冻结 DAG；当前最多 3 步的串行计划作为迁移基线。
+- Supervisor 选择 ready steps，对无依赖、只读且无副作用的步骤执行受控 fan-out/fan-in，不自由重规划。
 - Domain Agent 返回统一结果，不彼此调用。
 - Safety/Evaluator 由固定治理边强制执行。
 - 无 Key 使用 deterministic policy；真实模型只做固定候选的结构化决策。
 
-不选择 Agent 级并行、群聊式协作或无限循环。只读、独立的 I/O 可以在领域 Agent 内通过 `asyncio.gather` 等受控方式并发；任务状态和副作用保持事务串行。
+最终 UnifiedHealthGraph 支持 Agent 级有界 DAG 并行，但不采用群聊式自由协作或无限循环。并行只用于依赖已满足、只读且无副作用的领域步骤；确认、写操作、Checkpoint、Safety、FinalAnswer 冻结和 Evaluator 保持串行。并行结果按 `step_id` 使用确定性 reducer 合并，领域 Agent 内部仍可对独立 I/O 使用受控异步并发。
 
 ## 7. Tool 与 Provider
 
@@ -193,20 +193,76 @@ Deterministic Evaluator 是正式核心。任务十一已经使用 32 条冻结�
 
 任务十一的 P50/P95 使用冻结 fixture latency，不能当作真实服务 wall-clock。deterministic provider 未返回 usage，因此 `token_usage_available=false`，token 和 billed cost 为 `N/A`，运行器禁止合成这些指标。任务十二已在本机 Docker PostgreSQL/Redis/FastAPI/Next.js 栈补充真实运行验收；baseline 19/19、Redis 故障回源 18/18，详见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。
 
-4D-B 进一步增加本地观测 runner：实际执行 bounded Supervisor、`KeywordRetriever`、ContextManager 和 ProviderRegistry 故障注入，再生成版本化报告。该层使用合成 fixture 和内存 SQLite，用于验证实现与指标公式接线；它不替代 Docker PostgreSQL/pgvector、Checkpoint/Redis 恢复、真实 HTTP 或真实 LLM 评测。对应缺失指标继续为 `N/A`。
+4D-B2.5 已增加 v2 本地 preview runner：`WorldStateMaterializer` 为每条 Query 创建隔离的内存 DB/Provider/RAG projection，`V2DeterministicGraders` 分别评分 Route、Plan、Tool、Claim、RAG、Safety、Context、Reliability 和 Database State，`V2EvalRunner` 输出稳定 report id、JSON/Markdown 和 failure taxonomy。该层不替代 Docker PostgreSQL/pgvector、Checkpoint/Redis 恢复、真实 HTTP 或真实 LLM 评测；v2 数据仍是 `pending_review`，preview 指标继续不能写入简历。
+
+### 13.1 4D-B 最终评测数据流
+
+最终评测使用 UnifiedHealthGraph 的有界 DAG，并通过 WorldState v2 物化同一份测试事实：
+
+```text
+WorldState
+  -> PostgreSQL / Provider / RAG materialize
+  -> real HTTP runtime
+  -> Route / Plan / Tool / Source / FinalAnswer / RunTrace
+  -> final database state
+  -> deterministic graders
+  -> metrics + badcases + environment manifest
+```
+
+B2.5 的本地 preview 使用同一条数据流，但 executor 只做 Gold projection：
+
+```text
+WorldState / Query
+  -> in-memory isolated projection
+  -> SyntheticProjectionExecutor
+  -> frozen RunTrace + V2RunArtifacts
+  -> nine deterministic graders
+  -> preview JSON/Markdown
+```
+
+它用于验证评测契约、成员隔离、清理和聚合逻辑，不代表真实业务图已在 PostgreSQL、Provider 和 RAG 上执行。
+
+现有 260 条 4D-A gold 是回答、RAG、安全、上下文和 Provider 五组专项数据，继续用于快速回归；它们不是 260 个端到端 WorldState。4D-B 最终建立 300 个 WorldState，每个生成 4 条表达，共 1200 条 v2 Query，并按 base world 拆分 development、validation 和 holdout。评测模式保留 `all_history` 合成数据基线，生产默认使用 `dependency_only` Role-specific Context View。详细数量、字段、指标公式和执行门槛见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。
+
+### 13.2 FinalClaim
+
+4D-B2.3 已在同一次结构化输出中加入 `FinalClaim` 和 `AnswerEnvelope`。`FinalAnswer` 仍保留用户可见正文，但每条可评测事实同时保存结构化 Claim：
+
+```text
+claim_id
+subject_id  # 当前任务的 member scope
+fact_key
+value
+claim_type
+source_ids
+```
+
+事实 Claim 必须保留 Tool、Provider、数据库或 RAG 来源；`subject_id` 必须与任务 `member_id` 一致，`source_ids` 必须来自同一 RunTrace 的上下文来源集合。Evaluator 读取冻结 Claim，但不能修改正文、生成医疗建议或写业务状态。FinalClaim 不进入个人长期记忆，也不能由另一个 LLM 在评测阶段从正文反向生成。
 
 ## 14. 当前实现与目标差异
 
-| 当前实现 | 4B 目标 | 对应任务 |
+| 当前实现 | 收口目标 | 对应任务 |
 | --- | --- | --- |
-| deterministic Router + 三领域 Agent/串行 Supervisor 内核已独立实现和评测，但两个 HTTP 入口仍走各自固定领域链 | 将当前 HTTP Runtime 统一到 bounded Supervisor 与固定治理边 | 4D 后续工程收口 |
+| UnifiedHealthGraph 已接入患者端业务入口，内部业务执行由 ProductWorkflow 适配器负责；Router/三领域 Agent/bounded DAG Supervisor 已独立评测 | 已增加 FinalClaim、AnswerEnvelope、Trace v2 和正文/Claim 一致性校验 | 4D-B2.3 DONE |
 | 任务六领域编排默认 deterministic | 领域决策可选 model-assisted，始终受约束 | 后续 Provider/模型增强 |
 | 新业务链路已自动生成本地 DRAFT，确认后执行本地状态迁移；旧 Runtime 保留兼容 | 任务八已落地 PG 权威 checkpoint + Redis TTL cache/协调 | 8 |
 | `TaskCheckpointService` 写入不可变 checkpoint，`TaskCheckpointCache` 校验作用域和版本；确认 run 使用最小投影 | 后续任务九的 Tool/Provider 可靠性和真实外部联调 | 8–9 |
 | 三个重点 Provider 已具备强 schema、有限重试、attempt/source/degraded 测试；其他 mock 兼容保留 | 任务十已补 RAG、隔离和 Observation；外部 Provider 仍待真实联调 | 9–12 |
 | RRF、过期向量拒绝、攻击式隔离、白名单 Observation 和 32 条 A/B/C Harness 已实现 | 本机 Docker PostgreSQL/Redis 与 wall-clock 已验收，结果不等于生产 SLO | 12 |
 | 16 条历史契约 + 9 条 runtime 场景 + 32 条任务十一业务 fixture | 三条业务 API、RAG 索引、Redis 回源和并发状态机已完成真实 smoke | 12 |
-| 4D-B 已观测本地 Supervisor、关键词 RAG、ContextManager 和 Provider fault | Docker pgvector、Checkpoint/Redis、HTTP 重复运行和可选真实 LLM 仍待统一报告 | 4D-B |
+| 4D-B 已观测本地 Supervisor、关键词 RAG、ContextManager 和 Provider fault；B2.1/B2.2 已接入 UnifiedHealthGraph、bounded DAG 和评测 `all_history`；B2.3 已接入 Claim/Trace v2；B2.4 已生成可重复 v2 数据；B2.5 已完成内存物化、九层 grader 和 preview runner | 人工审核并接入 300 个 WorldState/1200 条 Query 的 PostgreSQL/Provider/RAG 物化，再运行真实 UnifiedHealthGraph、Docker 报告和可选真实 LLM 报告 | 4D-B2.6 至 B3 |
+
+## 14.1 4D-B2.6 真实集成评测
+
+4D-B2.6 在不新增 Alembic migration 的前提下，把 v2 benchmark 接到真实本地运行边界：
+
+- `PostgresV2Materializer` 使用每 case 的 PostgreSQL transaction、temporary projection table 和 shadow knowledge rows；结束后 rollback，不能污染 demo 业务数据。
+- `ScopedPostgresRetriever` 复用当前 PostgreSQL hybrid retriever，再按 case source allow-list 过滤，防止 seed knowledge 或其他 case 的 source 混入。
+- `ScopedProviderSandbox` 复用 Provider contract，并在当前 case 内记录 timeout/no-source attempt trace；它不是外部医院、药房或通知系统。
+- `UnifiedHealthGraphIntegrationExecutor` 要求显式 benchmark user/member/source identity map，缺少映射时 fail closed，不把不相关 demo 数据当成评测结果。
+- `V2AblationRunner` 固定 A/B/C/D 只改变 routing、execution、context 开关；数据、Provider、RAG、安全、确认和 token limit 必须保持不变。
+
+Docker 验收实际通过了 `19/19` 个本地检查；第一条真实 v2 integration sample 通过九类 deterministic grader，但 v2 数据仍是 `pending_review`，所以报告状态保持 `preview`。完整命令和剩余门槛见 [4D-B2.6 集成状态](4D_B2.6_INTEGRATION_STATUS.md)。
 
 ## 15. 数据库迁移链
 
@@ -251,3 +307,9 @@ Docker build/up -> migration/seed -> fixed Runtime Demo
 ```
 
 Harness fixture 在宿主机离线执行，避免把测试数据打进 backend 镜像；浏览器 E2E 通过公开前端和 API 访问真实 Docker 服务。脚本只写 `var/closeout/` 运行报告，不持久化完整聊天、医疗正文、Prompt、Token、成员 ID、run ID 或密钥。任一步骤失败都返回非零退出码，因此“演示能打开”不能替代完整收口。
+
+## 18. 4D-B3 可选真实模型评测
+
+4D-B3 不改变业务图的治理边界。真实模型仍只通过 `ModelGateway` 进入最终答案草稿节点；`run_4d_b3_real_llm.py` 复用 PostgreSQL shadow transaction、Provider/RAG 隔离和九层 deterministic grader，并额外从脱敏 `model` Observation 读取 provider usage、fallback 和模型耗时。
+
+真实 token 只能来自 provider 返回的完整 `input/output/total` usage。成本计算需要本机 `.env` 提供每百万输入/输出 token 价格；缺少 usage 或价格时保持 `N/A`。没有 `--live`、没有 Key 或 provider 不是 `openai_compatible` 时，runner 只生成 blocked 报告，不访问网络。B3 的 deterministic contract pass rate 不是自然语言答案质量；答案质量必须经过人工复核。审核队列额外保存只读 `ConfirmationDraftSnapshot`。审核完成后，finalizer 校验队列未修改 FinalAnswer、成员、来源和期望字段，规范化 pass/fail，计算人工通过率并冻结 canonical queue hash 与输出文件 manifest。当前 8 条 development 固定样本已经完成该流程。

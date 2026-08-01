@@ -1,6 +1,6 @@
 # 后端与大模型应用开发面经问答
 
-> 当前最终口径：三个领域 Agent，简单请求直达，复杂请求使用一次性 Planner + 串行 bounded Supervisor；三层安全由状态图强制执行；PostgreSQL 保存权威任务检查点、确认记录和偏好，Redis 只做 TTL 缓存并可回源；医疗知识使用独立 pgvector RAG。项目不实现 Agent 级并行或复杂自动重规划。旧问答若描述早期角色或确认流程，应作为演进背景，不得覆盖此口径。
+> 当前实现与最终目标必须分开：现有代码已经实现三个领域 Agent、简单任务直达、一次性 Planner 和串行 bounded Supervisor 内核；4D-B 的最终目标是把它们接入 UnifiedHealthGraph，并对依赖已满足、只读且无副作用的 DAG 步骤做有界并行。确认、写操作、Checkpoint、Agent 安全和 Agent 评测仍保持串行，也不实现无限循环或复杂自动重规划。PostgreSQL 保存权威任务检查点、确认记录和偏好，Redis 只做 TTL 缓存并可回源，医疗知识使用独立 pgvector RAG。
 
 这份文档根据近期面试题和项目当前路线整理。回答默认遵循：先给结论，再讲设计、取舍、项目证据和边界。
 
@@ -12,10 +12,10 @@
 
 这份通用题库保留面试题原顺序；项目专属题库按主题集中维护，避免同一个答案散落多处：
 
-- 上下文、记忆、压缩、任务恢复和记忆评测：[上下文与记忆专题](learning/INTERVIEW_QUESTION_BANK.md#5-上下文与记忆)
-- RAG、Embedding、来源和召回评测：[RAG 与模型专题](learning/INTERVIEW_QUESTION_BANK.md#2-rag-与模型)
-- 多 Agent、Planner、Supervisor 和 ReAct：[多 Agent 编排专题](learning/INTERVIEW_QUESTION_BANK.md#6-多-agent-编排)
-- Dify 画布、节点和业务边界：[Dify 专题](learning/INTERVIEW_QUESTION_BANK.md#3-dify环境与业务闭环)
+- 上下文、记忆、压缩、任务恢复和记忆评测：[上下文与记忆专题](learning/PROJECT_INTERVIEW_QUESTION_BANK.md#5-上下文与记忆)
+- RAG、Embedding、来源和召回评测：[RAG 与模型专题](learning/PROJECT_INTERVIEW_QUESTION_BANK.md#2-rag-与模型)
+- 多 Agent、Planner、Supervisor 和 ReAct：[多 Agent 编排专题](learning/PROJECT_INTERVIEW_QUESTION_BANK.md#6-多-agent-编排)
+- Dify 画布、节点和业务边界：[Dify 专题](learning/PROJECT_INTERVIEW_QUESTION_BANK.md#3-dify环境与业务闭环)
 - 测试开发和 Agent 质量：[测试开发面经](INTERVIEW_QA_TEST_ENGINEERING.md)
 
 以后新增相似问题时，把原句追加到对应专题，不再为同一考点复制一套新答案。
@@ -201,7 +201,7 @@ LangGraph 适合这种有明确状态、条件分支、工具调用和人工确�
 
 **参考回答：**
 
-我先用单 Agent 验证完整流程，只有当职责、工具权限或上下文边界明显不同才拆分。最终业务层只保留三个领域 Agent：`TriageAgent` 负责预问诊信息结构化，`MedicationAgent` 负责处方/药箱/库存/提醒草稿，`ReportAgent` 负责医疗文档结构化和有来源解释。简单任务由 Complexity Router 直达一个领域 Agent；跨领域任务才由一次性 Planner 拆成最多三步，再由串行 bounded Supervisor 按依赖执行。
+我先用单 Agent 验证完整流程，只有当职责、工具权限或上下文边界明显不同才拆分。最终业务层只保留三个领域 Agent：`TriageAgent` 负责预问诊信息结构化，`MedicationAgent` 负责处方/药箱/库存/提醒草稿，`ReportAgent` 负责医疗文档结构化和有来源解释。简单任务由 Complexity Router 直达一个领域 Agent；跨领域任务才由一次性 Planner 生成有界计划，再由 bounded Supervisor 按依赖执行。当前内核只对依赖满足、独立且无副作用的只读步骤做有界 DAG 并行，确认、写操作和治理节点保持串行。
 
 每个角色都要说清楚负责什么、能看什么信息、能调用什么工具、失败后怎么处理。只是复制几份 Prompt、换几个角色名，不算真正的多 Agent。Planner 只决定“要完成什么”，Supervisor 只决定“冻结计划中的下一步由谁执行”，两者不会同时改写任务目标。
 
@@ -281,7 +281,7 @@ MySQL 或 PostgreSQL 负责权威结构化数据、权限和事务；向量索�
 
 压缩时要保留任务编号、家庭成员、信息来源、安全标记和未完成事项，清理无关历史与临时推理。未经用户确认的模型推断不能写入长期记忆。
 
-详细的保留/删除规则、代码证据和 40 条固定用例评测流程见 [上下文与记忆专题](learning/INTERVIEW_QUESTION_BANK.md#5-上下文与记忆)。
+详细的保留/删除规则、代码证据和 40 条固定用例评测流程见 [上下文与记忆专题](learning/PROJECT_INTERVIEW_QUESTION_BANK.md#5-上下文与记忆)。
 
 ### Q32：Agent 执行模式如何选择？如何防止死循环？
 
@@ -493,7 +493,7 @@ Agent 安全不能只靠一句提示词。像诊断、停药、加量、换药�
 
 如果压缩后仍然无法安全完成，就明确告诉用户需要补充信息或继续下一轮，不能把被截断的内容当成已经处理。程序还要限制最大步骤、最大工具调用次数和最大 Token，防止任务在上下文不足时无限循环。
 
-当前项目采用业务规则触发 compact 和每轮固定 reset，尚未把 token 百分比作为自动触发条件。具体触发条件和评测方法见 [上下文与记忆专题](learning/INTERVIEW_QUESTION_BANK.md#q09-什么时候需要压缩上下文)。
+当前项目采用业务规则触发 compact 和每轮固定 reset，尚未把 token 百分比作为自动触发条件。具体触发条件和评测方法见 [上下文与记忆专题](learning/PROJECT_INTERVIEW_QUESTION_BANK.md#q09-什么时候需要压缩上下文)。
 
 ### Q59：多 Agent 之间怎样传递成功、失败、超时和重试状态？
 
@@ -622,13 +622,13 @@ Coze、Dify 和 n8n 更适合快速搭建流程、连接现成服务和验证产
 
 **参考回答：**
 
-当前 Docker 验收只有 13 个 baseline HTTP 样本，p95 是 426.67 毫秒，样本太少，也没有控制后台负载，所以我没有放进简历。正式测量会先预热，再对固定黄金链各运行 100 次并重复 3 轮，同时拆分总延迟、RAG、模型和工具耗时。这样得到的也只是固定电脑和固定模型下的本地基准，不是生产 SLA。
+当前 B3 已冻结 8 条真实模型 development 样本，本机 model/workflow p95 为 `4452/5239` 毫秒。这个数字可以作为小样本本机基准写进简历，但必须同时说明样本数、模型和场景范围；它不是生产 SLA。更正式的性能测试仍要预热、扩展 validation/holdout、重复运行，并拆分总延迟、RAG、模型和工具耗时。
 
 ### Q73：Token 成本怎么统计和优化？
 
 **参考回答：**
 
-Model Gateway 已经能记录输入、输出和总 Token，但默认 deterministic provider 不产生真实 usage，所以当前成本是 N/A。接入真实模型后，我会用固定用例统计平均输入和输出 Token，再按供应商每百万 Token 单价计算单次任务成本。优化时优先减少无关历史、只给领域 Agent 最小上下文、控制 RAG Top-K 和输出长度，同时检查质量不能因为省 Token 明显下降。
+Model Gateway 会记录输入、输出和总 token。B3 runner 在显式 `--live` 后读取 provider usage；8 条 `deepseek-v4-flash` development 样本的平均输入/输出/总 token 为 `599.75/432.75/1032.5`，按本机价格配置计算平均单次成本 `$0.00146525`，人工复核为 `8/8` 通过。这个结果只适用于固定小样本，不代表所有医疗问答成本。优化时优先减少无关历史、只给领域 Agent 最小上下文、控制 RAG Top-K 和输出长度，同时用同一审核集检查质量不能因为省 token 下降。
 
 ### Q74：失败重试率应该怎么解释？
 
@@ -666,4 +666,4 @@ Model Gateway 已经能记录输入、输出和总 Token，但默认 determinist
 - 能否区分当前仓库已经实现的能力、4B 后端目标和 4C 最终产品目标？
 - 是否避免声称用过没有实际使用的工具，避免把设计指标说成实测结果？
 
-通用基础题见 [通用计算机基础八股](GENERAL_INTERVIEW_KNOWLEDGE.md)。测试开发方向的完整题目、pytest、CI、性能和质量工程回答见 [备选测试开发面经](INTERVIEW_QA_TEST_ENGINEERING.md)。
+测试开发方向的完整题目、pytest、CI、性能和质量工程回答见 [备选测试开发面经](INTERVIEW_QA_TEST_ENGINEERING.md)。通用基础题请使用独立求职知识库，不再与本项目面经混放。

@@ -69,7 +69,8 @@ RAG 是三条业务线共用的知识与证据能力，解决四个核心问题�
 ## 6. 最终交互与 Agent 范围
 
 - 简单单领域请求直接进入 Triage、Medication 或 Report 领域 Agent。
-- 只有复杂跨领域请求才调用一次性 TaskPlanner 和串行 bounded Supervisor。
+- 只有复杂跨领域请求才调用一次性 TaskPlanner 和 bounded Supervisor；编排内核已对依赖就绪、只读且无副作用的步骤执行有界 DAG，业务写操作和确认仍串行。
+- 依赖已满足、只读且无副作用的领域步骤可以受控并行；确认、写操作、Checkpoint、Agent 安全和 Agent 评测必须串行。
 - 三个领域 Agent 各自具有受枚举和工具权限限制的决策点；旧 Profile/Refill/Pharmacy/Reminder 角色收敛为 Medication 领域步骤或 Tool。
 - 无 Key 使用 deterministic policy；真实模型只能从固定候选项中输出结构化决策。
 - 请求前 Safety Guard、动作前 Policy Guard、最终输出 SafetyAgent 由状态图强制执行。
@@ -79,7 +80,7 @@ RAG 是三条业务线共用的知识与证据能力，解决四个核心问题�
 
 当前仓库已经实现旧版四场景基线：父亲降压药续方、母亲中医复诊材料整理、母亲用药提醒和高风险用药调整拦截。已完成数据库、API、Tool Registry、关键词 RAG 基线、Model Gateway、有界 LangGraph 工作流、运行轨迹、Agent 评测和前端演示页面。
 
-新三条业务主线仍处于本地 MVP 阶段，尚未接入真实医院、药店或生产用户。当前已经完成产品重基线、业务域、Provider 模式、SourceRef、向量 RAG 路径、旧版有界工作流、Model Gateway、任务五的最终路由契约、任务六的 deterministic 三领域编排内核、任务七的新业务三层安全和确认状态机、任务八的 PostgreSQL 权威 checkpoint/Redis 回源/两次 run 续跑、任务九 Tool/Provider 可靠性、任务十 RRF/版本拒绝/成员隔离/脱敏 Observation、任务十一 32 条 deterministic Harness/A/B/C 消融、任务十二真实 Docker 后端验收、任务十三 4B Git/文档收口和 4C 患者端交付；4C 已完成，后续只做独立的真实 Provider/LLM 联调、生产认证和部署准备。
+新三条业务主线仍处于本地 MVP 阶段，尚未接入真实医院、药店或生产用户。当前已经完成产品重基线、业务域、Provider 模式、SourceRef、向量 RAG 路径、旧版有界工作流、Model Gateway、任务五的最终路由契约、任务六的 deterministic 三领域编排内核、任务七的新业务三层安全和确认状态机、任务八的 PostgreSQL 权威 checkpoint/Redis 回源/两次 run 续跑、任务九 Tool/Provider 可靠性、任务十 RRF/版本拒绝/成员隔离/脱敏 Observation、任务十一 32 条 deterministic Harness/A/B/C 消融、任务十二真实 Docker 后端验收、任务十三 4B Git/文档收口和 4C 患者端交付，以及 4D-B2.1 的 UnifiedHealthGraph 统一入口、4D-B2.2 的有界只读 DAG 与评测 `all_history` 基线、4D-B2.3 的 FinalClaim/AnswerEnvelope/Trace v2 和 4D-B2.4 的 300/1200 v2 数据生成。v2 数据仍待人工审核、物化和 grader；真实 Provider/LLM、生产认证和部署准备仍是后续可选或生产化工作。
 
 ## 8. 验收原则
 
@@ -90,3 +91,4 @@ RAG 是三条业务线共用的知识与证据能力，解决四个核心问题�
 - 评测验收：同时覆盖任务完成、工具调用、RAG 证据、安全、确认、隔离和延迟。
 - 真实性验收：未接入的医院、药店、医生、通知和文档解析能力必须明确标记为模拟，不得伪装成实时生产数据。
 - 多 Agent 验收：32 条固定用例公平比较 Single Agent、固定领域子图和按需 Planner + bounded Supervisor；简单和复杂任务分开统计。
+- 最终架构验收：在同一 300 个 WorldState、1200 条表达上比较自动路由、串行/并行和全历史/最小上下文模式；按 base world 拆分数据，禁止同一事实的表达变体跨集合泄漏。

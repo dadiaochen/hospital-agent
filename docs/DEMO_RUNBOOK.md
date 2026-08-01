@@ -70,7 +70,7 @@ Runner 先通过 `GET /api/family-members` 查找 seed 中的 father/mother，�
 
 每个结果还必须满足：来源覆盖符合 ExpectedCase、Evaluator 通过、`external_action_status="not_submitted"`。Runner 不修改 FinalAnswer，也不直接访问数据库。
 
-本次固定实跑结果见 [3D MVP 演示报告](mvp_demo_report.3d.md)。报告不保存 member ID、run ID、答案正文、prompt 或 Key。
+当前固定实跑证据统一见 [4C MVP 收口报告](mvp_closeout_report.4c.md)。报告不保存 member ID、run ID、答案正文、prompt 或 Key。
 
 ## 3.1 浏览器 E2E 回归
 

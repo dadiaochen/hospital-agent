@@ -649,9 +649,10 @@ def _default_suite_path(root: Path) -> Path:
 
 
 def _default_report_paths(root: Path) -> tuple[Path, Path]:
+    report_dir = root / "output" / "benchmarks"
     return (
-        root / "docs" / "agent_eval_report.3c.json",
-        root / "docs" / "agent_eval_report.3c.md",
+        report_dir / "runtime_harness_report.json",
+        report_dir / "runtime_harness_report.md",
     )
 
 

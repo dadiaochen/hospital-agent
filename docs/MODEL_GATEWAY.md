@@ -137,3 +137,11 @@ LLM Judge 不复用运行时 Gateway 做在线决策。若进行实验，只离�
 这些计数可以进入白名单 Observation，但消息内容、Provider raw response、Authorization 和 API Key 不能进入。token usage 是调用审计字段，不是模型质量指标，也不能在没有真实 Provider 报告时用于宣称成本或性能。
 
 任务十一三组共享 `deterministic/deterministic-product-answer-v1` 和相同 token 上限。由于 deterministic provider 不返回 usage，所有消融结果保持 `token_usage_available=false`、token/cost 为 `N/A`；Harness 明确拒绝在 usage 缺失时填入合成计数。
+
+## 12. 4D-B3 真实模型评测
+
+`scripts/run_4d_b3_real_llm.py` 是离线安全的评测入口：没有 `--live` 时不访问模型；有 `--live` 时仍要求 `MODEL_PROVIDER=openai_compatible`、真实 `MODEL_API_BASE`、`MODEL_API_KEY`、`MODEL_NAME` 和本地 identity/source map。它复用 PostgreSQL shadow transaction、UnifiedHealthGraph、九层 deterministic grader 和当前 Model Gateway。
+
+真实 token 只读取 provider 返回的完整 `usage`。成本只有在 `.env` 同时配置 `MODEL_INPUT_PRICE_PER_1M_USD` 和 `MODEL_OUTPUT_PRICE_PER_1M_USD` 时计算；缺少 usage 或价格就保持 `N/A`。真实模型失败后 fallback 成功时，报告仍记录 fallback，不能把 fallback 结果算成 primary 模型成功。
+
+对于默认开启 thinking 的 Provider，可以在 `.env` 设置 `MODEL_THINKING_MODE=disabled`。Gateway 只消费最终 `content`，不会把 `reasoning_content` 当作用户答案；如果最终 content 为空或不符合目标 Pydantic schema，仍按失败记录并 fallback。

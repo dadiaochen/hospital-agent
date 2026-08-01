@@ -1,8 +1,8 @@
 """Pydantic contracts for the final 4B routing and orchestration boundary.
 
-These contracts deliberately sit beside the legacy workflow schemas.  The
-legacy graph remains runnable while 4B task five freezes the new boundary;
-task six will consume these models from the bounded Supervisor workflow.
+These contracts deliberately sit beside the legacy workflow schemas. The
+legacy graph remains runnable while the 4D-B2 bounded Supervisor consumes the
+new boundary and exposes only frozen, validated orchestration results.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from pydantic import Field, model_validator
 
 from app.agent.context_schemas import (
     ContractModel,
+    ContextMode,
     Intent,
     NonEmptyStr,
     RAGSourceRef,
@@ -23,6 +24,9 @@ from app.agent.safety import SafetyDecision, SafetyStage
 
 DomainAgentRole = Literal["TriageAgent", "MedicationAgent", "ReportAgent"]
 RouteMode = Literal["simple_single_domain", "complex_cross_domain"]
+ExecutionMode = Literal["serial", "parallel"]
+RoutingMode = Literal["auto", "forced_supervisor"]
+PlannerMode = Literal["deterministic", "model"]
 RouteReasonCode = Literal[
     "single_domain_signal",
     "ambiguous_input",
@@ -47,6 +51,29 @@ class ComplexityRoutingRequest(ContractModel):
     member_id: NonEmptyStr
     user_input: NonEmptyStr
     intent: Intent | None = None
+
+
+class EvalRuntimeOptions(ContractModel):
+    """Server-owned switches for deterministic architecture ablations.
+
+    ``all_history`` is deliberately impossible unless the caller explicitly
+    marks the run as evaluation-only. API input must never be able to turn it
+    on.
+    """
+
+    routing_mode: RoutingMode = "auto"
+    execution_mode: ExecutionMode = "parallel"
+    context_mode: ContextMode = "dependency_only"
+    planner_mode: PlannerMode = "deterministic"
+    evaluation_only: bool = False
+
+    @model_validator(mode="after")
+    def validate_context_mode(self) -> "EvalRuntimeOptions":
+        if self.context_mode == "all_history" and not self.evaluation_only:
+            raise ValueError("all_history is restricted to evaluation-only runs")
+        if self.planner_mode != "deterministic":
+            raise ValueError("model planner mode is not implemented in 4D-B2.2")
+        return self
 
 
 class ComplexityRoute(ContractModel):
@@ -91,13 +118,33 @@ class ComplexityRoute(ContractModel):
         return self
 
 
+class DependencyEdge(ContractModel):
+    """One explicit edge in the frozen task DAG."""
+
+    upstream_step_id: NonEmptyStr
+    downstream_step_id: NonEmptyStr
+
+    @model_validator(mode="after")
+    def reject_self_edge(self) -> "DependencyEdge":
+        if self.upstream_step_id == self.downstream_step_id:
+            raise ValueError("a dependency edge cannot point to itself")
+        return self
+
+
 class PlanStep(ContractModel):
-    """One bounded business step selected from the three final domain roles."""
+    """One bounded business step selected from the three final domain roles.
+
+    ``read_only`` is a scheduling permission, not a replacement for Tool
+    Registry permissions. The real registry still validates every tool call.
+    """
 
     step_id: NonEmptyStr
     role: DomainAgentRole
     objective: NonEmptyStr
     dependencies: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    read_only: bool = True
+    allowed_tools: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    required_source_types: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
 
     @model_validator(mode="after")
     def reject_self_dependency(self) -> "PlanStep":
@@ -121,6 +168,8 @@ class TaskPlan(ContractModel):
     intent: Intent
     steps: tuple[PlanStep, ...] = Field(min_length=1, max_length=3)
     max_steps: int = Field(default=3, ge=1, le=3)
+    dependency_edges: tuple[DependencyEdge, ...] = Field(default_factory=tuple)
+    max_parallelism: int = Field(default=1, ge=1, le=3)
 
     @model_validator(mode="after")
     def validate_bounded_dependencies(self) -> "TaskPlan":
@@ -130,15 +179,70 @@ class TaskPlan(ContractModel):
         if len(self.steps) > self.max_steps:
             raise ValueError("task plan exceeds max_steps")
 
-        completed_step_ids: set[str] = set()
-        for step in self.steps:
-            unknown = set(step.dependencies) - set(completed_step_ids)
-            if unknown:
-                raise ValueError(
-                    "step dependencies must reference an earlier step: "
-                    + ", ".join(sorted(unknown))
-                )
-            completed_step_ids.add(step.step_id)
+        step_id_set = set(step_ids)
+        dependency_map = {
+            step.step_id: set(step.dependencies) for step in self.steps
+        }
+        unknown = set().union(*(dependencies for dependencies in dependency_map.values())) - step_id_set
+        if unknown:
+            raise ValueError(
+                "step dependencies must reference a known step: "
+                + ", ".join(sorted(unknown))
+            )
+
+        edge_pairs = {
+            (edge.upstream_step_id, edge.downstream_step_id)
+            for edge in self.dependency_edges
+        }
+        if len(edge_pairs) != len(self.dependency_edges):
+            raise ValueError("dependency edges must be unique")
+        if any(
+            edge.upstream_step_id not in step_id_set
+            or edge.downstream_step_id not in step_id_set
+            for edge in self.dependency_edges
+        ):
+            raise ValueError("dependency edges must reference plan steps")
+
+        declared_pairs = {
+            (dependency, step_id)
+            for step_id, dependencies in dependency_map.items()
+            for dependency in dependencies
+        }
+        if self.dependency_edges:
+            if edge_pairs != declared_pairs:
+                raise ValueError("dependency edges must match step dependencies")
+        else:
+            # Preserve the original serial contract. Arbitrary DAG edges must
+            # be explicit so old callers cannot silently change semantics.
+            completed_step_ids: set[str] = set()
+            for step in self.steps:
+                forward_only = set(step.dependencies) - completed_step_ids
+                if forward_only:
+                    raise ValueError(
+                        "step dependencies must reference an earlier step: "
+                        + ", ".join(sorted(forward_only))
+                    )
+                completed_step_ids.add(step.step_id)
+
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(step_id: str) -> None:
+            if step_id in visiting:
+                raise ValueError("task plan dependencies must be acyclic")
+            if step_id in visited:
+                return
+            visiting.add(step_id)
+            for dependency in dependency_map[step_id]:
+                visit(dependency)
+            visiting.remove(step_id)
+            visited.add(step_id)
+
+        for step_id in step_ids:
+            visit(step_id)
+
+        if self.max_parallelism > len(self.steps):
+            raise ValueError("max_parallelism cannot exceed the number of steps")
         return self
 
 
@@ -198,6 +302,11 @@ class OrchestrationRunResult(ContractModel):
     steps_executed: int = Field(default=0, ge=0, le=3)
     used_planner: bool = False
     used_supervisor: bool = False
+    execution_mode: ExecutionMode = "serial"
+    context_mode: ContextMode = "dependency_only"
+    parallel_batches: tuple[tuple[NonEmptyStr, ...], ...] = Field(
+        default_factory=tuple
+    )
 
     @model_validator(mode="after")
     def validate_run_shape(self) -> "OrchestrationRunResult":
@@ -214,6 +323,20 @@ class OrchestrationRunResult(ContractModel):
                 raise ValueError("AgentTaskResult task_id must match request")
             if result.member_id != self.request.member_id:
                 raise ValueError("AgentTaskResult member_id must match request")
+
+        if any(not batch for batch in self.parallel_batches):
+            raise ValueError("parallel batches cannot be empty")
+        if self.execution_mode == "serial" and any(
+            len(batch) > 1 for batch in self.parallel_batches
+        ):
+            raise ValueError("serial execution cannot contain parallel batches")
+        if self.plan is not None:
+            plan_step_ids = {step.step_id for step in self.plan.steps}
+            flattened = [step_id for batch in self.parallel_batches for step_id in batch]
+            if len(flattened) != len(set(flattened)):
+                raise ValueError("a plan step cannot appear in multiple parallel batches")
+            if set(flattened) - plan_step_ids:
+                raise ValueError("parallel batches must reference plan steps")
 
         if self.route.route_mode == "simple_single_domain":
             if self.plan is not None:
@@ -299,10 +422,16 @@ __all__ = [
     "AgentTaskStatus",
     "ComplexityRoute",
     "ComplexityRoutingRequest",
+    "ContextMode",
+    "DependencyEdge",
     "DomainAgentRole",
+    "ExecutionMode",
+    "EvalRuntimeOptions",
     "PlanStep",
     "RouteMode",
     "RouteReasonCode",
+    "RoutingMode",
+    "PlannerMode",
     "SafetyDecision",
     "SafetyDecisionBundle",
     "SafetyStage",

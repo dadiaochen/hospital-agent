@@ -8,23 +8,27 @@
 
 | 证据 | 最新结果 | 简历能说明什么 | 不能说明什么 |
 | --- | --- | --- | --- |
-| Python 自动化 | `308/308`；最近一次 branch-aware 覆盖率 `86%` | 后端回归和异常分支具有较完整自动化保护 | 业务正确率、模型准确率、临床安全率 |
+| Python 自动化 | `356/356`；最近一次 branch-aware 覆盖率 `86%` | 后端回归和异常分支具有较完整自动化保护 | 业务正确率、模型准确率、临床安全率 |
 | 前端自动化 | `25/25` 组件测试、`7/7` Edge E2E | 固定患者端黄金链和错误展示可重复 | 浏览器兼容全覆盖、线上可用率 |
 | 编排消融 | 32 case × 3 策略 = 96 Trace | bounded Supervisor 在固定复杂任务中完成 `6/6`，固定单域路由为 `0/6` | 当前业务 API 已接 Supervisor、真实用户成功率 |
 | Docker 后端验收 | baseline `19/19`、Redis 故障 `18/18` | migration/seed/API/pgvector/cache fallback 的本地集成链可运行 | 生产 SLA、高可用或容量 |
-| 4D 本地观测 | Supervisor 32、关键词 RAG 12、上下文 40、Provider 故障 30 | 核心本地实现已接入版本化指标 runner | Docker pgvector、真实 LLM、客户数据和生产性能 |
+| v2 评测体系 | 300 个 WorldState、1200 条 Query；development/validation/holdout 为 `720/240/240` 条 Query | 已建立版本化数据、九维规则评分、固定 seed、关联校验和报告 Runner | 数据仍待全量人工审核；preview 通过率不是模型质量 |
+| 4D 本地观测 | Supervisor 32、关键词 RAG 12、上下文 40、Provider 故障 30 | 核心本地实现已接入版本化指标 runner | 客户数据和生产性能 |
+| 真实 LLM 小样本 | 8 条 development 冻结产物人工复核 `8/8`；平均总 token `1032.5`；本机 workflow p95 `5239 ms` | 真实 provider、usage、成本、延迟和人工审核链路已跑通 | 开放问答准确率、临床安全率、生产 SLA |
 
 早期 16 条 `agent_harness_cases.json` + `mock_run_traces.json` 仍用于验证 Evaluator 能发现坏轨迹，但其中 `98.75%/93.75%/p95 260ms` 不再作为主简历指标。它们混合了故意失败 fixture 和人工 latency 字段，容易被误读成真实系统质量。
 
 建议的项目简历句子：
 
 ```text
-设计并实现基于 Supervisor 编排模式的多 Agent 协作内核，包含分诊、用药和报告三个领域 Agent；建立分层上下文和记忆机制，解决任务恢复、长对话膨胀和家庭成员信息串用，通过 RAG 保留回答来源，并建立运行后自动评测和固定用例回归。
+设计并实现基于 Supervisor 的多 Agent 架构，包含分诊、用药和报告三个领域 Agent；简单任务直接处理，复杂任务由一次性 Planner 生成有界计划并由 Supervisor 按依赖调度。
 
-在 32 条本地固定用例中，Supervisor 完成全部 6 条复杂跨领域任务，固定单领域路由完成 0 条；工具调用准确率为 100%。固定 RAG 用例的 Recall@3 为 75%、Recall@5 为 100%。
+设计分层上下文和记忆机制，分离单次运行状态、PostgreSQL 任务检查点和 Redis 短期缓存，并按家庭成员隔离事实与来源；通过 RAG、Agent 安全和人工确认保证回答可追溯，高风险请求在动作前拦截。
+
+建立覆盖 300 个业务状态、1200 条多表达问题的分层评测体系，按开发集、验证集和留出集拆分，并完成编排、工具、来源、安全和上下文等九个维度的全量规则回放。32 条固定消融用例中 Supervisor 完成 6/6 条复杂任务，固定领域路由完成 0/6，工具调用准确率 100%；8 条真实模型固定产物人工复核 8/8 通过，平均总 token 约 1033、单次成本约 0.0015 美元、本机工作流 p95 约 5.24 秒。
 ```
 
-简历正文只保留上述四项核心工作和两组质量指标。`308` 条测试、最近一次 `86%` 覆盖率和 `7` 条浏览器 E2E 可以放在项目成果最后一句；Docker 检查数、数据库表名、内部契约名和所有错误分类留给追问，不放进开场。
+简历正文优先保留“Supervisor 编排、上下文与成员隔离、RAG 与安全、分层评测”四项核心工作。项目规模先写 300 个 WorldState 和 1200 条 Query；指标再写 32 条消融对比和 8 条真实 LLM 人工审核。`356` 条后端测试与 `7` 条浏览器 E2E 可作为工程质量补充。RAG 的 4 条小样本指标、Docker 检查数、数据库表名和内部契约名留给追问。
 
 当前简历中的预问诊科室推荐准确率、报告字段提取准确率等空缺指标不应填入估计值。仓库当前固定 Harness 没有对应 gold set 和字段级评测，应该先删除占位符，等后续真实用例和评测闭环完成后再写。
 
@@ -43,7 +47,7 @@
 - 实现固定响应的本地 Agent Harness：覆盖固定用例、运行轨迹、规则评估、失败原因和汇总报告。
 - 区分运行时 Agent 安全和任务结束后的 Agent 评测，避免用事后评估代替动作发生前的安全拦截。
 - 实现混合检索：保留稳定的关键词检索基线，向量检索只返回资料位置，再从知识表读取正文；向量检索不可用时记录原因并降级。
-- 设计统一模型调用层，对模型输出做结构化校验和规则检查，对超时、返回格式错误和安全检查失败记录重试与降级过程；尚未进行真实线上模型质量评测。
+- 设计统一模型调用层，对模型输出做结构化校验和规则检查，对超时、返回格式错误和安全检查失败记录重试与降级过程；已完成 8 条真实模型本机样本审核，但尚未进行线上或临床质量评测。
 - 使用 LangGraph 实现有边界、可终止的固定领域业务状态图，串联资料查询、Agent 安全、人工确认和任务结束后的 Agent 评测；另实现并独立评测按需 Planner + bounded Supervisor 编排内核。
 - 实现 Agent 运行接口，记录任务运行和工具调用，支持家庭成员隔离、重复请求去重、确认后的同任务续跑和失败审计；不执行外部医疗动作。
 - 实现 Next.js 核心数据页面，统一处理加载、空数据和错误状态；切换家庭成员时取消旧请求，并再次校验返回数据所属成员。
@@ -105,18 +109,34 @@ Provider 相关亮点可以表述为“设计统一 Provider Adapter 契约和 m
 
 任务十现在可以如实表述为“实现 keyword/vector 的 RRF rank 融合，保留原始分、rank、文档/分块/embedding schema 与 fallback 决策；过期向量来源必须回到 PostgreSQL 权威版本校验；处方和药箱查询在 SQL 同时约束用户、成员和资源，并用白名单 Observation 记录节点、工具、Provider、来源、重试、模型和可用 token 计数”。可以补充“通过旧资源 ID、伪造成员、Prompt 注入和缓存污染测试”，但不能写成真实语义召回率、零数据泄漏、线上 p95 或临床安全指标。
 
+4D-B2.2 完成后，统一入口已经接入有界只读 DAG 并行；业务 ProductWorkflow 适配器中的确认、写操作和安全治理仍串行。简历仍应区分编排能力和业务副作用边界：
+
+- “将 Router、一次性 Planner、有界 bounded Supervisor 和三个领域 Agent 接入患者端统一运行入口；对无依赖只读步骤做受控 DAG 并行，并把编排结果写入冻结 RunTrace；业务 Tool、确认、写操作和安全治理仍由固定 ProductWorkflow 适配器串行执行。”
+
 最终架构中已经实现、但需要区分运行接线状态的亮点只能这样表达：
 
-- “实现并独立评测简单任务直达、复杂任务由一次性 Planner 与串行 bounded Supervisor 协调的编排内核；当前业务 API 仍使用固定领域 LangGraph。”
+- “实现并独立评测简单任务直达、复杂任务由一次性 Planner 与串行 bounded Supervisor 协调的编排内核；当前患者端已通过 UnifiedHealthGraph 接入该编排边界，业务执行仍由固定 ProductWorkflow 适配器完成。”
 - “实现请求、动作和最终输出三层安全治理，并将 Agent 安全与只读 Agent 评测分离；确认状态机保证首轮自动草稿和确认后的本地状态迁移。”
 - “实现 Tool/Provider 可靠性、RRF/版本拒绝、成员隔离和脱敏 Observation 契约，并用 32 条固定业务用例扩展 deterministic Agent 评测。”
 - “实现同一模型/工具/RAG/Safety/确认/token 上限下的 Single-Agent、固定路由、bounded Supervisor 消融；固定集显示简单任务固定路由足够，复杂跨域任务由 Supervisor 提升角色与工具覆盖。”
 
-任务十一已有代码、测试和 deterministic 报告，因此可以写“实现消融评测”，但数字必须注明“32 条固定 deterministic fixture”。不能把 1.0000 Safety/隔离、fixture P95 或 `N/A` token/cost 写成生产指标。项目没有实现 MCP Server、OpenTelemetry/Jaeger、Agent 级并行或复杂自动重规划，不应为了增加技术名词写入简历。
+任务十一已有代码、测试和 deterministic 报告，因此可以写“实现消融评测”，但数字必须注明“32 条固定 deterministic fixture”。不能把 1.0000 Safety/隔离、fixture P95 或 `N/A` token/cost 写成生产指标。项目没有实现 MCP Server、OpenTelemetry/Jaeger 或复杂自动重规划，不应为了增加技术名词写入简历。当前已实现有界 DAG，只并行独立且依赖满足的只读步骤，写操作和治理节点仍串行。
 
 4C-3 可以如实表述为“使用 Playwright 在真实 Docker Compose 前后端上建立浏览器级回归，覆盖续方 DRAFT/确认续跑、用药提醒、复诊材料、高风险拦截、成员切换和 API 失败，7 条固定场景本机通过”。这里的 7/7 是 deterministic 本地演示链路的 E2E 证据，不是线上成功率、临床安全率或真实模型指标。实现细节见 [4C 浏览器 E2E 报告](browser_e2e_report.4c.md)。
 
 4C-4 可以如实表述为“设计并实现一键 MVP 收口脚本，串联 Docker 构建、PostgreSQL migration/seed、固定四场景 Runtime Demo、deterministic Agent Harness、A/B/C 消融和 Playwright 浏览器 E2E，并生成脱敏 closeout report”。本次本机证据为 Demo `4/4`、浏览器 `7/7` 和前后端 health `200`；这些是本地 deterministic 验收结果，不是生产可用率、临床安全率或线上 p95。
+
+## 4D-B2.6 可写与不可写的成果
+
+可以如实写：实现了 PostgreSQL shadow transaction、Provider/RAG case isolation、真实 UnifiedHealthGraph integration executor、A/B/C/D preview runner，以及 Docker 本机全链路回归；Docker 验收为 `19/19`，第一条 integration sample 九层 deterministic grader 全部通过。
+
+不能把这些数字写成线上质量、临床准确率或最终全量 benchmark 指标。B3 的 8 条真实模型样本已经产生可写的小样本 token/cost/p95；RAG Recall、Safety recall、记忆保留率、Provider 恢复率和 300/1200 全量指标继续写为 `N/A` 或“目标指标”。
+
+## 4D-B3 真实模型指标边界
+
+B3 已实现可选真实 LLM runner、真实 usage 读取、价格换算、fallback 统计、模型/工作流 p95、人工审核队列和审核冻结 finalizer。`deepseek-v4-flash` 在 8 条 development 固定样本中真实 provider 生效 `8/8`、fallback `0/8`，人工对 FinalAnswer 与冻结草稿/来源快照复核 `8/8` 通过；平均输入/输出/总 token 为 `599.75/432.75/1032.5`，平均单次成本 `$0.00146525`，本机 workflow/model p95 为 `5239/4452 ms`。
+
+推荐简历只保留一句：**“对 8 条固定 development 样本完成真实 LLM 运行与人工复核，冻结产物 8/8 通过；平均总 token 约 1033、单次成本约 0.0015 美元、本机工作流 p95 约 5.24 秒。”** 必须同时说明只覆盖两个成员和提醒/购药场景；不能改写为开放问答准确率 100%、临床安全率或生产 SLA。
 
 ## 不能夸大的内容
 
@@ -126,10 +146,16 @@ Provider 相关亮点可以表述为“设计统一 Provider Adapter 契约和 m
 - Agent 运行接口、运行记录持久化和前端核心页面已实现；4C-3/4C-4 已完成固定浏览器和 MVP 收口验证，但仍不是生产环境验证。
 - 知识库搜索已完成自动化与本地 PostgreSQL/Postman 验证，但不能把本地联调描述为生产检索质量或临床有效性验证。
 - 不要把 RAG 检索分数描述为医疗正确率，也不要把本地 deterministic provider 的结果描述成真实语义模型质量；当前代码已具备 FastEmbed + PostgreSQL pgvector 链路，但真实模型质量和线上检索指标仍未验证。
-- 不要把固定响应或模拟接口测试描述成真实大模型效果，也不要宣称模型准确率、安全率、成本或 p95 延迟。
+- 不要把固定响应或模拟接口测试描述成真实大模型效果；B3 的成本和 p95 可以按“8 条固定 development 样本、本机环境”引用，不得省略范围。
 
 ## 4D-B 评测口径
 
 4D-A 的五组 gold 数据已完成审核并冻结 manifest。4D-B deterministic runner 已实现 manifest/hash 校验、数据契约检查、来源键检查、安全标签检查、上下文记忆标签检查和 Provider 故障策略检查，并生成 JSON/Markdown 报告。
 
-4D-B 本地观测 runner 还实际执行 32 次 bounded Supervisor、12 次关键词检索、40 次 ContextManager 和 30 次 Provider 故障注入。对应数字只允许称为“固定合成本地用例结果”；Docker pgvector、Checkpoint 恢复、真实回答质量、token 和成本仍为 `N/A`。简历不能把 `1.0000` 的数据契约结果写成模型准确率，也不应在 Docker/真实模型验证前把本地 `100%` Safety 或 RAG 指标当作最终成果。
+4D-B 本地观测 runner 还实际执行 32 次 bounded Supervisor、12 次关键词检索、40 次 ContextManager 和 30 次 Provider 故障注入。对应数字只允许称为“固定合成本地用例结果”；B3 另有 8 条真实模型人工复核报告，二者不能混算。简历不能把 `1.0000` 的数据契约结果写成模型准确率，也不能把 B3 的 8/8 扩展为全量安全或 RAG 指标。
+
+### 4D-B 最终目标不是当前成果
+
+4D-B 已完成 UnifiedHealthGraph、有界 DAG、评测专用 `all_history` 基线、结构化 FinalClaim/AnswerEnvelope/Trace v2、固定 seed 的 300 个 WorldState/1200 条 v2 Query 生成器，以及内存 projection、九层 deterministic grader 和 preview Runner；生产仍使用 `dependency_only` 上下文。v2 数据尚待人工审核和真实 PostgreSQL/Provider/RAG 物化，因此简历可以写已实现“带来源 Claim 的结构化答案、可重复评测数据与确定性评测扩展”，但不能把 preview 的 100% 通过率或模拟延迟写成结果。
+
+最终报告完成后，简历优先保留三类高价值结果：复杂任务完成与 Tool 正确性、RAG 召回与引用正确性、Agent 安全/成员隔离与 p95/token。具体数字由报告回填，不在文档中预设。

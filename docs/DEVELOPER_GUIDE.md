@@ -192,7 +192,7 @@ python -m app.agent.runtime_harness `
   --run-key-prefix "3c-$((Get-Date).ToString('yyyyMMddHHmmss'))"
 ```
 
-报告写入 `docs/agent_eval_report.3c.json` 和 `.md`。JSON 是 commit-safe 摘要，不含 member/run ID 或答案正文。每次新测量使用新的前缀；复用前缀会命中 Runtime 幂等 replay。
+报告写入被 Git 忽略的 `output/benchmarks/runtime_harness_report.json` 和 `.md`。报告不含 member/run ID 或答案正文；每次新测量使用新的前缀，复用前缀会命中 Runtime 幂等 replay。阶段报告不再写入 `docs/`，避免生成文件和当前设计文档混在一起。
 
 3D 固定 MVP 演示：
 
@@ -202,7 +202,7 @@ python -m app.agent.runtime_harness `
 .\scripts\run_demo.ps1
 ```
 
-自动化契约位于 `test_mvp_demo_runner.py`；本地报告位于被忽略的 `var/demo/`，提交用脱敏快照位于 `docs/mvp_demo_report.3d.*`。四场景通过只属于本地 PostgreSQL seed + deterministic provider。
+自动化契约位于 `test_mvp_demo_runner.py`；本地报告位于被忽略的 `var/demo/`。最终可提交的交付证据统一看 `docs/mvp_closeout_report.4c.md`，不再保留旧 3D 快照。四场景通过只属于本地 PostgreSQL seed + deterministic provider。
 
 确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。读取 API 与知识检索已集成；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。
 
@@ -239,12 +239,14 @@ python -m app.agent.runtime_harness `
 - 用户和 `member_id` 的边界已经验证。
 - 工具经过 Tool Registry；本地 DRAFT 无外部副作用，受保护动作经过人工确认。
 - 只读 Tool/Provider 只对 timeout、rate-limit、临时不可用有限重试；参数、权限、schema、业务冲突、内部错误和写操作不自动重试；失败响应没有 data/SourceRef。
-- 简单任务直接路由，复杂任务才使用一次性 Planner 与串行 bounded Supervisor；条件边有明确终点，没有依赖模型输出的无限循环。
+- 简单任务直接路由，复杂任务才使用一次性 Planner 与 bounded Supervisor；当前内核只允许对依赖已满足、只读且无副作用的 DAG 步骤有界并行。所有条件边必须有明确终点，不允许依赖模型输出无限循环。
 - 请求、动作和最终输出三层安全均不可由 Supervisor 绕过；Evaluator 位于回答与 reset 之后且只读。
 - 最终 Runtime 的确认是同一 task 下的新 run；PostgreSQL 是 checkpoint 权威源，Redis 故障能回源，重复或并发确认不会重复执行。
 - 前端成员页面在切换时取消旧请求，并区分 loading、empty、error；成员响应通过 `member_id` 二次检查。
 - 当前 Agent UI 使用兼容确认字段；最终 UI 展示自动生成的本地 DRAFT，用户只确认执行。高风险不能续跑，Trace/Evaluation 始终只读。
 - 更新了对应的技术、接口、数据库、Agent 或测试文档。
 - README 只更新对 GitHub 访客有价值的当前状态，不追加阶段流水账。
+- `.env`、API Key、Token、真实成员数据、identity/source map、人工审核队列、`output/` 和 `var/` 没有进入 Changes。
+- 合成 fixture 可以提交，但必须使用合成 ID，并明确标记为测试数据；不得把本机 PostgreSQL 导出或真实模型原始输出伪装成 fixture。
 
-本项目明确不以 MCP Server、OpenTelemetry/Jaeger、Agent 级并行或复杂自动重规划作为 4B 目标。只有领域 Agent 内相互独立的只读 Provider、数据库和 RAG 查询可以受控异步并发；任务状态和副作用仍由 PostgreSQL 事务、幂等键和状态条件更新保证一致性。
+本项目明确不以 MCP Server、OpenTelemetry/Jaeger 或复杂自动重规划作为目标。当前 bounded Supervisor 已支持有界 DAG，只并行相互独立、依赖已满足、只读且无副作用的领域步骤。确认、写操作、Checkpoint、安全治理和评测保持串行，任务状态和副作用仍由 PostgreSQL 事务、幂等键和状态条件更新保证一致性。

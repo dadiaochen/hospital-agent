@@ -8,13 +8,13 @@
 
 | 工程问题 | 当前实现 |
 | --- | --- |
-| 多 Agent 如何避免无限循环 | 简单任务直达领域 Agent；复杂任务由一次性 Planner 生成计划，再由串行 bounded Supervisor 按依赖和最大步数调度 |
+| 多 Agent 如何避免无限循环 | 统一入口使用 Router、一次性 Planner 和 bounded Supervisor；复杂任务采用有界 DAG，只并行依赖已满足的只读步骤，写操作和治理节点保持串行 |
 | 医疗动作如何避免越权 | 请求入口、动作执行前、最终输出前三层安全检查；受保护动作必须经过显式确认和幂等校验 |
 | 上下文如何避免跨成员污染 | `ContextEnvelope`、角色最小视图、Context Reset/Compaction；所有事实引用绑定 `member_id` 与来源 |
 | 中断任务如何恢复 | PostgreSQL 保存权威 Task Checkpoint，Redis 只做带 TTL 的短期缓存，缓存故障时回源 PostgreSQL |
 | RAG 如何保证可追溯 | PostgreSQL + pgvector、关键词降级、RRF 融合、版本校验和 `source_id` 引用 |
 | 外部依赖失败怎么办 | Tool Registry 和 Provider Registry 统一 timeout、有限重试、错误分类、降级结果与 attempt trace |
-| Agent 质量如何证明 | deterministic Evaluator、固定 gold 数据、32 条 A/B/C 消融 fixture、Docker/API/E2E 与本地观测 runner |
+| Agent 质量如何证明 | 300 个 WorldState、1200 条 Query 和九维 deterministic Runner；另用 32 条消融用例验证编排，用 8 条真实 LLM 样本验证人工审核、token、成本和延迟链路 |
 | 没有模型 Key 能否运行 | 默认 deterministic Model Gateway；可选 OpenAI-compatible provider，未配置 Key 时前后端和测试仍可运行 |
 
 ## 系统架构
@@ -23,7 +23,13 @@
 flowchart TB
     UI["Next.js patient UI"] --> API["FastAPI API"]
     API --> GUARD1["Request Safety Guard"]
-    GUARD1 --> FLOW["Current fixed-domain LangGraph workflow"]
+    GUARD1 --> GRAPH["UnifiedHealthGraph"]
+    GRAPH --> ROUTER["Complexity Router"]
+    ROUTER -->|"simple"| DOMAIN["Domain Agent"]
+    ROUTER -->|"complex"| PLAN["One-shot Planner"]
+    PLAN --> SUP["Bounded Supervisor"]
+    SUP --> DOMAIN
+    DOMAIN --> FLOW["ProductWorkflow adapter"]
     FLOW --> CTX["ContextManager"]
     FLOW --> TOOLS["Tool Registry"]
     TOOLS --> DB["PostgreSQL + pgvector"]
@@ -32,12 +38,8 @@ flowchart TB
     FLOW --> GUARD2["Action Policy Guard"]
     GUARD2 --> CONFIRM["Draft + explicit confirmation"]
     CONFIRM --> GUARD3["Final-output SafetyAgent"]
-    GUARD3 --> TRACE["Frozen RunTrace + EvaluationResult"]
-
-    ROUTER["Complexity Router"] -->|simple| DOMAIN["Domain Agent"]
-    ROUTER -->|complex| PLAN["One-shot Planner"]
-    PLAN --> SUP["Serial bounded Supervisor"]
-    SUP --> DOMAIN
+    GUARD3 --> TRACE["Frozen RunTrace"]
+    TRACE --> EVAL["Read-only EvaluatorAgent"]
 ```
 
 业务角色保持精简：
@@ -48,7 +50,7 @@ flowchart TB
 - `SafetyAgent`：运行时安全拦截，属于治理层。
 - `EvaluatorAgent`：答案生成后的只读评测，不能修改答案或业务状态。
 
-> 重要边界：Router、Planner、bounded Supervisor 编排内核已实现、测试并完成 A/B/C 消融，但当前两个 HTTP 业务入口仍使用固定领域工作流，尚未统一接入该内核。仓库没有把“内核已实现”包装成“线上 API 已动态调度”。
+> 重要边界：Router、Planner、bounded Supervisor 编排内核已实现、测试并完成 A/B/C 消融；4D-B2.1 至 B2.6 已完成统一图、DAG、FinalClaim/Trace v2、300 个 WorldState/1200 条 Query、隔离物化和 Docker 回归。4D-B3 已冻结 8 条真实模型 development 样本的人工复核报告；其余 v2 数据仍未完成全量人工审核和真实映射，局部报告不是生产或临床指标。
 
 ## 当前状态
 
@@ -57,9 +59,9 @@ flowchart TB
 - `4B` 后端工程能力：完成。
 - `4C` 患者端、黄金链路、浏览器 E2E 和固定演示：完成。
 - `4D-A` 五组 gold benchmark 数据：已审核并冻结。
-- `4D-B` 自动化评测与最终可复现指标：进行中。
+- `4D-B` 自动化评测与最终可复现指标：进行中；B3 的 8 条真实模型 development 报告已完成，剩余工作是 v2 全量映射和三 split 正式报告。
 
-当前最重要的未完成项是：统一 HTTP 运行链与 bounded Supervisor、用 Docker PostgreSQL/pgvector 运行完整 4D 指标、验证 PostgreSQL Checkpoint/Redis 故障恢复、接入可选真实 LLM 后测量回答质量与 token/cost。完整清单见路线图的 `4D-B` 和本文“仍未完成”章节。
+当前已构建 300 个 WorldState、1200 条 Query 的版本化评测集，并完成九维 deterministic preview 回放；数据按 development/validation/holdout 拆分，但仍待全量人工审核和真实映射，因此 preview 通过率不作为质量指标。B3 已用 `deepseek-v4-flash` 完成 8 条 development 固定样本，并由人工对“FinalAnswer + 草稿/来源快照”逐条复核，结果为 `8/8` 通过；平均总 token `1032.5`、按本机价格配置计算的平均单次成本 `$0.00146525`、本机 workflow/model p95 为 `5239/4452 ms`。这些数字只属于两个已映射成员和提醒/购药场景，不是生产 SLO、临床安全率或开放问答准确率。详见 [4D-B2.6 集成状态](docs/4D_B2.6_INTEGRATION_STATUS.md)、[4D-B3 真实模型评测](docs/4D_B3_REAL_LLM.md) 和路线图的 `4D-B`。
 
 ## Docker 启动
 
@@ -124,18 +126,27 @@ Copy-Item .env.example .env
 - 默认 `MODEL_PROVIDER=deterministic`，不需要模型 Key。
 - 真实模型只允许通过服务端环境变量配置，详见 [LLM 配置](docs/LLM_CONFIGURATION.md)。
 
+### GitHub 数据边界
+
+- 可以提交：API 源代码、数据库 schema/migration、脱敏 seed、固定 seed 生成的合成测试 fixture、测试代码和设计文档。
+- 禁止提交：`.env`、API Key、Token、真实密码、真实患者/成员数据、本机 identity/source map、人工审核队列、模型原始输出和本机 benchmark 报告。
+- `backend/tests/fixtures/benchmarks/v2/` 中的 300 个 WorldState 和 1200 条 Query 全部使用合成 ID、药品编码和场景，不是患者数据；它们随仓库发布，用于复现评测契约。
+- `output/`、`var/`、`*.local.json`、`*identity_map*.json` 和 `*review_queue*.json` 已由 Git 忽略。
+
 ## 本地验证
 
-2026-07-31 发布前复验：
+2026-08-01 发布前复验：
 
 | 验证层 | 结果 | 真实性边界 |
 | --- | ---: | --- |
-| 后端 pytest | `308 passed` | 本地自动化，含 SQLite 隔离测试和契约/异常分支 |
+| 后端 pytest | `356 passed` | 本地自动化，含 SQLite 隔离测试、统一图边界、B3 审核冻结和契约/异常分支 |
 | 前端 Vitest | `25 passed` | 组件与 API client 测试 |
 | TypeScript | `passed` | `tsc --noEmit` |
 | Next.js build | `passed` | 本地生产构建 |
-| 浏览器 E2E | 最近一次 `7 passed` | Docker + Microsoft Edge，本轮未因 Docker Desktop 未启动而重跑 |
+| 浏览器 E2E | `7 passed` | 本轮使用 Docker + Microsoft Edge 重新执行 |
 | Docker 后端验收 | 最近一次 baseline `19/19`、Redis 故障 `18/18` | 本机集成证据，不是生产 SLO |
+| v2 评测 Runner | `1200` 条 Query 完成九维 preview 回放 | 合成投影管线验证，不是模型准确率 |
+| 真实 LLM 审核 | `8/8` 固定产物人工通过 | 两个映射成员、提醒/购药场景，不是开放问答质量 |
 
 运行后端测试：
 
@@ -162,6 +173,46 @@ Set-Location E:\project_code\hospital
 ```
 
 测试分层、Windows 临时目录权限处理和 review 方法见 [测试指南](docs/TESTING_GUIDE.md)。
+
+运行 4D-B2.5 本地 preview（不会访问数据库、Provider、RAG 或 LLM）：
+
+```powershell
+Set-Location E:\project_code\hospital
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+.\.venv\Scripts\python.exe -B -m app.agent.v2_eval_runner `
+  --project-root (Resolve-Path '.') `
+  --max-cases 1200 `
+  --allow-pending-review `
+  --output-dir output\benchmarks\v2
+```
+
+输出为 `output/benchmarks/v2/agent_eval_report.v2.preview.json` 和 Markdown。因为 v2 数据仍是
+`pending_review`，必须显式传 `--allow-pending-review`，且报告只标记为 `preview`，不能把其中的 100% 通过率写进简历。
+
+运行 4D-B2.6 A/B/C/D preview：
+
+```powershell
+Set-Location E:\project_code\hospital
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+.\.venv\Scripts\python.exe scripts\run_4d_b26_ablation.py `
+  --max-cases 16 `
+  --split development `
+  --output-dir output\benchmarks\4d-b26-ablation
+```
+
+第一条真实 PostgreSQL/RAG/Provider/UnifiedHealthGraph integration sample 的运行方式和本地
+identity map 约束见 [4D-B2.6 集成状态](docs/4D_B2.6_INTEGRATION_STATUS.md)。
+
+运行 4D-B3 离线检查（不调用模型）：
+
+```powershell
+Set-Location E:\project_code\hospital
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+.\.venv\Scripts\python.exe scripts\run_4d_b3_real_llm.py `
+  --output-dir output\benchmarks\4d-b3-real-llm-check
+```
+
+真实模型必须显式加入 `--live`，完整配置和第一次只跑 1 条 case 的流程见 [4D-B3 真实模型评测](docs/4D_B3_REAL_LLM.md)。
 
 ## 项目结构
 
@@ -199,14 +250,16 @@ hospital/
 - [RAG 检索](docs/RAG_RETRIEVAL.md)
 - [安全策略](docs/SAFETY_POLICY.md)
 - [测试指南](docs/TESTING_GUIDE.md)
-- [核心代码走读](docs/learning/17_CORE_CODE_WALKTHROUGH.md)
+- [4D-B2.6 集成状态与运行手册](docs/4D_B2.6_INTEGRATION_STATUS.md)
+- [4D-B3 真实模型评测](docs/4D_B3_REAL_LLM.md)
+- [核心代码走读](docs/learning/CORE_CODE_WALKTHROUGH.md)
 
 ## 仍未完成
 
-- 将 bounded Supervisor 内核统一接入当前 HTTP 业务运行链，删除或迁移两套兼容运行入口。
-- 配置并验证真实 OpenAI-compatible LLM；未提供 Key 时，回答质量、token 和成本指标保持 `N/A`。
-- 用 Docker PostgreSQL + pgvector 跑完 4D RAG gold，而不是只依赖本地关键词/SQLite 观测。
-- 将真实冻结 RunTrace、Checkpoint 恢复、Provider attempt 和重复 wall-clock 运行接入统一 benchmark report。
+- 完成人工审核并冻结 v2 WorldState/Query、完整 identity/source map 和三 split integration report。
+- 完成真实 A/B/C/D 消融、badcase 复核和正式报告；当前 Docker `19/19` 回归与一条 integration sample 已通过，但仍属于本机证据。
+- 扩展真实 OpenAI-compatible LLM 的 validation/holdout 与更多成员/业务样本；当前 8 条 development 样本已人工复核并冻结，但只代表两个本机已映射成员和两个业务场景。
+- 将真实冻结 RunTrace、Checkpoint 恢复、Provider attempt 和重复 wall-clock 运行接入正式 benchmark report。
 - 接入真实医院、药店、文档解析或通知 Provider，并完成 sandbox 契约验收。
 - 建设生产认证、权限、秘密管理、HTTPS、监控告警、备份恢复、CI/CD 和合规流程。
 

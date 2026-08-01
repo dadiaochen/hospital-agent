@@ -124,7 +124,7 @@ def register_db_tools(registry: ToolRegistry, db: Session) -> None:
             input_schema=PrescriptionsInput,
             output_schema=PrescriptionsOutput,
             permission_scope="prescriptions:read",
-            allowed_agent_roles=("RefillAgent", "SafetyAgent"),
+            allowed_agent_roles=("RefillAgent", "ReminderAgent", "SafetyAgent"),
             read_only=True,
         ),
         lambda tool_input, context: _query_prescriptions(db, tool_input, context),

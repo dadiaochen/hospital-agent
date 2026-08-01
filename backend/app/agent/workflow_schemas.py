@@ -12,6 +12,7 @@ from app.agent.context_schemas import (
     RunSummary,
 )
 from app.agent.eval_schemas import EvaluationResult, ExpectedCase, HarnessCaseCategory
+from app.agent.final_claim_schemas import FinalClaim
 from app.agent.model_gateway_schemas import ModelCallResult
 from app.agent.orchestration_schemas import (
     AgentTaskResult,
@@ -101,6 +102,7 @@ class WorkflowRunRequest(ContractModel):
 class WorkflowFinalAnswerDraft(ContractModel):
     content: NonEmptyStr
     contains_factual_claims: bool
+    claims: tuple[FinalClaim, ...] = Field(default_factory=tuple)
     waiting_for_user_confirmation: bool
     human_confirmation_present: bool = False
     action_status: ActionTraceStatus

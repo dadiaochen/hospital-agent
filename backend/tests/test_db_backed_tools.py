@@ -375,6 +375,19 @@ def test_query_prescriptions_father_bp_and_mother_tcm(registry: ToolRegistry) ->
     assert "tcm granules" in str(mother_output["prescriptions"]).lower()
 
 
+def test_reminder_agent_can_read_prescriptions_for_safety_check(
+    registry: ToolRegistry,
+) -> None:
+    result = registry.call(
+        "query_prescriptions",
+        {"member_id": FATHER_ID},
+        context_for("ReminderAgent", FATHER_ID, ["query_prescriptions"]),
+    )
+
+    assert result.success is True
+    assert result.evidence_present is True
+
+
 def test_query_medicine_box_returns_remaining_days(registry: ToolRegistry) -> None:
     result = registry.call(
         "query_medicine_box",

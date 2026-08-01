@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文描述 4B 最终目标架构。当前代码已经具备旧版有界 LangGraph、ContextManager、Tool Registry、SafetyAgent、Model Gateway、RunTrace、Evaluator，以及任务五的最终编排契约、deterministic Complexity Router、任务六的三个领域 Agent、一次性 Planner、串行 bounded Supervisor、任务七的新业务三层安全确认状态机和任务八的 PostgreSQL 权威 checkpoint/Redis 回源。后续状态只按 [总路线图](DEVELOPMENT_ROADMAP.md) 推进。
+本文描述最终目标架构及当前实现边界。代码已经具备固定领域 LangGraph、ContextManager、Tool Registry、SafetyAgent、Model Gateway、RunTrace、Evaluator，以及 deterministic Complexity Router、三个领域 Agent、一次性 Planner、bounded DAG Supervisor、三层安全确认状态机和 PostgreSQL 权威 checkpoint/Redis 回源。4D-B2.1 已新增 UnifiedHealthGraph 并接入患者端业务入口；4D-B2.2 已在编排内核中实现独立只读步骤受控并行和评测 `all_history`，业务 ProductWorkflow 适配器的副作用仍保持串行；4D-B2.5 已新增隔离内存 Materializer、九类 deterministic grader 和 pending-review preview Runner；4D-B3 的真实模型审核队列还会保存脱敏的本地草稿快照，但不改变业务状态。后续状态只按 [总路线图](DEVELOPMENT_ROADMAP.md) 推进。
 
 ## 2. 为什么采用有界多 Agent
 
@@ -24,9 +24,10 @@ API / AgentRuntimeService
        -> simple_single_domain
             -> TriageAgent | MedicationAgent | ReportAgent
        -> complex_cross_domain
-            -> TaskPlanner (one shot, max 3 steps)
-            -> serial bounded Supervisor
-                 -> Domain Agent
+            -> TaskPlanner (one shot, bounded DAG)
+            -> bounded Supervisor
+                 -> ready read-only steps [bounded parallel]
+                 -> deterministic reducer
                  -> AgentTaskResult
                  -> Supervisor review [bounded]
   -> Action Policy Guard
@@ -55,7 +56,7 @@ API / AgentRuntimeService
 
 ### 4.2 复杂请求
 
-需要两个以上领域结果或存在明确依赖时，TaskPlanner 一次性生成最多 3 步计划。例如：
+需要两个以上领域结果或存在明确依赖时，TaskPlanner 一次性生成有最大步骤数和最大并行数的 DAG。例如：
 
 ```json
 {
@@ -69,20 +70,19 @@ API / AgentRuntimeService
     {
       "step_id": "step_2",
       "role": "MedicationAgent",
-      "objective": "结合处方和药箱整理复诊材料",
-      "dependencies": ["step_1"]
+      "objective": "读取处方和药箱状态",
+      "dependencies": []
     }
   ]
 }
 ```
 
-Supervisor 只选择下一个满足依赖的步骤：
+Supervisor 选择依赖已满足的 ready set；只有相互独立、只读且无副作用的步骤可以进入同一并行批次：
 
 ```json
 {
-  "next_action": "call_role",
-  "target_role": "ReportAgent",
-  "step_id": "step_1",
+  "next_action": "dispatch_ready_steps",
+  "step_ids": ["step_1", "step_2"],
   "reason_code": "dependency_satisfied"
 }
 ```
@@ -93,7 +93,7 @@ Supervisor 只选择下一个满足依赖的步骤：
 | --- | --- | --- |
 | Complexity Router | 判断简单/复杂和目标领域 | 拆解复杂步骤、调用工具 |
 | TaskPlanner | 一次性拆解复杂任务、定义依赖 | 每轮改计划、执行工具、处理 provider 错误、生成医疗回答 |
-| bounded Supervisor | 按计划调度、检查依赖、有限重试/降级/终止 | 重写目标、修改成员、产生计划外步骤、跳过治理节点 |
+| bounded Supervisor | 按冻结 DAG 调度、检查依赖、受控并行只读步骤、有限重试/降级/终止 | 重写目标、修改成员、产生计划外步骤、并发写操作、跳过治理节点 |
 | Domain Agent | 完成一个领域子任务并返回结构化结果 | 调用其他 Agent、修改计划、直接执行外部动作 |
 
 Supervisor 是业务执行层的协调器。SafetyAgent 和 EvaluatorAgent 是治理层节点，不属于 Supervisor 的候选角色。
@@ -196,14 +196,16 @@ Redis 只缓存短期 checkpoint，缓存丢失不影响从 PostgreSQL 恢复。
 
 ## 10. 并发边界
 
-Supervisor 按步骤串行调度，不实现 Agent 级 fan-out/fan-in。领域 Agent 内部可以并发执行相互独立、无副作用的只读查询，例如同时读取处方和药箱，或同时执行文档解析和知识检索。
+最终 Supervisor 支持有界 fan-out/fan-in。进入并行批次的步骤必须依赖已满足、`read_only=true`、属于同一 member scope，并且不共享可变业务状态。结果按 `step_id` 使用确定性 reducer 合并，不能依赖完成先后顺序覆盖状态。
 
-以下操作必须串行并受事务保护：确认、状态迁移、草稿/偏好写入、幂等判断和任何未来外部动作。并发只优化等待时间，不能改变业务顺序或权限边界。
+领域 Agent 内部也可以并发执行相互独立、无副作用的只读查询，例如同时读取处方和药箱，或同时执行文档解析和知识检索。
+
+以下操作必须串行并受事务保护：Agent 安全、确认、状态迁移、草稿/偏好写入、幂等判断、Checkpoint、FinalAnswer 冻结、Evaluator 和任何未来外部动作。并发只优化等待时间，不能改变业务顺序或权限边界。
 
 ## 11. 终止条件
 
-- Planner 最多 3 步。
-- Supervisor 有 `max_steps` 和每角色最大调用次数。
+- 当前 Planner 最多 3 步；UnifiedHealthGraph 通过服务端配置限制 `max_steps` 和 `max_parallelism`。
+- Supervisor 有最大步骤数、最大并行数和每角色最大调用次数。
 - 工具重试由 Tool Registry 策略控制，不由 Supervisor 无限重试。
 - 缺失信息返回 `needs_clarification` 并结束当前 run。
 - 阻断风险返回 `blocked`。
@@ -222,6 +224,15 @@ Supervisor 按步骤串行调度，不实现 Agent 级 fan-out/fan-in。领域 A
 任务十一已将这一设计实现为 `AblationHarnessRunner`。32 条固定业务 case 按八类覆盖，分别生成 Single-Agent、固定单域路由和当前 `DeterministicBoundedSupervisor` 的冻结 `RunTrace`，三组共 96 份结果。`FairnessConfig` 固定 deterministic model identity、工具目录版本、RAG 索引、安全/确认策略和 4096 token 上限；共享治理节点与来源排序不随策略变化。
 
 本地报告的正确解读是：固定路由在简单任务上足够且 fixture latency 更低；复杂跨域任务需要 bounded Supervisor 才能覆盖完整角色和工具；Single-Agent 在固定集上可以完成任务，但会产生额外/重复工具调用。报告不证明临床效果，也不证明真实 LLM 的 token、成本或线上时延优势。
+
+4D-B 在 UnifiedHealthGraph 内增加四种受控模式：
+
+1. forced Supervisor + serial + all_history。
+2. auto route + serial + all_history。
+3. auto route + parallel + all_history。
+4. auto route + parallel + dependency_only。
+
+`all_history` 只在测试环境和合成数据中启用，并始终保持 user/member 隔离。A 到 B 测 Router，B 到 C 测 DAG 并行，C 到 D 测角色最小上下文。完整数据和指标见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。
 
 ## 13. 任务七实现边界
 
@@ -253,17 +264,17 @@ request: evaluate_safety(user_input)
 
 ## 16. 当前实现边界
 
-| 已实现 | 任务七以后目标 |
+| 当前已实现 | 尚未完成 |
 | --- | --- |
-| 旧版 Planner + 四角色有界 DAG；任务六 deterministic 三领域编排内核；任务十一 32 条 A/B/C Harness | 任务十二本机真实 PostgreSQL/Redis/Docker 后端验收已完成 |
+| 患者端 HTTP 已通过 UnifiedHealthGraph 接入；内部业务执行仍由 ProductWorkflow 适配器负责；bounded Supervisor 已完成只读 DAG fan-out/fan-in；4D-B2.3 已完成 FinalClaim、AnswerEnvelope、Trace v2 和 Claim 一致性校验；4D-B2.4 已生成 v2 数据；B2.5 已完成内存 projection、九层 grader 和 preview runner；B2.6 已接入 PostgreSQL shadow transaction、Provider sandbox、case-scoped RAG 和真实 UnifiedHealthGraph 单样例执行 | 300 WorldState/1200 Query 的全量正式报告、人工审核冻结和真实 A/B/C/D 消融仍待完成 |
 | 新业务链路已接入三层治理、自动 DRAFT、确认状态机、版本化 checkpoint 和三类重点 Provider 可靠性 | 真实外部 Provider 联调仍未实现 |
-| PostgreSQL 冻结产物、continuation、Redis TTL 回源、确认后偏好、Tool/Provider attempts、RRF、白名单 Observation 和任务十一消融报告 | 任务十二已记录本机 wall-clock 与 Redis 故障回源；不等于生产 SLO |
+| PostgreSQL 冻结产物、continuation、Redis TTL 回源、确认后偏好、Tool/Provider attempts、RRF、白名单 Observation、Trace v2 Claim 产物，以及 B2.6 的 Docker 19/19 回归和真实单样例物化 | 300 WorldState/1200 Query 的全量正式评测报告和最终 A/B/C/D 归因仍未冻结 |
+| Model Gateway 已支持 deterministic/真实模型双模式和结构化 FinalAnswer | 已生成 8 条 development 固定样本的人工复核、token、成本和本机延迟报告；validation/holdout 与全量稳定性仍未完成 |
 
 ## 4B 任务十：Observation 在架构中的位置
 
 Observation 不是新 Agent，也不进入 Supervisor 决策。业务图执行结束后，artifact projector 从已冻结 state 投影 `request -> node -> tool/provider/source/model -> final` 事件，再随 `RunTrace` 交给只读 Evaluator。事件契约没有任意 metadata，不能携带 raw conversation、scratchpad、业务 payload 或模型原文。
 
 RAG 与成员隔离也不依赖模型自觉：RRF 在 Retriever 内确定性计算；过期版本在 source hydration 边界拒绝；成员资源在 Repository SQL 和 Tool execution context 两层校验；Redis 污染或过期只会触发 PostgreSQL 回源。SafetyAgent 仍负责运行时风险，Observation 只负责记录发生了什么。
-| Model Gateway 主要生成 FinalAnswer | 固定候选内的 Router/Planner/Agent/Supervisor 可选模型决策 |
 
-状态和实施顺序只以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
+4D-B 的评测数据、FinalClaim、grader、Docker runner 和简历指标规则见 [Agent 评测与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。状态和实施顺序只以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。

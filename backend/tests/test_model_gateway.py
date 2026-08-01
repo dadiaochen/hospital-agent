@@ -321,6 +321,46 @@ def test_openai_compatible_provider_uses_structured_http_contract(
     client.close()
 
 
+def test_openai_compatible_provider_can_disable_thinking_mode(
+    model_request: ModelCallRequest,
+) -> None:
+    def handler(http_request: httpx.Request) -> httpx.Response:
+        body = json.loads(http_request.content)
+        assert body["thinking"] == {"type": "disabled"}
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "content": "Structured response.",
+                                    "requires_human_confirmation": True,
+                                }
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    provider = OpenAICompatibleModelProvider(
+        api_base="https://model.example/v1",
+        api_key="secret-from-env",
+        model_name="example-model",
+        timeout_ms=1000,
+        thinking_mode="disabled",
+        client=client,
+    )
+
+    result = ModelGateway(provider).invoke(model_request, StructuredAnswer)
+
+    assert result.trace.success is True
+    client.close()
+
+
 def test_openai_compatible_timeout_is_normalized(
     model_request: ModelCallRequest,
 ) -> None:
@@ -348,6 +388,7 @@ def test_model_settings_are_loaded_only_from_environment(
     monkeypatch.setenv("MODEL_API_BASE", "https://model.example/v1")
     monkeypatch.setenv("MODEL_API_KEY", "environment-secret")
     monkeypatch.setenv("MODEL_NAME", "environment-model")
+    monkeypatch.setenv("MODEL_THINKING_MODE", "disabled")
     monkeypatch.setenv("MODEL_TIMEOUT_MS", "2500")
 
     configured = Settings()
@@ -358,6 +399,7 @@ def test_model_settings_are_loaded_only_from_environment(
     assert configured.model_api_key.get_secret_value() == "environment-secret"
     assert "environment-secret" not in repr(configured)
     assert configured.model_name == "environment-model"
+    assert configured.model_thinking_mode == "disabled"
     assert configured.model_timeout_ms == 2500
 
 

@@ -18,14 +18,21 @@ from app.agent.context_schemas import (
 )
 from app.agent.eval_schemas import EvaluationResult, ExpectedCase, ExpectedSource
 from app.agent.evaluator import DeterministicEvaluator
+from app.agent.final_claim_schemas import (
+    AnswerEnvelope,
+    FinalClaim,
+    build_workflow_claims,
+)
 from app.agent.run_trace_schemas import (
     FinalAnswerTrace,
+    OrchestrationTrace,
     RAGTrace,
     RunTrace,
     SafetyTrace,
     ToolCallTrace,
 )
 from app.agent.observability import build_observation_traces
+from app.agent.orchestration_schemas import OrchestrationRunResult
 from app.schemas.business import SourceRef
 
 
@@ -104,13 +111,19 @@ def build_run_trace(state: Mapping[str, Any]) -> RunTrace:
     status = str(state.get("status") or "failed")
     confirmation_state = str(state.get("confirmation_state") or "NONE")
     answer = str(state.get("final_answer") or "")
+    display_content = answer or "当前没有生成可展示的回答。"
     waiting = status == "needs_confirmation" or bool(
         state.get("need_human_confirmation", False)
     )
     confirmation_present = bool(
         state.get("human_confirmation_granted") or state.get("confirmation_result")
     )
-    if confirmation_state == "DRAFT" or status == "needs_confirmation":
+    if waiting:
+        # A blocked high-risk request may still require human review.  Keep
+        # that distinction in the frozen answer contract: it is not an
+        # executable action, but the answer is waiting for a human decision.
+        action_status = "awaiting_confirmation"
+    elif confirmation_state == "DRAFT" or status == "needs_confirmation":
         action_status = "awaiting_confirmation"
     elif confirmation_state == "EXECUTED" or state.get("confirmation_result"):
         action_status = "executed"
@@ -119,7 +132,58 @@ def build_run_trace(state: Mapping[str, Any]) -> RunTrace:
     else:
         action_status = "none"
 
+    orchestration = _orchestration_trace(state)
+    context_source_ids = tuple(
+        dict.fromkeys(
+            [
+                *(
+                    call.source_id
+                    for call in tool_calls
+                    if call.success and call.evidence_present and call.source_id
+                ),
+                *(rag.source_id for rag in rag_traces if rag.retrieved),
+                *(source.source_id for source in _source_refs(state)),
+            ]
+        )
+    )
+    dependency_result_ids = tuple(
+        result.step_id
+        for result in orchestration.domain_agent_results
+        if result.step_id
+    ) if orchestration is not None else ()
+    claims = tuple(
+        FinalClaim.model_validate(item)
+        for item in state.get("final_claims", [])
+        if isinstance(item, Mapping)
+    )
+    if not claims:
+        claims = build_workflow_claims(
+            run_id=str(state["run_id"]),
+            member_id=member_id,
+            status=status,
+            confirmation_state=confirmation_state,
+            source_ids=context_source_ids,
+        )
+    answer_id = str(uuid5(_ANSWER_NAMESPACE, str(state["run_id"])))
+    answer_envelope = AnswerEnvelope(
+        answer_id=answer_id,
+        run_id=str(state["run_id"]),
+        task_id=str(state["task_id"]),
+        member_id=member_id,
+        display_text=display_content,
+        claims=claims,
+        waiting_for_user_confirmation=waiting,
+        human_confirmation_present=confirmation_present,
+        action_status=action_status,
+        context_source_ids=context_source_ids,
+        dependency_result_ids=dependency_result_ids,
+    )
+    model_trace = state.get("model_call_trace")
+    model_trace = model_trace if isinstance(model_trace, Mapping) else {}
+    token_usage_available = bool(model_trace.get("token_usage_available", False))
+
     return RunTrace(
+        trace_schema_version="4d-b2.3",
         case_id=f"business-task:{state['task_id']}",
         run_id=str(state["run_id"]),
         task_id=str(state["task_id"]),
@@ -138,16 +202,61 @@ def build_run_trace(state: Mapping[str, Any]) -> RunTrace:
             ),
         ),
         final_answer=FinalAnswerTrace(
-            answer_id=str(uuid5(_ANSWER_NAMESPACE, str(state["run_id"]))),
-            content=answer,
-            contains_factual_claims=bool(_source_refs(state)),
+            answer_id=answer_id,
+            content=display_content,
+            contains_factual_claims=bool(_source_refs(state)) or bool(claims),
             waiting_for_user_confirmation=waiting,
             human_confirmation_present=confirmation_present,
             action_status=action_status,
+            answer_envelope=answer_envelope,
         ),
         observations=build_observation_traces(state),
+        orchestration=orchestration,
+        context_source_ids=context_source_ids,
+        dependency_result_ids=dependency_result_ids,
+        input_tokens=(
+            int(model_trace["input_tokens"])
+            if token_usage_available and model_trace.get("input_tokens") is not None
+            else None
+        ),
+        output_tokens=(
+            int(model_trace["output_tokens"])
+            if token_usage_available and model_trace.get("output_tokens") is not None
+            else None
+        ),
+        total_tokens=(
+            int(model_trace["total_tokens"])
+            if token_usage_available and model_trace.get("total_tokens") is not None
+            else None
+        ),
+        token_usage_available=token_usage_available,
         latency_ms=max(0, int(state.get("latency_ms") or 0)),
         schema_valid=all(call.schema_valid for call in tool_calls),
+    )
+
+
+def _orchestration_trace(
+    state: Mapping[str, Any],
+) -> OrchestrationTrace | None:
+    """Project the unified graph result without retaining its raw request text."""
+
+    raw = state.get("orchestration_run")
+    if not isinstance(raw, Mapping):
+        return None
+    result = OrchestrationRunResult.model_validate(raw)
+    return OrchestrationTrace(
+        route=result.route,
+        plan=result.plan,
+        supervisor_decisions=result.decisions,
+        domain_agent_results=result.results,
+        completed=result.completed,
+        termination_reason=result.termination_reason,
+        steps_executed=result.steps_executed,
+        used_planner=result.used_planner,
+        used_supervisor=result.used_supervisor,
+        execution_mode=result.execution_mode,
+        context_mode=result.context_mode,
+        parallel_batches=result.parallel_batches,
     )
 
 

@@ -14,6 +14,7 @@ Intent = Literal[
     "chronic_care",
     "health_record",
 ]
+ContextMode = Literal["all_history", "dependency_only"]
 ActionType = Literal["draft", "query", "safety_review"]
 ExecutionAgentRole = Literal[
     "Planner",
