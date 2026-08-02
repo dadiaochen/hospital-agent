@@ -68,7 +68,7 @@ def test_ambiguous_simple_request_returns_structured_clarification() -> None:
     assert run.results[0].missing_information == ("request_goal",)
 
 
-def test_complex_request_uses_one_shot_planner_and_serial_supervisor() -> None:
+def test_complex_request_uses_one_shot_planner_and_parallel_supervisor() -> None:
     run = DeterministicBoundedSupervisor().run(
         make_request("Please review the report and prepare a medication refill.")
     )
@@ -88,7 +88,10 @@ def test_complex_request_uses_one_shot_planner_and_serial_supervisor() -> None:
         "call_role",
         "finish",
     ]
-    assert run.plan.steps[1].dependencies == (run.plan.steps[0].step_id,)
+    assert run.plan.steps[1].dependencies == ()
+    assert run.plan.max_parallelism == 2
+    assert run.execution_mode == "parallel"
+    assert run.parallel_batches == (("step_1", "step_2"),)
 
 
 def test_planner_rejects_simple_route() -> None:
@@ -164,12 +167,13 @@ def test_supervisor_allows_one_bounded_retry_then_continues() -> None:
     assert run.completed is True
     assert [decision.action for decision in run.decisions] == [
         "call_role",
-        "retry",
         "call_role",
+        "retry",
         "finish",
     ]
     assert run.results[0].attempt == 1
-    assert run.results[1].attempt == 2
+    assert run.results[1].attempt == 1
+    assert run.results[2].attempt == 2
 
 
 def test_domain_agent_input_rejects_tool_outside_role_allowlist() -> None:

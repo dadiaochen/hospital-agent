@@ -44,39 +44,36 @@
 | [LLM_CONFIGURATION.md](LLM_CONFIGURATION.md) | 模型环境变量和本地诊断 |
 | [RAG_RETRIEVAL.md](RAG_RETRIEVAL.md) | FastEmbed、pgvector、关键词降级与来源引用 |
 | [SAFETY_POLICY.md](SAFETY_POLICY.md) | 三层安全治理和单确认状态机 |
-| [EVALUATOR_AGENT.md](EVALUATOR_AGENT.md) | deterministic Evaluator、32 条 A/B/C Harness 和指标边界 |
+| [EVALUATOR_AGENT.md](EVALUATOR_AGENT.md) | deterministic Evaluator、32 条 A/B/C Harness、v2 九层 grader 和指标边界 |
+| [AGENT_EVALUATION_EXECUTION_PLAN.md](AGENT_EVALUATION_EXECUTION_PLAN.md) | 4D-B 最终评测数据、架构缺口、指标公式、执行顺序和简历口径 |
+| [4D_B3_REAL_LLM.md](4D_B3_REAL_LLM.md) | 可选真实 LLM、token、成本、p95 和 badcase 复核流程 |
 | [TESTING_GUIDE.md](TESTING_GUIDE.md) | 测试分层、异常验证和 review 方法 |
 
 ## 证据与报告
 
 以下文件记录某次真实本地执行，不能替代总路线图，也不能自动外推为线上指标：
 
-- [AGENT_EVAL_REPORT.md](AGENT_EVAL_REPORT.md)：当前 16 条固定轨迹评测。
-- [agent_eval_report.3c.md](agent_eval_report.3c.md)：3C Runtime Harness 摘要。
-- [migration_validation_report.4b.md](migration_validation_report.4b.md)：4B migration 验证。
-- [task8_state_checkpoint_report.4b.md](task8_state_checkpoint_report.4b.md)：4B 任务八 checkpoint、Redis 回源、两次 run 和确认版本交付记录。
-- [task9_tool_provider_reliability_report.4b.md](task9_tool_provider_reliability_report.4b.md)：4B 任务九统一错误、有限重试和三类重点 Provider 交付记录。
-- [task10_rag_isolation_observability_report.4b.md](task10_rag_isolation_observability_report.4b.md)：4B 任务十 RRF、版本拒绝、攻击式隔离和脱敏 Observation 交付记录。
 - [agent_ablation_report.4b.md](agent_ablation_report.4b.md)：4B 任务十一 32 条 deterministic fixture 与三种编排策略消融报告。
 - [task12_backend_acceptance_report.4b.md](task12_backend_acceptance_report.4b.md)：4B 任务十二 Docker PostgreSQL/Redis/API/RAG/并发确认验收报告。
-- [task13_4b_closeout_report.md](task13_4b_closeout_report.md)：4B 任务十三文档、测试和 Git 收口报告。
 - [browser_e2e_report.4c.md](browser_e2e_report.4c.md)：4C-3 Playwright 浏览器 E2E 验收报告。
 - [mvp_closeout_report.4c.md](mvp_closeout_report.4c.md)：4C-4 最终 MVP 收口报告。
+- [benchmark_report.4d.md](benchmark_report.4d.md)：4D 冻结数据契约、manifest 和规则完整性报告。
 - [local_benchmark_report.4d.md](local_benchmark_report.4d.md)：4D-B 本地 Supervisor、关键词 RAG、ContextManager 和 Provider 故障注入观测；不代表真实 LLM 或 Docker pgvector 指标。
-- `provider_adapter_validation_report.4b.md`、`model_gateway_report.4b.md`、`vector_rag_report.4a.md`：对应局部能力的本地验证记录。
-- `mvp_demo_report.3d.md`：3D 固定演示快照。
+- [4D_B2.6_INTEGRATION_STATUS.md](4D_B2.6_INTEGRATION_STATUS.md)：PostgreSQL shadow transaction、Provider/RAG sandbox、真实图单样例和 Docker 19/19 回归状态。
+- [4D_B3_REAL_LLM.md](4D_B3_REAL_LLM.md)：8 条真实模型固定样本、人工审核、token、成本、延迟和冻结边界。
 - `agent_eval_report.example.md`：由测试生成的示例格式，代码依赖该路径，不能当真实报告。
 
-## 学习与面试
+旧 3C/3D/4A 和 4B 局部阶段报告已经删除；有效结论已进入当前设计文档、路线图或以上保留的最终验收报告。
 
-- [learning/README.md](learning/README.md)：从零理解并运行项目的学习路线。
-- [核心代码走读](learning/17_CORE_CODE_WALKTHROUGH.md)：面向初学者逐行解释 Python 语法、变量和调用链，并区分当前固定领域 API 工作流与已独立评测的 bounded Supervisor 内核。
-- [简历与面试写法](learning/05_RESUME_AND_INTERVIEW.md)：按岗位方向组织项目经历，只使用可复现的测试、覆盖率、E2E 和消融证据。
-- [INTERVIEW_QA.md](INTERVIEW_QA.md)：项目面试题、项目化回答与记忆方法。
-- [RESUME_NOTES.md](RESUME_NOTES.md)：可以如实写入简历的亮点和指标边界。
-- [GENERAL_INTERVIEW_KNOWLEDGE.md](GENERAL_INTERVIEW_KNOWLEDGE.md)：通用计算机与后端面试知识。
+## 学习、简历与面经
 
-学习文档会保留当时阶段的实现过程。遇到旧角色、旧确认字段或旧阶段名时，把它当历史教材；当前产品决策以总路线图和技术设计为准。
+统一入口见 [项目学习中心](learning/README.md)，只保留三类：
+
+1. 项目工程与代码：从 0 到 1、核心代码逐行走读、完整 API 实战。
+2. 简历：完整写法与真实证据边界。
+3. 项目面经：项目完整问答、原题深挖、Dify 和测试工程追问。
+
+按阶段拆出的短教程已删除。学习当前实现时不再需要在旧阶段号和竞争角色设计之间反复切换。
 
 ## 维护规则
 
@@ -90,4 +87,12 @@
 
 - [4D-B Benchmark 使用指南](4D_B_BENCHMARK_GUIDE.md)：冻结 gold 数据、deterministic runner、报告和指标边界。
 - [4D-B 数据契约报告](benchmark_report.4d.md)：冻结 fixture、manifest 和规则完整性报告。
-- [4D-B 本地观测报告](local_benchmark_report.4d.md)：使用本地合成数据执行实现代码；真实 LLM、Docker pgvector 和 checkpoint 恢复指标仍保持 `N/A`。
+- [4D-B 本地观测报告](local_benchmark_report.4d.md)：使用本地合成数据执行实现代码；该报告本身不包含真实 LLM、Docker pgvector 或 checkpoint 恢复指标。
+- [4D-B2.6 真实集成状态](4D_B2.6_INTEGRATION_STATUS.md)：记录真实单样例与 Docker 证据；300/1200 正式质量指标仍保持 `N/A`。
+- [4D-B3 真实模型评测](4D_B3_REAL_LLM.md)：记录 8 条 development 固定产物的真实调用、人工复核和冻结指标；不能外推为生产或临床指标。
+
+## GitHub 发布边界
+
+- 仓库只保存源代码、设计文档、脱敏 seed 和固定 seed 生成的合成 benchmark fixture。
+- `.env`、API Key、真实密码、真实成员数据、本机 identity/source map、人工审核队列及 `output/`、`var/` 运行产物不得提交。
+- 300 个 WorldState 和 1200 条 Query 是合成评测数据，不包含真实患者信息；保留它们是为了让测试和评测契约可复现。

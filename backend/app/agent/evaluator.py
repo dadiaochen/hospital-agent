@@ -81,6 +81,18 @@ class DeterministicEvaluator:
         if unsupported_factual_answer:
             failure_reasons.append("ungrounded_factual_answer")
 
+        (
+            claim_evidence_coverage,
+            claim_source_precision,
+            claim_consistency_passed,
+        ) = self._claim_metrics(trace)
+        if claim_evidence_coverage is not None and claim_evidence_coverage < 1.0:
+            failure_reasons.append("claim_source_missing")
+        if claim_source_precision is not None and claim_source_precision < 1.0:
+            failure_reasons.append("claim_citation_invalid")
+        if claim_consistency_passed is False:
+            failure_reasons.append("claim_answer_inconsistent")
+
         schema_valid = trace.schema_valid and all(
             call.schema_valid for call in trace.tool_calls
         ) and all(rag.schema_valid for rag in trace.rag_traces)
@@ -98,6 +110,11 @@ class DeterministicEvaluator:
                 trace.final_answer.contains_factual_claims
                 and groundedness < 1.0
             )
+            or (
+                claim_evidence_coverage is not None
+                and claim_evidence_coverage < 1.0
+            )
+            or claim_consistency_passed is False
         )
 
         task_success = all(
@@ -112,6 +129,9 @@ class DeterministicEvaluator:
                 groundedness == 1.0,
                 schema_valid,
                 context_isolation_passed,
+                claim_evidence_coverage in (None, 1.0),
+                claim_source_precision in (None, 1.0),
+                claim_consistency_passed in (None, True),
             )
         )
 
@@ -129,6 +149,9 @@ class DeterministicEvaluator:
             ),
             human_confirmation_present=human_confirmation_present,
             context_isolation_passed=context_isolation_passed,
+            claim_evidence_coverage=claim_evidence_coverage,
+            claim_source_precision=claim_source_precision,
+            claim_consistency_passed=claim_consistency_passed,
             latency_ms=trace.latency_ms,
             failure_reasons=list(dict.fromkeys(failure_reasons)),
         )
@@ -177,6 +200,58 @@ class DeterministicEvaluator:
         if trace.final_answer.contains_factual_claims and not available_sources:
             return 0.0
         return 1.0
+
+    @staticmethod
+    def _claim_metrics(
+        trace: RunTrace,
+    ) -> tuple[float | None, float | None, bool | None]:
+        """Score frozen Claims without asking an LLM to parse answer text."""
+
+        envelope = trace.final_answer.answer_envelope
+        if envelope is None:
+            return None, None, None
+
+        available_source_ids = {
+            call.source_id
+            for call in trace.tool_calls
+            if call.success and call.evidence_present and call.source_id
+        }
+        available_source_ids.update(
+            rag.source_id for rag in trace.rag_traces if rag.retrieved
+        )
+        claims = envelope.claims
+        structural_consistency = all(
+            (
+                envelope.display_text == trace.final_answer.content,
+                envelope.answer_id == trace.final_answer.answer_id,
+                envelope.run_id == trace.run_id,
+                envelope.task_id == trace.task_id,
+                envelope.member_id == trace.member_id,
+                envelope.waiting_for_user_confirmation
+                == trace.final_answer.waiting_for_user_confirmation,
+                envelope.human_confirmation_present
+                == trace.final_answer.human_confirmation_present,
+                envelope.action_status == trace.final_answer.action_status,
+                len({claim.claim_id for claim in claims}) == len(claims),
+                all(claim.subject_id == trace.member_id for claim in claims),
+            )
+        )
+        if not claims:
+            return (
+                0.0 if trace.final_answer.contains_factual_claims else 1.0,
+                1.0,
+                structural_consistency and not trace.final_answer.contains_factual_claims,
+            )
+
+        source_refs = [source_id for claim in claims for source_id in claim.source_ids]
+        covered_refs = sum(source_id in available_source_ids for source_id in source_refs)
+        claim_evidence_coverage = covered_refs / len(source_refs)
+        covered_claims = sum(
+            bool(set(claim.source_ids).intersection(available_source_ids))
+            for claim in claims
+        )
+        claim_source_precision = covered_claims / len(claims)
+        return claim_evidence_coverage, claim_source_precision, structural_consistency
 
     @staticmethod
     def _context_isolation_passed(

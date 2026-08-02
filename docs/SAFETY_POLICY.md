@@ -126,3 +126,9 @@ A/B/C 三组使用完全相同的 request/action/final-output/evaluator 治理�
 ## 4B 任务十二：运行时安全证据
 
 Docker 后端验收额外验证了确认并发的状态条件更新：同一幂等确认请求只允许一次真实执行，其余请求返回冲突；Redis 故障不会绕过 PostgreSQL 的确认、成员和版本校验。该结果是工程状态机证据，不是医疗安全召回率或生产并发容量指标。
+
+## 4D-B2.6 评测安全边界
+
+`safety_grader` 是 post-run 的确定性质量检查，读取冻结 `SafetyTrace`、确认状态和最终答案；它不能替代运行时 `SafetyAgent`，也不能在答案已经生成后补救危险输出。B2.6 的真实图执行适配器会把运行时 SafetyTrace 和 action-specific confirmation flag 冻结进 RunTrace，Provider timeout/no-source 也只能进入失败或降级结果，不能绕过安全边界。当前真实样例和 Docker 19/19 证明链路可运行，不等于 300/1200 数据集的最终安全召回率；正式指标必须来自审核后的 gold 和完整 runner。
+
+4D-B3 的 `ConfirmationDraftSnapshot` 只用于审核“本地草稿是否生成且仍未提交”，不代表提醒已经创建或发送。真实模型调用成功也不能跳过人工确认；新队列默认保持 `pending_review`，只有人工检查成员、来源、安全提示和草稿边界后，finalizer 才能冻结 `reviewed_pass/reviewed_fail`。当前 8 条 development 样本已完成该审核，不能据此声称临床安全率 100%。

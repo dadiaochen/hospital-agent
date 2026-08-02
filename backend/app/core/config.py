@@ -1,5 +1,6 @@
 import os
 from functools import cached_property
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
@@ -18,6 +19,13 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_optional_float(name: str) -> float | None:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return None
+    return float(value)
 
 
 class Settings(BaseModel):
@@ -83,9 +91,24 @@ class Settings(BaseModel):
     model_name: str = Field(
         default_factory=lambda: os.getenv("MODEL_NAME", "deterministic-local")
     )
+    model_thinking_mode: Literal["default", "disabled", "enabled"] = Field(
+        default_factory=lambda: os.getenv("MODEL_THINKING_MODE", "default")
+    )
     model_timeout_ms: int = Field(
         default_factory=lambda: int(os.getenv("MODEL_TIMEOUT_MS", "10000")),
         ge=1,
+    )
+    model_input_price_per_1m_usd: float | None = Field(
+        default_factory=lambda: _env_optional_float(
+            "MODEL_INPUT_PRICE_PER_1M_USD"
+        ),
+        ge=0,
+    )
+    model_output_price_per_1m_usd: float | None = Field(
+        default_factory=lambda: _env_optional_float(
+            "MODEL_OUTPUT_PRICE_PER_1M_USD"
+        ),
+        ge=0,
     )
     cors_origins: str = Field(default_factory=lambda: os.getenv("CORS_ORIGINS", "http://localhost:3000"))
     demo_user_phone: str = Field(

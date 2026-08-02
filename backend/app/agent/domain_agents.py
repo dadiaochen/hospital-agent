@@ -16,6 +16,7 @@ from pydantic import Field, model_validator
 from app.agent.context_schemas import ContractModel, NonEmptyStr
 from app.agent.orchestration_schemas import (
     AgentTaskResult,
+    ContextMode,
     ComplexityRoute,
     DomainAgentRole,
     PlanStep,
@@ -61,6 +62,7 @@ class DomainAgentInput(ContractModel):
     user_input_summary: SummaryText
     allowed_tools: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     prior_results: tuple[AgentTaskResult, ...] = Field(default_factory=tuple)
+    context_mode: ContextMode = "dependency_only"
 
     @model_validator(mode="after")
     def validate_agent_scope(self) -> "DomainAgentInput":
@@ -85,6 +87,10 @@ class DomainAgentInput(ContractModel):
                 raise ValueError("prior result task_id must match the route")
             if result.member_id != self.route.member_id:
                 raise ValueError("prior result member_id must match the route")
+        if self.context_mode == "all_history" and not self.prior_results:
+            # An empty first batch is valid; the field still records that the
+            # evaluation baseline was selected without inventing history.
+            return self
         return self
 
 

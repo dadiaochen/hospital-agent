@@ -13,6 +13,7 @@ from app.agent.ablation_schemas import (
 )
 from app.agent.context_schemas import (
     ConfirmedFact,
+    ContextMode,
     ContextEnvelope,
     ConversationSummary,
     MemoryRef,
@@ -38,6 +39,11 @@ from app.agent.model_gateway_schemas import (
 )
 from app.agent.eval_schemas import EvaluationResult, ExpectedCase, ExpectedSource
 from app.agent.evaluator import DeterministicEvaluator
+from app.agent.final_claim_schemas import (
+    AnswerEnvelope,
+    FinalClaim,
+    build_workflow_claims,
+)
 from app.agent.harness_runtime import (
     AgentHarnessRuntime,
     HarnessRuntimeBatchResult,
@@ -75,7 +81,10 @@ from app.agent.orchestration_schemas import (
     AgentTaskResult,
     ComplexityRoute,
     ComplexityRoutingRequest,
+    DependencyEdge,
     DomainAgentRole,
+    EvalRuntimeOptions,
+    ExecutionMode,
     OrchestrationRunResult,
     PlanStep,
     SafetyDecision,
@@ -87,12 +96,14 @@ from app.agent.orchestration_schemas import (
 from app.agent.run_trace_schemas import (
     FinalAnswerTrace,
     ObservationTrace,
+    OrchestrationTrace,
     RAGTrace,
     RunTrace,
     SafetyTrace,
     ToolCallTrace,
 )
 from app.agent.runtime_schemas import PersistedRunArtifacts, RuntimeRequestContext
+from app.agent.unified_health_graph import UnifiedHealthGraph
 from app.agent.workflow_schemas import (
     WorkflowFinalAnswerDraft,
     WorkflowPlan,
@@ -106,6 +117,7 @@ __all__ = [
     "AblationHarnessOutput",
     "AblationRunTrace",
     "AblationToolCallTrace",
+    "AnswerEnvelope",
     "BusinessHarnessCase",
     "ConfirmedFact",
     "ContextEnvelope",
@@ -118,12 +130,16 @@ __all__ = [
     "ConfirmationTransitionResult",
     "ComplexityRoute",
     "ComplexityRoutingRequest",
+    "ContextMode",
     "DeterministicComplexityRouter",
     "DeterministicBoundedSupervisor",
     "DeterministicTaskPlanner",
+    "DependencyEdge",
     "DomainAgent",
     "DomainAgentInput",
     "DomainAgentRole",
+    "EvalRuntimeOptions",
+    "ExecutionMode",
     "ConversationSummary",
     "DeterministicEvaluator",
     "EvaluationResult",
@@ -132,6 +148,7 @@ __all__ = [
     "ExpectedToolInvocation",
     "FairnessConfig",
     "FinalAnswerTrace",
+    "FinalClaim",
     "FinalOutputSafetyResult",
     "AgentHarnessRuntime",
     "HarnessRuntimeBatchResult",
@@ -148,6 +165,7 @@ __all__ = [
     "ModelProviderAttemptTrace",
     "OpenAICompatibleModelProvider",
     "ObservationTrace",
+    "OrchestrationTrace",
     "RAGSourceRef",
     "ReportAgent",
     "RAGTrace",
@@ -178,10 +196,12 @@ __all__ = [
     "WorkflowRunRequest",
     "WorkflowRunResult",
     "RuntimeRequestContext",
+    "UnifiedHealthGraph",
     "create_model_gateway",
     "BoundedSupervisor",
     "OrchestrationRunResult",
     "allowed_tools_for_role",
     "build_domain_agent_registry",
     "build_confirmation_scope",
+    "build_workflow_claims",
 ]

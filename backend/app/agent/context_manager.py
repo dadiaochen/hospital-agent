@@ -3,6 +3,7 @@ from typing import Any
 
 from app.agent.context_schemas import (
     ConfirmedFact,
+    ContextMode,
     ContextEnvelope,
     ConversationSummary,
     ExecutionAgentRole,
@@ -216,6 +217,59 @@ class ContextManager:
             memory_refs=self._unique_memory_refs(
                 ref for envelope in envelopes for ref in envelope.memory_refs
             ),
+        )
+
+    def select_structured_history(
+        self,
+        envelopes: list[ContextEnvelope],
+        *,
+        mode: ContextMode,
+        evaluation_only: bool = False,
+        dependency_source_ids: Iterable[str] | None = None,
+    ) -> tuple[ConversationSummary, ...]:
+        """Select summaries for an agent without exposing raw conversation.
+
+        ``all_history`` is a test-only baseline. It means all structured
+        summaries for the same task/member, not an unrestricted chat transcript.
+        Production callers use ``dependency_only`` and pass the source
+        pointers required by the current step.
+        """
+
+        if not envelopes:
+            raise ValueError("history selection requires at least one context")
+        if mode == "all_history" and not evaluation_only:
+            raise ValueError("all_history is restricted to evaluation-only runs")
+
+        task_ids = {envelope.task_id for envelope in envelopes}
+        member_ids = {envelope.member_id for envelope in envelopes}
+        user_ids = {envelope.user_id for envelope in envelopes}
+        if len(task_ids) != 1 or len(member_ids) != 1 or len(user_ids) != 1:
+            raise ValueError("history selection requires one task, user and member")
+
+        if mode == "all_history":
+            selected = envelopes
+        else:
+            required = set(dependency_source_ids or ())
+            selected = [
+                envelope
+                for envelope in envelopes
+                if required.intersection(envelope.conversation_summary.source_ids)
+                or required.intersection(
+                    ref.source_id for ref in envelope.tool_evidence_refs
+                )
+                or required.intersection(
+                    ref.source_id for ref in envelope.rag_source_refs
+                )
+            ]
+            if not selected:
+                selected = [envelopes[-1]]
+
+        return tuple(
+            ConversationSummary(
+                summary=envelope.conversation_summary.summary,
+                source_ids=self._unique(envelope.conversation_summary.source_ids),
+            )
+            for envelope in selected
         )
 
     def create_run_summary(

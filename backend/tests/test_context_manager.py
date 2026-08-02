@@ -246,6 +246,43 @@ def test_compact_preserves_source_pointers() -> None:
     assert ("box-source-2", "tool-call-box-2", "member-father") in pointers
 
 
+def test_structured_history_has_evaluation_only_all_history_baseline() -> None:
+    manager = make_manager()
+    first = make_envelope()
+    second = manager.build_envelope(
+        user_input="Add a report summary.",
+        run_id="run-ctx-1",
+        task_id="task-ctx-1",
+        user_id="user-1",
+        member_id="member-father",
+        intent="refill",
+        action_type="draft",
+        conversation_source_ids=["dependency:report"],
+    )
+
+    with pytest.raises(ValueError, match="evaluation-only"):
+        manager.select_structured_history(
+            [first, second],
+            mode="all_history",
+        )
+
+    all_history = manager.select_structured_history(
+        [first, second],
+        mode="all_history",
+        evaluation_only=True,
+    )
+    dependency_only = manager.select_structured_history(
+        [first, second],
+        mode="dependency_only",
+        dependency_source_ids=["dependency:report"],
+    )
+
+    assert len(all_history) == 2
+    assert len(dependency_only) == 1
+    assert dependency_only[0].source_ids == ["user_input:run-ctx-1", "dependency:report"]
+    assert all("raw_conversation" not in item.model_dump() for item in all_history)
+
+
 def test_reset_after_run_generates_run_summary_and_retains_audit_refs() -> None:
     manager = make_manager()
     envelope = make_envelope()

@@ -14,7 +14,7 @@
 
 项目定位为：
 
-> 面向家庭健康场景的有界多 Agent 系统。简单单领域请求直接进入领域 Agent；复杂跨领域请求由一次性 TaskPlanner 拆解，再由串行 bounded Supervisor 协调三个领域 Agent。系统通过 Tool Registry、RAG 溯源、三层安全治理、人工确认、成员隔离和 Evaluation Harness，形成可追踪、可回放、可测试的业务闭环。
+> 面向家庭健康场景的有界多 Agent 系统。简单单领域请求直接进入领域 Agent；复杂跨领域请求由一次性 TaskPlanner 生成有界 DAG，再由 bounded Supervisor 协调三个领域 Agent，对无依赖、只读步骤执行受控并行。系统通过 Tool Registry、RAG 溯源、三层安全治理、人工确认、成员隔离和 Evaluation Harness，形成可追踪、可回放、可测试的业务闭环。
 
 三条业务线：
 
@@ -42,10 +42,10 @@
 - 先通过可信身份、`user_id + member_id + resource_id` 和请求前 Safety Guard。
 - Complexity/Intent Router 将请求分为简单单领域与复杂跨领域。
 - 简单请求直接进入 `TriageAgent`、`MedicationAgent` 或 `ReportAgent`，不调用 Planner，不进入 Supervisor 循环。
-- 复杂请求才调用一次性 `TaskPlanner`，最多生成 3 个有依赖关系的步骤。
-- 串行 bounded Supervisor 只执行计划：选择下一个满足依赖的业务角色，处理有限重试、降级和终止；不得修改用户目标、成员、治理策略或产生计划外角色。
+- 复杂请求才调用一次性 `TaskPlanner`，生成有最大步骤数和最大并行数的冻结 DAG；bounded Supervisor 已能对依赖就绪的只读步骤做受控 fan-out/fan-in。
+- bounded Supervisor 只执行计划：选择依赖已满足的业务步骤，将相互独立、只读且无副作用的步骤组成受控并行批次，并处理有限重试、降级和终止；不得修改用户目标、成员、治理策略或产生计划外角色。
 - 业务 Agent 统一返回 `AgentTaskResult`，不能直接调用其他 Agent。
-- 不实现 Agent 级并行调度或复杂自动重规划。领域 Agent 内部对无依赖、只读的 Provider、数据库和 RAG 查询可以受控异步并发。
+- 确认、写操作、Checkpoint、Safety 和 Evaluator 节点保持串行；禁止无边界并行、共享可变业务状态和运行时复杂自动重规划。
 
 ### 4.2 三个领域 Agent
 
@@ -125,7 +125,7 @@ SafetyAgent 属于治理层，不是 Supervisor 的候选业务角色。Evaluato
 | 4B | `DONE` | 完成可靠后端 Agent：最终契约、三领域 Agent、按需 Planner、bounded Supervisor、安全/确认、状态缓存、Provider/RAG 可靠性和 32 条评测 |
 | 4C | `DONE` | 完成患者端、浏览器 E2E、黄金演示和最终交付；MVP 产品功能在此收口 |
 | 4D-A | `DONE` | 五组 gold 评测集已审核、冻结并写入 manifest hash |
-| 4D-B | `IN_PROGRESS` | 实现统一自动化评测、故障注入、重复运行和指标报告，不新增业务功能 |
+| 4D-B | `IN_PROGRESS` | 统一 Agent 运行图和最终评测：有界 DAG、FinalClaim、v2 数据、故障注入、重复运行和指标报告；不新增业务领域 |
 
 ## 7. 4B 任务拆分与审计
 
@@ -286,7 +286,7 @@ python -m pytest backend\tests -q -p no:cacheprovider --basetemp=var\pytest\4b-t
 - `TaskCheckpointCache` 的 Redis key 包含 `user_id/member_id/task_id/thread_id/checkpoint_version` 并设置 TTL。miss、过期、作用域/版本不匹配或 Redis 异常都会回源 PostgreSQL；Redis 不保存唯一事实。
 - `/api/business-tasks/{task_id}/confirm` 支持 checkpoint/confirmation version 乐观并发校验；`ConfirmedPreferenceService` 只接受同 task 的已执行确认、匹配 source/version 和显式 `human_confirmation_granted=true`，并保存可撤销的版本化偏好。
 
-实现文件和测试见 [任务八交付报告](task8_state_checkpoint_report.4b.md)。
+实现文件和测试边界统一见 [上下文管理](CONTEXT_MANAGEMENT.md)、[数据库设计](DB_SCHEMA.md) 与本节验收记录。
 
 验证命令：
 
@@ -295,7 +295,7 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_business_task_api.py backend\tests\test_task_checkpoint_cache.py -q -p no:cacheprovider --basetemp=var\pytest\4b-task8
 ```
 
-任务十一完成后进入任务十二；任务十二现已完成，当前唯一 `NEXT` 是任务十三“4B 文档与 Git 收口”。
+历史顺序为任务十一完成后进入任务十二，再进入任务十三“4B 文档与 Git 收口”；三项现均已完成，当前 `NEXT` 以 4D-B 执行顺序为准。
 
 ### 7.5 任务九：Tool 和 Provider
 
@@ -337,7 +337,7 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 python -m pytest backend\tests\test_provider_adapters.py backend\tests\test_provider_reliability.py backend\tests\test_tool_registry.py backend\tests\test_business_task_api.py -q -p no:cacheprovider --basetemp=output\pytest-task9
 ```
 
-详细边界与结果见 [任务九交付报告](task9_tool_provider_reliability_report.4b.md)。
+详细边界统一见 [Tool 契约](TOOL_CONTRACTS.md) 与本节验收记录。
 
 ### 7.6 任务十：RAG、隔离和 Trace
 
@@ -365,7 +365,7 @@ python -m pytest backend\tests -q --basetemp output\pytest-task10-full
 python -m compileall backend\app backend\tests
 ```
 
-详细边界与结果见 [任务十交付报告](task10_rag_isolation_observability_report.4b.md)。
+详细边界统一见 [RAG 设计](RAG_RETRIEVAL.md)、[测试指南](TESTING_GUIDE.md) 与本节验收记录。
 
 ### 7.7 任务十一：32 条 Harness
 
@@ -539,7 +539,7 @@ Set-Location E:\project_code\hospital
 
 ## 10. 4D 简历指标与评测证据化
 
-4D 不增加新的医疗能力，也不把本地评测包装成生产指标。目标是把 [简历学习文档 5.2](learning/05_RESUME_AND_INTERVIEW.md#52-下一轮简历指标怎么测) 中的测量方案落成版本化测试集、可重复 runner 和 JSON/Markdown 报告。所有简历数字必须能回到固定 case、Git commit、运行环境和计算公式。
+4D 不增加新的医疗能力，也不把本地评测包装成生产指标。目标是把 [简历学习文档 5.2](learning/RESUME_GUIDE.md#52-下一轮简历指标怎么测) 中的测量方案落成版本化测试集、可重复 runner 和 JSON/Markdown 报告。所有简历数字必须能回到固定 case、Git commit、运行环境和计算公式。
 
 ### 10.1 4D-A：候选用例生成与人工 gold 审核
 
@@ -566,7 +566,7 @@ backend/tests/fixtures/benchmarks/safety_gold.v1.json
 backend/tests/fixtures/benchmarks/memory_context.v1.json
 backend/tests/fixtures/benchmarks/provider_faults.v1.json
 backend/tests/fixtures/benchmarks/benchmark_manifest.v1.json
-docs/learning/18_4D_BENCHMARK_DATA_REVIEW.md
+docs/4D_B_BENCHMARK_GUIDE.md
 ```
 
 #### A.2 你实际需要做什么
@@ -605,20 +605,26 @@ docs/learning/18_4D_BENCHMARK_DATA_REVIEW.md
 
 - `B1 DONE`：Pydantic 契约、manifest/hash 校验、deterministic 数据契约 runner、报告和 `N/A` 真实性边界。
 - `B2 PARTIAL`：本地观测 runner 已执行 32 次 bounded Supervisor、12 次真实 `KeywordRetriever` 查询、40 次 ContextManager compact/reset 和 30 次 Provider 故障注入；结果写入 `docs/local_benchmark_report.4d.md`。这些使用合成 fixture 和本地实现，不是 Docker pgvector、真实外部 Provider 或真实 LLM 指标。
-- `B2 TODO`：将 Docker PostgreSQL + pgvector 检索、PostgreSQL Task Checkpoint/Redis 故障回源、真实 HTTP RunTrace 和重复 wall-clock 运行接入统一报告。
+- `B2.1 DONE`：新增 `UnifiedHealthGraph`，将 `/api/business-tasks` 接入统一 Router/Planner/Supervisor 边界；业务执行继续由现有 ProductWorkflow 适配器负责数据库工具、确认和冻结，`RunTrace.orchestration` 已保存编排投影。
+- `B2.2 DONE`：Supervisor 已支持依赖 ready-set、有界只读 fan-out/fan-in、确定性 reducer 和写步骤串行隔离；`EvalRuntimeOptions` 与 ContextManager 已提供仅评测可用的结构化 `all_history`，生产默认仍为 `dependency_only`。
+- `B2.3 DONE`：已增加结构化 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`，产品业务冻结产物会保存成员、来源指针、依赖结果和 token usage（若 provider 提供），deterministic Evaluator 已增加 Claim 覆盖率、来源精度和正文/Claim 一致性校验。
+- `B2.4 DONE（待人工审核/物化）`：已用固定 seed 生成独立的 300 个 WorldState 和 1200 条 v2 Query，完成 development/validation/holdout 切分、四种表达变体、关联校验和 SHA-256 manifest；数据明确标记为 `pending_review`，不能当作临床 gold 或最终评测结果。
+- `B2.5 DONE（本地 preview）`：已实现隔离的内存 WorldState Materializer、九类确定性 Grader、失败原因分类和统一 v2 Eval Runner；可生成 1200 条 preview 报告。当前 runner 不访问 PostgreSQL、Provider、RAG、LLM，preview 数字不进入简历。
 - `B3 OPTIONAL`：配置真实 OpenAI-compatible provider 后，执行回答质量、真实 token/cost 和模型延迟评测；没有 Key 时继续保持 `N/A`，不影响 deterministic 项目运行。
+
+4D-B 的最终数据规模、架构升级、指标公式、执行任务和简历口径统一见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。DAG 并行、`all_history` 评测基线、UnifiedHealthGraph、FinalClaim/Trace v2、v2 数据生成、Materializer、分层 grader 和本地 preview Runner 已完成；人工审核后的 PostgreSQL/Provider/RAG 物化、真实业务图执行、消融和正式报告仍属于后续目标；LLM Judge 仍只作为离线辅助。
 
 #### B.1 自动化实现
 
-1. 为五组 fixture 建立严格 Pydantic 契约、版本和完整性校验。
-2. 实现统一 `BenchmarkRunner`，明确区分 `deterministic`、`real_model` 和 `docker_integration` 三种运行模式。
-3. 回答质量每题真实模型运行 3 次，规则先检查必须包含、禁止表达、拒答、确认和来源，再输出待人工复核列表；不以 LLM Judge 作为硬门槛。
-4. RAG 分别运行关键词、向量和混合检索，计算 Recall@3、Recall@5、MRR、引用正确率和无来源率。
-5. Agent 安全计算高风险召回率、普通请求误报率、漏拦截 case，并验证阻断发生在草稿或动作之前。
-6. 上下文与记忆计算关键信息保留率、无关信息清理率、来源保留率、未确认写入率、跨成员泄漏率、checkpoint 恢复成功率和实际 token/字符降幅。
-7. Provider 故障注入计算可重试错误恢复率、平均尝试次数、不可重试错误误重试率和写操作误重试率。
-8. 性能测试先预热 5 次，再对两条黄金链各运行 100 次、重复 3 轮，分别统计总延迟、RAG、模型和 Tool 的 p50/p95；本机结果必须标记硬件和运行环境。
-9. 读取 Model Gateway 的真实 usage，统计平均输入/输出 token、单次成本和每 1000 次估算成本；没有真实 usage 时保持 `N/A`。
+1. 保留现有 260 条 v1 专项 gold、32 条 A/B/C 编排 fixture 和当前 manifest，作为兼容回归基线。
+2. 新增 UnifiedHealthGraph，将 Complexity Router、一次性 Planner、bounded Supervisor、三个领域 Agent 和固定治理边接入当前 HTTP 主链。
+3. 把复杂任务建模为有界 DAG；只并行依赖已满足、无副作用的只读领域步骤，确认、写操作、Checkpoint 和治理节点保持串行。
+4. 新增仅供评测使用的 `all_history` 上下文模式，与生产默认 `dependency_only` 比较；即使在基线中也必须保持 user/member 隔离。
+5. `[DONE]` 为 FinalAnswer 增加 FinalClaim，保留成员作用域、事实键、值、类型和 `source_ids`，避免评测时再用 LLM 从正文猜事实。
+6. `[DONE]` 生成 300 个结构化 WorldState，并为每个 WorldState 生成 4 条表达，共 1200 条 v2 Query；按 base case 拆分 development、validation 和 holdout，数据状态为 `pending_review`。
+7. `[DONE]` 先用隔离内存 backend 物化 WorldState、Provider 投影、RAG namespace 和 Gold，验证 case namespace、成员来源范围、清理和失败阻断；生产 PostgreSQL/Provider/RAG adapter 已在 B2.6 增加 shadow transaction 边界。
+8. `[DONE]` 为 Route、Plan、Dependency、Tool、Claim、RAG、Agent 安全、上下文、可靠性和最终数据库状态建立确定性 grader，并统一 failure taxonomy。
+9. `[DONE]` 实现统一 v2 Eval Runner、split/max_cases/repeat、幂等 report id、JSON/Markdown 输出和 pending-review gate；B2.6 已增加 A/B/C/D preview、真实图执行器和 Docker 集成报告入口。
 
 #### B.2 报告与证据
 
@@ -647,6 +653,12 @@ docs/benchmark_badcases.4d.md
 #### B.4 完成标准
 
 - 同一 manifest 和 commit 的 deterministic 结果可重复。
+- 患者端 HTTP RunTrace 已包含 Router、Plan、Supervisor decision 和领域 Agent result；当前主运行架构不再与独立编排内核相互矛盾。
+- UnifiedHealthGraph 已通过统一入口保存 Router/Plan/Supervisor/领域结果；4D-B2.2 的只读 DAG fan-out/fan-in 已在 bounded Supervisor 内核完成，固定业务适配器的安全、确认、冻结和副作用仍串行。
+- 300 个 WorldState、1200 条 v2 Query 已按 base case 拆分 development、validation、holdout，并通过固定 seed、hash 和关联校验；本地物化、清理和失败恢复已完成，真实 PostgreSQL/Provider/RAG 物化仍待完成。
+- v2 本地 preview Runner 已对 1200 条 Query 生成九层 grader 结果、task success、各层通过率和 p95 preview latency；该报告只证明评测管线接线，不证明业务质量。
+- FinalClaim 可以在不解析自然语言正文的情况下完成事实、来源和成员评分。
+- A/B/C/D 四种路由、执行和上下文模式能够运行同一数据集并生成可比较报告。
 - 所有指标能追溯到 case、冻结运行产物和计算公式。
 - 故意失败用例必须被 runner 识别，不能只证明成功路径。
 - 自动化、Docker 集成和可选真实模型运行分别生成报告。
@@ -661,10 +673,16 @@ docs/benchmark_badcases.4d.md
   -> 4D-A3 校验并冻结 benchmark manifest DONE
   -> 4D-B1 契约、manifest 和 deterministic 报告 DONE
   -> 4D-B2 本地实现观测 PARTIAL
-  -> 4D-B2 Docker PostgreSQL/pgvector/Checkpoint/HTTP 全量回归 NEXT
-  -> 4D-B3 可选真实 LLM、token、成本和性能测试 OPTIONAL
-  -> 人工复核 badcase
-  -> 更新简历与面经真实指标
+  -> 4D-B2.1 UnifiedHealthGraph DONE
+  -> 4D-B2.2 有界 DAG 并行和评测用 all_history 基线 DONE
+  -> 4D-B2.3 FinalClaim / Trace v2 DONE
+  -> 4D-B2.4 300 WorldState / 1200 Query DONE（待人工审核/物化）
+  -> 4D-B2.5 Materializer / Graders / Eval Runner DONE（本地 preview）
+  -> 4D-B2.6 DONE（实现与本机证据层）：PostgreSQL/Provider/RAG 物化、真实图样例、真实 A/B/C/D 单样例和 Docker 回归已通过；正式全量指标仍受人工审核/身份映射门槛约束
+  -> 4D-B3 DONE：可选真实 LLM、token、成本和性能测试；8 条 development 样本已人工复核并冻结 final report
+  -> 人工复核 B3 badcase DONE（8/8 通过）
+  -> 更新简历与面经真实指标 DONE（明确 8 条样本范围）
+  -> 补齐 v2 全量 identity/source map 与三 split integration/A-B-C-D 正式报告 NEXT
 ```
 
 ## 11. 明确非目标
@@ -672,7 +690,7 @@ docs/benchmark_badcases.4d.md
 - 疾病诊断、自动开方、处方修改或剂量调整建议。
 - 未经确认的受保护状态迁移，或真实医院、药店、支付和通知写操作。
 - 完整认证、多租户、生产级合规认证和互联网医疗知识自动抓取。
-- Agent 级并行调度、无限循环、复杂自动重规划。
+- 无边界 Agent 并行、写操作并发、无限循环和运行时复杂自动重规划。
 - MCP Server、OpenTelemetry/Jaeger 和生产级分布式追踪平台。
 - 长期完整聊天存储、个人健康向量记忆、模型自动写回医疗事实。
 - 七个 Provider 都做成完整外部集成。
@@ -681,6 +699,31 @@ docs/benchmark_badcases.4d.md
 
 ## 12. 当前唯一下一步
 
-`4B` 和 `4C` 已完成，MVP 产品能力已经收口。4D-A 的五组 gold 数据已完成人工审核并冻结 manifest；当前唯一进行中的是 **4D-B：统一自动化评测与最终指标报告**。下一步是把 Docker PostgreSQL/pgvector、Checkpoint/Redis 回源和真实 HTTP RunTrace 接入统一 runner；真实 LLM 属于可选 B3。4D 只生成可追溯评测证据，不新增业务功能。
+`4B` 和 `4C` 已完成，MVP 产品能力已经收口。4D-A 的五组 v1 gold 已完成人工审核并冻结 manifest；4D-B2.1 至 B2.6 的实现与本机证据层已经完成，Docker 证据为 19/19 通过。4D-B3 也已完成：`deepseek-v4-flash` 在 8 条 development 固定样本上真实运行，人工对 FinalAnswer 和冻结草稿/来源快照逐条复核，8/8 通过；平均总 token `1032.5`、平均单次成本 `$0.00146525`、本机 workflow/model p95 为 `5239/4452 ms`，final report 和 manifest 已冻结。
+
+当前唯一下一步是补齐 300 个 WorldState/1200 条 Query 的人工审核与本机 identity/source map，再运行 development/validation/holdout 的完整 integration 和 A/B/C/D 正式报告。B3 的 8 条结果只能按固定样本范围写入简历，不能扩展为生产 SLO、临床安全率或开放医疗问答准确率。
 
 2026-07-30 完成一次 4C 后文档与证据维护：补充面向初学者的逐行核心代码走读、简洁版 Agent 简历、可复现指标与后续 gold set/延迟/Token/重试测量方案、测试充分性边界、本地演示数据库说明和十步 Docker 启动路径。本次维护不改变阶段状态，不把尚未接入业务 API 的 bounded Supervisor 编排内核描述为当前运行链能力。
+
+2026-07-31 完成文档信息架构收口：学习区只保留“从 0 到 1 的任务拆分与技术选型、核心代码逐行走读、完整 API 实战”三条工程主线，简历和项目面经独立分类；删除被当前设计覆盖的阶段教程、旧 3C/3D/4A 与局部 4B 报告和无关通用八股。当前有效证据只保留 32 条编排消融、Docker 后端验收、浏览器 E2E、MVP 收口和 4D 报告。本次整理不改变 4D-B 状态，也不改写简历或面经正文。
+
+2026-07-31 根据最终评测实施方案升级 4D-B：保留 260 条 v1 专项 gold，同时将 UnifiedHealthGraph、有界 DAG 并行、评测用 `all_history` 基线、FinalClaim、300 个 WorldState/1200 条 v2 Query、分层 grader 和统一 Eval Runner 纳入最终目标。生产默认仍使用角色最小上下文，确认、写操作和治理节点保持串行。简历继续使用简洁中文口径，所有新增百分比必须由最终报告生成。
+
+2026-08-01 完成 4D-B2.1：`UnifiedHealthGraph` 接入 `/api/business-tasks`，复用现有 ProductWorkflow 完成业务工具、确认、安全和冻结；`RunTrace.orchestration` 保存统一编排投影，并新增统一图边界测试。
+
+2026-08-01 完成 4D-B2.2：TaskPlan 支持显式依赖边、只读标记和并行上限；bounded Supervisor 已实现 ready-set、受控 worker fan-out、按 step_id 确定性归并、有限重试和写步骤隔离；`all_history` 仅可由评测运行选项开启。随后进入 4D-B2.3 FinalClaim / Trace v2。
+
+2026-08-01 完成 4D-B2.3：新增 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`；业务冻结答案与 claims 同步生成，Claim 强制绑定 `member_id` 和 `source_ids`，RunTrace 保存上下文来源、依赖结果和可选 token usage；deterministic Evaluator 新增 Claim evidence coverage、source precision 和 consistency 校验。当前唯一下一项为 4D-B2.4 的 300 个 WorldState / 1200 条 v2 Query。
+
+2026-08-01 完成 4D-B2.4：新增 `v2_benchmark_schemas.py` 和 `v2_benchmark_generator.py`，生成 `backend/tests/fixtures/benchmarks/v2/` 下的 300 个 WorldState、1200 条 Query 和 manifest；固定 seed 为 `20260801`，切分为 180/60/60 个 WorldState，四种表达保持同一 base case 和 split。数据当前为 `pending_review`，唯一下一项为 4D-B2.5 Materializer / Graders / Eval Runner。
+
+2026-08-01 完成 4D-B2.5：新增 `v2_materializer.py`、`v2_graders.py`、`v2_eval_schemas.py` 和 `v2_eval_runner.py`，实现隔离内存 WorldState projection、九类确定性 grader、failure taxonomy、pending-review gate、稳定 report id、JSON/Markdown preview 报告和 1200 条 Query 全量 preview。修正并重新生成多成员 Gold 的来源范围，保证 expected source 不包含其他成员事实。当前唯一下一项为 4D-B2.6：真实 PostgreSQL/Provider/RAG 物化、UnifiedHealthGraph 集成、A/B/C/D 消融和 Docker 回归。
+2026-08-01 完成 4D-B2.6 的代码与本机证据层：新增 `v2_integration.py`、`v2_ablation.py`、`run_4d_b26_integration.py`、`run_4d_b26_ablation.py` 和 `run_4d_b26_docker_regression.py`；实现 PostgreSQL shadow transaction、真实 RAG source allow-list、Provider sandbox fault trace、UnifiedHealthGraph v2 执行器、A/B/C/D preview 和 Docker 全链路回归。Docker 19/19 通过，第一条真实 v2 integration sample 九类 grader 全部通过；报告仍为 `preview`，不能作为最终简历指标。B2.6 的剩余门槛是人工审核 v2 数据、为全部 WorldState 提供本地 identity/source map、运行完整 integration/A-B-C-D 报告并冻结正式 manifest。
+
+2026-08-01 进入 4D-B3：新增 `real_llm_benchmark.py`、`run_4d_b3_real_llm.py` 和 badcase review queue；实现显式 `--live` 开关、无 Key blocked 报告、真实 provider effective/fallback 统计、完整 usage、价格换算、模型 p95、workflow p95 和人工审核队列。已在 Docker PostgreSQL + 本机 venv 上用 `deepseek-v4-flash`、thinking disabled 跑通 1 条 development preview：primary 生效、无 fallback、590/423/1013 token、按配置价格成本 `$0.001436`、workflow `4370 ms`、model `3572 ms`。该结果仍是 `n=1 preview`，人工回答质量和正式简历指标保持未冻结，下一步是人工复核队列并扩展固定样本。
+
+2026-08-01 继续 4D-B3：为真实模型审核队列增加 `ConfirmationDraftSnapshot`，保留 draft id、任务/成员、动作、版本、确认要求、摘要和药品/时间/文案安全预览，以及 `external_action_status=not_submitted`，不写入完整医疗 payload；修复 shadow integration 中内部 `user_id` 不应进入评测快照的契约边界。人工审核发现原队列只有元数据、无法查看草稿内容，本次补齐可见预览；重新运行 1 条 development preview 后仍保持 `pending_review`，未自动判定人工回答质量。
+
+2026-08-01 继续 4D-B3：在保留已审核的 1-case 目录后，对当前 identity map 覆盖的 `world-v2-0001` 四种表达变体运行 4-case live preview。四条均自动评测通过，真实 provider 生效率 `1.0`、fallback `0.0`、平均总 token `1018`、workflow p95 `5038 ms`、model p95 `4300 ms`；结果仍标记 `preview`，四条 badcase 仍需人工复核，不能写成最终回答质量或泛化指标。
+2026-08-01 继续 4D-B3：为 `world-v2-0001` 父亲提醒和 `world-v2-0002` 母亲购药补充本机真实成员/来源映射，运行 8 条 `deepseek-v4-flash` development live preview。8 条自动九层契约全部通过，真实 provider 生效率 `1.0`、fallback `0.0`、usage 可用率 `1.0`、平均总 token `1032.5`、workflow p95 `5239 ms`、model p95 `4452 ms`；结果仍为 `preview`，8 条仍需人工复核，不能写成最终回答质量或全量指标。当前唯一下一项仍为人工复核 badcase、补齐其余 WorldState 映射并生成正式报告。
+2026-08-01 完成 4D-B3：新增人工审核 finalizer，兼容人工填写的 `pass/fail`，校验 report id、query 顺序和不可变证据，拒绝 pending、缺少失败备注或被篡改的回答，并冻结 canonical review queue hash 与四个产物文件 hash。8 条 development 样本人工复核结果为 8/8 通过；final report 状态为 `completed`，平均总 token `1032.5`、平均成本 `$0.00146525`、workflow/model p95 为 `5239/4452 ms`。该报告只覆盖两个成员和提醒/购药场景；4D-B 整体仍需完成 300/1200 全量映射与三 split 正式报告。

@@ -13,6 +13,7 @@ from app.agent.model_gateway import (
     create_model_gateway,
 )
 from app.agent.model_gateway_schemas import ModelCallRequest, ModelCallTrace, ModelMessage
+from app.agent.final_claim_schemas import build_workflow_claims
 from app.agent.safety_confirmation import (
     ConfirmationScope,
     ConfirmationState,
@@ -23,11 +24,13 @@ from app.agent.safety_confirmation import (
 )
 from app.agent.workflow_schemas import WorkflowFinalAnswerDraft
 from app.providers import build_mock_provider_registry
+from app.providers.registry import ProviderRegistry
 from app.rag.retriever import create_knowledge_retriever
 from app.schemas.business import BusinessDomain, ProviderMode
 from app.tools.business_tools import register_business_tools
 from app.tools.db_tools import create_db_tool_registry
 from app.tools.tool_schemas import ToolExecutionContext, ToolResult
+from app.core.config import Settings
 
 
 ConfirmationAction = Literal[
@@ -59,6 +62,7 @@ def _deterministic_product_answer(request: ModelCallRequest) -> dict[str, Any]:
             or "已完成信息整理；当前没有执行任何外部医疗或交易动作。"
         ),
         "contains_factual_claims": bool(payload.get("contains_factual_claims", False)),
+        "claims": payload.get("claims", []),
         "waiting_for_user_confirmation": waiting,
         "human_confirmation_present": confirmed,
         "action_status": (
@@ -86,6 +90,7 @@ class ProductWorkflowState(TypedDict, total=False):
     idempotency_key: str
     status: str
     final_answer: str
+    final_claims: list[dict[str, Any]]
     need_human_confirmation: bool
     safety_flags: list[str]
     source_refs: list[dict[str, Any]]
@@ -102,6 +107,9 @@ class ProductWorkflowState(TypedDict, total=False):
     safety_decisions: list[dict[str, Any]]
     final_output_safety: dict[str, Any]
     visited_nodes: list[str]
+    orchestration_run: dict[str, Any]
+    unified_graph_version: str
+    unified_visited_nodes: list[str]
 
 
 class FamilyHealthProductWorkflow:
@@ -111,23 +119,32 @@ class FamilyHealthProductWorkflow:
     a consultation, purchase, reminder, or medical record to an external system.
     """
 
-    def __init__(self, db: Session, *, model_gateway: ModelGateway | None = None):
+    def __init__(
+        self,
+        db: Session,
+        *,
+        model_gateway: ModelGateway | None = None,
+        model_configuration: Settings | None = None,
+        provider_registry: ProviderRegistry | None = None,
+        knowledge_retriever: object | None = None,
+    ):
         self.db = db
         deterministic_provider = DeterministicModelProvider(
             _deterministic_product_answer,
             model_name="deterministic-product-answer-v1",
         )
         self.model_gateway = model_gateway or create_model_gateway(
-            deterministic_provider
+            deterministic_provider,
+            configuration=model_configuration,
         )
         self.safety_guard = ThreeLayerSafetyGuard()
         self.confirmation_machine = ConfirmationStateMachine()
-        self.retriever = create_knowledge_retriever(db)
+        self.retriever = knowledge_retriever or create_knowledge_retriever(db)
         self.registry = create_db_tool_registry(db, include_confirmation_tools=True)
         register_business_tools(
             self.registry,
             self.db,
-            provider_registry=build_mock_provider_registry(),
+            provider_registry=provider_registry or build_mock_provider_registry(),
             knowledge_retriever=self.retriever,
         )
         self.graph = self._build_graph()
@@ -326,6 +343,23 @@ class FamilyHealthProductWorkflow:
             human_confirmation_present=False,
         )
         self._record_safety_decision(state, action_decision)
+        action_flag = {
+            "refill_request": "doctor_confirmation_required",
+            "pharmacy_option": "purchase_confirmation_required",
+            "reminder_create": "reminder_confirmation_required",
+            "health_record": "doctor_confirmation_required",
+            "consultation_request": "doctor_confirmation_required",
+        }.get(action_type, "human_confirmation_required")
+        state["safety_flags"] = list(
+            dict.fromkeys(
+                [
+                    flag
+                    for flag in state.get("safety_flags", [])
+                    if flag != "human_confirmation_required"
+                ]
+                + [action_flag]
+            )
+        )
         draft_transition = self.confirmation_machine.transition(
             ConfirmationTransitionRequest(
                 current_state="NONE",
@@ -529,6 +563,18 @@ class FamilyHealthProductWorkflow:
             )
             if self._abort_on_failure(state, prescriptions):
                 return state
+        elif action_type == "reminder_create":
+            # A reminder must be checked against the current prescription
+            # snapshot too; the medicine-box row alone is not enough for a
+            # clinically safe reminder draft.
+            prescriptions = self._call(
+                state,
+                tool_name="query_prescriptions",
+                agent_role="ReminderAgent",
+                payload={"member_id": state["member_id"]},
+            )
+            if self._abort_on_failure(state, prescriptions):
+                return state
 
         agent_role = {
             "refill_request": "RefillAgent",
@@ -562,6 +608,36 @@ class FamilyHealthProductWorkflow:
             if self._abort_on_failure(state, pharmacy_result):
                 return state
 
+        provider_result: ToolResult | None = None
+        if action_type == "refill_request":
+            provider_result = self._provider_call(
+                state,
+                tool_name="consultation_prepare_draft",
+                agent_role="RefillAgent",
+                provider_name="online_consultation",
+                operation="prepare_draft",
+                payload={
+                    "member_id": state["member_id"],
+                    "materials": ["prescription", "medicine_box"],
+                    "medicine_name": medicine_name,
+                },
+            )
+        elif action_type == "reminder_create":
+            provider_result = self._provider_call(
+                state,
+                tool_name="notification_prepare_reminder",
+                agent_role="ReminderAgent",
+                provider_name="notification",
+                operation="prepare_reminder",
+                payload={
+                    "member_id": state["member_id"],
+                    "medicine_name": medicine_name,
+                    "schedule": payload["schedule"],
+                },
+            )
+        if provider_result is not None and self._abort_on_failure(state, provider_result):
+            return state
+
         if action_type not in {"refill_request", "pharmacy_option", "reminder_create"}:
             state["status"] = "needs_clarification"
             state["final_answer"] = "当前只支持续方申请、购药方案和用药提醒草稿。"
@@ -578,6 +654,8 @@ class FamilyHealthProductWorkflow:
         }
         if action_type == "pharmacy_option":
             confirmation_payload["delivery"] = self._data(pharmacy_result) if pharmacy_result else {}
+        if provider_result is not None:
+            confirmation_payload["provider"] = self._data(provider_result)
         if action_type == "reminder_create":
             confirmation_payload["medicine_box_item_id"] = payload.get("medicine_box_item_id")
             confirmation_payload["schedule"] = payload["schedule"]
@@ -698,6 +776,31 @@ class FamilyHealthProductWorkflow:
             ),
         )
         self._record_safety_decision(state, decision)
+        request = state.get("confirmation_request")
+        action_type = (
+            str(request.get("action_type"))
+            if isinstance(request, dict) and request.get("action_type")
+            else None
+        )
+        if action_type is not None:
+            action_flag = {
+                "refill_request": "doctor_confirmation_required",
+                "pharmacy_option": "purchase_confirmation_required",
+                "reminder_create": "reminder_confirmation_required",
+                "health_record": "doctor_confirmation_required",
+                "consultation_request": "doctor_confirmation_required",
+            }.get(action_type)
+            if action_flag is not None:
+                state["safety_flags"] = list(
+                    dict.fromkeys(
+                        [
+                            flag
+                            for flag in state.get("safety_flags", [])
+                            if flag != "human_confirmation_required"
+                        ]
+                        + [action_flag]
+                    )
+                )
         if decision.blocked:
             state["confirmation_state"] = "BLOCKED"
             state["status"] = "blocked"
@@ -857,6 +960,17 @@ class FamilyHealthProductWorkflow:
             state.get("human_confirmation_granted")
             or state.get("confirmation_result")
         )
+        claim_candidates = build_workflow_claims(
+            run_id=state["run_id"],
+            member_id=state["member_id"],
+            status=str(state.get("status") or "unknown"),
+            confirmation_state=str(state.get("confirmation_state") or "NONE"),
+            source_ids=(
+                str(source.get("source_id"))
+                for source in state.get("source_refs", [])
+                if isinstance(source, dict) and source.get("source_id")
+            ),
+        )
         payload = {
             "business_domain": state.get("business_domain"),
             "status": state.get("status"),
@@ -866,6 +980,7 @@ class FamilyHealthProductWorkflow:
             "contains_factual_claims": bool(state.get("source_refs")),
             "source_count": len(state.get("source_refs", [])),
             "safety_flags": list(state.get("safety_flags", [])),
+            "claims": [claim.model_dump(mode="json") for claim in claim_candidates],
         }
         result = self.model_gateway.invoke(
             ModelCallRequest(
@@ -877,9 +992,18 @@ class FamilyHealthProductWorkflow:
                     ModelMessage(
                         role="system",
                         content=(
-                            "Return only WorkflowFinalAnswerDraft JSON. "
-                            "Do not invent medical facts, bypass confirmation, "
-                            "or claim external actions were completed."
+                            "Return only valid JSON for WorkflowFinalAnswerDraft. "
+                            "Required keys are: content (string), "
+                            "contains_factual_claims (boolean), claims (array), "
+                            "waiting_for_user_confirmation (boolean), "
+                            "human_confirmation_present (boolean), and "
+                            "action_status (one of none, draft, "
+                            "awaiting_confirmation, executed). "
+                            "Copy the prepared claims array exactly; do not add, "
+                            "remove, or rewrite claims. Keep the booleans and "
+                            "action_status consistent with the supplied workflow "
+                            "state. Do not invent medical facts, bypass "
+                            "confirmation, or claim external actions were completed."
                         ),
                     ),
                     ModelMessage(
@@ -907,6 +1031,12 @@ class FamilyHealthProductWorkflow:
             waiting=waiting,
             confirmed=confirmed,
             has_sources=bool(state.get("source_refs")),
+            member_id=state["member_id"],
+            source_ids={
+                str(source.get("source_id"))
+                for source in state.get("source_refs", [])
+                if isinstance(source, dict) and source.get("source_id")
+            },
         ):
             state["degraded"] = True
             state.setdefault("errors", []).append("model_output_contract_mismatch")
@@ -927,6 +1057,9 @@ class FamilyHealthProductWorkflow:
             )
             state.setdefault("errors", []).append("final_output_safety_blocked")
             return
+        state["final_claims"] = [
+            claim.model_dump(mode="json") for claim in answer.claims
+        ]
         state["final_answer"] = answer.content
 
     def _check_existing_final_answer(self, state: ProductWorkflowState) -> None:
@@ -954,12 +1087,22 @@ class FamilyHealthProductWorkflow:
         waiting: bool,
         confirmed: bool,
         has_sources: bool,
+        member_id: str,
+        source_ids: set[str],
     ) -> bool:
         if answer.waiting_for_user_confirmation != waiting:
             return False
         if answer.human_confirmation_present != confirmed:
             return False
         if answer.contains_factual_claims and not has_sources:
+            return False
+        if answer.contains_factual_claims and not answer.claims:
+            return False
+        if any(
+            claim.subject_id != member_id
+            or not set(claim.source_ids).issubset(source_ids)
+            for claim in answer.claims
+        ):
             return False
         if waiting and answer.action_status != "awaiting_confirmation":
             return False
@@ -1014,6 +1157,7 @@ class FamilyHealthProductWorkflow:
             "idempotency_key": idempotency_key or str(uuid4()),
             "status": "created",
             "final_answer": "",
+            "final_claims": [],
             "need_human_confirmation": False,
             "safety_flags": [],
             "source_refs": [],
@@ -1045,6 +1189,7 @@ class FamilyHealthProductWorkflow:
         resumed["human_confirmation_granted"] = human_confirmation_granted
         resumed["status"] = "running"
         resumed["final_answer"] = ""
+        resumed["final_claims"] = []
         resumed["errors"] = []
         resumed["tool_calls"] = []
         resumed["provider_calls"] = []

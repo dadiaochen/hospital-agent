@@ -19,7 +19,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.agent.product_workflow import FamilyHealthProductWorkflow
+from app.agent.unified_health_graph import UnifiedHealthGraph
 from app.agent.product_artifacts import add_product_artifacts
 from app.core.exceptions import ApiError, InvalidRequestError, ResourceNotFoundError
 from app.models import (
@@ -141,9 +141,9 @@ class BusinessTaskService:
         )
         self.db.add(task)
         self.db.add(run)
-        workflow: FamilyHealthProductWorkflow | None = None
+        workflow: UnifiedHealthGraph | None = None
         try:
-            workflow = FamilyHealthProductWorkflow(self.db)
+            workflow = UnifiedHealthGraph(self.db)
             self.db.flush()
             state = workflow.invoke(
                 run_id=run_id,
@@ -289,9 +289,9 @@ class BusinessTaskService:
         task.status = "running"
         task.need_human_confirmation = False
         self.db.add(run)
-        workflow: FamilyHealthProductWorkflow | None = None
+        workflow: UnifiedHealthGraph | None = None
         try:
-            workflow = FamilyHealthProductWorkflow(self.db)
+            workflow = UnifiedHealthGraph(self.db)
             self.db.flush()
             resume_state = self.checkpoints.restore_state_for_continuation(
                 task=task,

@@ -51,7 +51,10 @@ MODEL_PROVIDER=openai_compatible
 MODEL_API_BASE=https://your-provider.example/v1
 MODEL_API_KEY=your-real-key
 MODEL_NAME=your-real-model-name
+MODEL_THINKING_MODE=disabled
 MODEL_TIMEOUT_MS=10000
+MODEL_INPUT_PRICE_PER_1M_USD=0.15
+MODEL_OUTPUT_PRICE_PER_1M_USD=0.60
 ```
 
 字段含义：
@@ -62,7 +65,10 @@ MODEL_TIMEOUT_MS=10000
 | `MODEL_API_BASE` | API 根地址，通常写到 `/v1` | 不要再加 `/chat/completions` |
 | `MODEL_API_KEY` | 本机密钥 | 不要填进 `.env.example`、代码、截图或 Git |
 | `MODEL_NAME` | 供应商实际模型 ID | 不能继续使用 `deterministic-local` |
+| `MODEL_THINKING_MODE` | `default`、`disabled` 或 `enabled` | DeepSeek 结构化最终答案建议使用 `disabled`，不要把 `reasoning_content` 当用户答案 |
 | `MODEL_TIMEOUT_MS` | 单次 HTTP 超时毫秒数 | 过短容易触发 fallback |
+| `MODEL_INPUT_PRICE_PER_1M_USD` | 输入 token 每百万的价格 | 不填则 cost 为 `N/A` |
+| `MODEL_OUTPUT_PRICE_PER_1M_USD` | 输出 token 每百万的价格 | 不填则 cost 为 `N/A` |
 
 这里的“OpenAI-compatible”描述的是 HTTP 请求格式，不限定某个厂商。供应商必须支持 `POST {base_url}/chat/completions`，并能返回 JSON object 内容。
 
@@ -148,6 +154,19 @@ docker compose exec -T backend python -m scripts.check_model_provider --live
 
 连通性成功不等于回答质量、安全率或医疗有效性已经验证。真实质量仍需专门用例和报告。
 
+4D-B3 的真实模型评测必须显式加入 `--live`：
+
+```powershell
+python scripts/run_4d_b3_real_llm.py `
+  --live `
+  --identity-map var/demo/v2_identity_map.local.json `
+  --max-cases 1 `
+  --split development `
+  --allow-pending-review
+```
+
+不加入 `--live` 时只生成 blocked/readiness 报告，不访问外部模型。第一次真实运行只允许使用 1 个 case，确认 provider、fallback、usage 和安全检查后再扩大样本。
+
 ## 7. 失败时发生什么
 
 外部 provider 超时、HTTP 错误、返回格式错误、Pydantic 校验失败或命中输出安全规则时：
@@ -176,4 +195,5 @@ docker compose exec -T backend python -m scripts.check_model_provider
 - 自动化测试使用 `httpx.MockTransport` 验证 URL、结构化响应、失败回退和密钥不泄露，不访问真实厂商。
 - 2026-07-20 已在无 Key 模式通过 196 条后端测试、compileall、Docker 四项 healthcheck 和固定四场景 4/4；容器诊断确认没有外部调用。
 - 仓库没有用户的真实 API Key，因此尚未形成任何真实 LLM 的效果、成本、延迟或安全指标。
+- B3 runner 已实现真实 usage、fallback、模型延迟、工作流 p95 和成本聚合；当前没有真实 Key/报告，相关值仍为 `N/A`。
 - 简历可以写“实现 OpenAI-compatible / deterministic 双模式 Model Gateway 和可复现诊断”，不能写“某模型已达到某准确率或 p95”。

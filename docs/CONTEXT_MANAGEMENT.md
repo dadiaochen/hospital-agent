@@ -65,6 +65,24 @@ RunSummary 只能保存 source/resource pointer 和上次任务状态，不能�
 
 现有 Profile/Refill/Pharmacy/Reminder 视图在任务六迁移后仅作为 Medication 领域内部兼容步骤，不再对目标工作流公开独立 Agent 路由。
 
+### 5.1 评测专用全历史基线
+
+生产运行始终使用上面的最小角色视图。4D-B 额外增加 `all_history`，但它只用于测试环境中的合成 WorldState 和消融评测，用来回答“角色裁剪是否在不降低质量的前提下降低 token 和跨成员风险”，不能成为生产默认配置。
+
+| 模式 | 使用范围 | Agent 可见内容 | 目的 |
+| --- | --- | --- | --- |
+| `all_history` | 仅测试环境、合成数据 | 当前 user/member 作用域内的完整合成任务历史 | 建立高上下文基线 |
+| `dependency_only` | 生产默认、测试对照 | 当前步骤依赖的摘要、证据、来源和安全标记 | 控制 token、泄漏面和无关信息 |
+
+即使使用 `all_history`，也必须满足以下边界：
+
+- 只能读取当前 `user_id + member_id + task_id` 的合成历史，不能跨成员或跨任务拼接。
+- 不包含 API Key、Prompt、Provider 原始响应、数据库整行记录或真实患者完整对话。
+- 不写入 PostgreSQL 偏好、Redis checkpoint 或个人向量记忆；run 结束后仍按 Context Reset 清理。
+- A/B/C/D 消融只改变路由、执行模式和上下文模式，WorldState、模型配置、Tool/Provider 数据和评分器必须保持一致。
+
+`all_history` 不是更先进的生产方案，而是评测对照组。最终报告比较它与 `dependency_only` 的任务质量、成员越权率、平均输入 token 和 p95 延迟；没有报告前不能声称压缩比例或质量提升。
+
 ## 6. Compaction
 
 只有相同 task 和 member 的 envelope 可以 compact：
@@ -114,7 +132,7 @@ Evaluator 读取冻结产物，不因评测需要延迟 working state 清理。
 - 未确认偏好、撤销偏好和知识 namespace 混用被拒绝。
 - continuation run 重新读取处方、报告和库存，不复用旧值。
 
-这些规则测试不能直接换算成“记忆准确率”。独立记忆评测需要用人工标注的多轮固定用例，比较 compact、reset 和 checkpoint 恢复前后的关键信息、来源、成员和允许写入项，再计算保留率、清理率、未确认写入率、跨成员泄漏率和恢复成功率。完整的 40 条用例拆分、指标公式、异常注入和报告流程见 [项目面经问题库 Q14](learning/INTERVIEW_QUESTION_BANK.md#q14-怎么评测上下文和记忆机制)。在报告生成前，文档中的百分比只能作为验收目标。
+这些规则测试不能直接换算成“记忆准确率”。独立记忆评测需要用人工标注的多轮固定用例，比较 compact、reset 和 checkpoint 恢复前后的关键信息、来源、成员和允许写入项，再计算保留率、清理率、未确认写入率、跨成员泄漏率和恢复成功率。完整的 40 条用例拆分、指标公式、异常注入和报告流程见 [项目面经问题库 Q14](learning/PROJECT_INTERVIEW_QUESTION_BANK.md#q14-怎么评测上下文和记忆机制)。在报告生成前，文档中的百分比只能作为验收目标。
 
 当前 ContextManager 已实现角色裁剪、compaction 和 reset；任务五已实现最终编排契约的成员/任务身份边界和 deterministic 路由输入；任务六的 `DomainAgentInput` 继续只传任务摘要、角色 allowlist 和同成员结构化前序结果。任务八已由 `TaskCheckpointService` 将最小 `confirmation_state`、draft scope、版本、RunSummary、冻结产物和来源指针写入 PostgreSQL 权威 checkpoint，并由 `TaskCheckpointCache` 提供带作用域/版本校验的 Redis TTL 加速。Redis miss、过期或不可用时回源 PostgreSQL；continuation 不恢复 raw conversation、scratchpad 或未确认推断。偏好写入由 `ConfirmedPreferenceService` 绑定同 task 的已执行确认、成员、source version 和显式人工确认。
 
@@ -128,6 +146,8 @@ Observation 不属于 working context，也不进入长期 memory。它是 run �
 ## 4B 任务十一：评测上下文公平性
 
 `FairnessConfig` 固定三种编排策略的 context token limit 和输出上限；fixture 只保存单条任务输入、成员作用域、结构化工具参数、来源 ID 和预期治理字段，不保存完整聊天或 scratchpad。A/B/C 不能通过扩大上下文、跨成员读取或追加隐藏来源提高指标。
+
+这是 32 条 v1 编排消融的历史规则。4D-B v2 在同一 WorldState 上增加 A/B/C/D 四种模式，其中 A/B/C 使用测试专用 `all_history`，D 使用生产默认 `dependency_only`；两种模式都受成员隔离和敏感字段过滤约束。
 
 ## 4B 任务十二：运行时回源验证
 

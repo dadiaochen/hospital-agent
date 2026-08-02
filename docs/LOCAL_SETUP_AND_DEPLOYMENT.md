@@ -120,7 +120,7 @@ docker compose ps
 | `backend` | FastAPI、业务 Service、Tool、RAG、Planner、Supervisor、Safety 和 Evaluator | `http://localhost:8000` |
 | `frontend` | Next.js 患者端页面 | `http://localhost:3000` |
 
-**Agent 不需要单独启动。** 本项目没有 `agent` 容器：Agent 工作流运行在 `backend` 进程内。打开患者端 `/agent` 页面并点击“运行 Agent”，前端会调用兼容入口 `/api/agent-runs`，由 `AgentRuntimeService + LangGraphAgentWorkflow` 执行。4B 新业务 API `/api/business-tasks` 使用另一条 `BusinessTaskService + FamilyHealthProductWorkflow` 链；两者当前都可运行，但 bounded Supervisor 编排内核尚未接入这两个 HTTP 入口。
+**Agent 不需要单独启动。** 本项目没有 `agent` 容器：Agent 工作流运行在 `backend` 进程内。患者端 `/agent` 页面仍通过兼容入口 `/api/agent-runs` 运行旧演示链；4B 新业务 API `/api/business-tasks` 已由 `BusinessTaskService + UnifiedHealthGraph` 接入 Router/Planner/Supervisor 边界，再由 ProductWorkflow 适配器完成业务工具、确认、安全和冻结。4D-B2.2 已在编排内核完成只读 DAG 并行，但 ProductWorkflow 的业务副作用仍串行。
 
 ### 0.3 怎么确认启动成功
 
@@ -642,6 +642,19 @@ Redis 故障回归：在一个终端临时执行 `docker compose stop redis`，�
 
 完整演示顺序、RAG/模型模式和故障处理见 [MVP 演示手册](DEMO_RUNBOOK.md)。
 
+## 7.2 4D-B2.6 评测集成
+
+Docker 全链路启动后，可以运行本机回归入口：
+
+```powershell
+Set-Location E:\project_code\hospital
+.\.venv\Scripts\python.exe scripts\run_4d_b26_docker_regression.py --start
+```
+
+真实 v2 integration 需要一个只存在于本机的 identity map，把 benchmark user/member/source 映射到 Docker PostgreSQL 的 demo rows；不能把这个文件提交到 GitHub。运行方式、PostgreSQL shadow transaction、RAG source allow-list、Provider sandbox 和 A/B/C/D preview 见 [4D-B2.6 集成状态](4D_B2.6_INTEGRATION_STATUS.md)。
+
+Docker 回归报告中的 `19/19` 是本机部署和接口证据，不是生产 SLO；v2 `pending_review` 数据生成的 report 仍标记为 `preview`。
+
 ## 8. 停止、重启和清空
 
 ### 8.1 停止但保留容器与数据
@@ -675,7 +688,7 @@ docker compose down -v
 2. uvicorn PowerShell 没有 traceback。
 3. `http://localhost:8000/health` 返回 `{"status":"ok"}`。
 4. `GET /api/family-members` 能找到 demo member。
-5. 再按 [2E-1 知识搜索实战](learning/06_2E1_KNOWLEDGE_SEARCH_API_EXERCISE.md) 的 Postman 章节测试目标接口。
+5. 再按 [API 开发教程](learning/API_DEVELOPMENT_TUTORIAL.md) 的 Postman 章节测试目标接口。
 
 ## 10. 常见故障
 
@@ -794,7 +807,10 @@ MODEL_PROVIDER=openai_compatible
 MODEL_API_BASE=https://your-provider.example/v1
 MODEL_API_KEY=your-real-key
 MODEL_NAME=your-real-model-name
+MODEL_THINKING_MODE=disabled
 MODEL_TIMEOUT_MS=10000
+MODEL_INPUT_PRICE_PER_1M_USD=0.15
+MODEL_OUTPUT_PRICE_PER_1M_USD=0.60
 ```
 
 配置后重建 backend，并先执行一次 live 诊断：
@@ -805,3 +821,13 @@ docker compose exec -T backend python -m scripts.check_model_provider --live
 ```
 
 看到 `primary_provider_verified=true` 才说明外部 primary 真正连通。`effective_provider=deterministic` 只能说明发生了 fallback。完整 URL 规则、Ollama 宿主机地址、退出码与恢复步骤见 [LLM_CONFIGURATION.md](LLM_CONFIGURATION.md)。
+
+4D-B3 真实评测默认不运行模型。先做离线检查：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+docker compose exec -T backend python scripts/run_4d_b3_real_llm.py `
+  --output-dir output/benchmarks/4d-b3-real-llm-check
+```
+
+只有确认要产生真实模型费用时，才加入 `--live`、本地 identity map 和 `--max-cases 1`。完整流程见 [4D-B3 真实模型评测](4D_B3_REAL_LLM.md)。

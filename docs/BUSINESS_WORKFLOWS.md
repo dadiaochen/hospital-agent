@@ -11,11 +11,13 @@
 ```text
 用户请求 -> 可信成员/资源校验 -> Request Safety Guard -> Complexity Router
   -> 简单：对应 Domain Agent
-  -> 复杂：一次性 TaskPlanner -> 串行 bounded Supervisor -> Domain Agents
+  -> 复杂：一次性 TaskPlanner -> bounded Supervisor -> Domain Agents
 -> Action Policy Guard -> 可选本地 DRAFT
 -> Model Gateway 候选答案 -> Final Output SafetyAgent
 -> 冻结产物 -> Context Reset -> Deterministic Evaluator
 ```
+
+4D-B2.1 已将患者端入口接入 `UnifiedHealthGraph`：统一图先执行 Router、一次性 Planner/Supervisor 和领域结果投影，再进入现有 ProductWorkflow 适配器完成业务 Tool、草稿、确认和冻结。4D-B2.2 已把复杂计划表示成有界 DAG：只有依赖已满足、只读且无写工具的领域步骤可以 fan-out 并行，结果按 `step_id` 确定性合并；任何确认、写操作、Checkpoint、安全检查和评测节点仍按固定边串行执行。4D-B2.3 已在同一次最终答案产物中保存 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`，4D-B2.4 已生成待审核的 300/1200 v2 数据；B2.5 已完成内存 projection、九类 grader 和 preview Runner；B2.6 已接入 PostgreSQL shadow transaction、case-scoped RAG、Provider sandbox、真实图执行和 Docker 19/19 回归，但全量正式消融报告仍未冻结。
 
 任务七把“可选本地 DRAFT”固定为受保护动作的状态机入口：新业务任务首轮在作用域、动作和来源检查通过后自动产生本地 `DRAFT`；用户确认的是后续本地执行，不是是否允许生成草稿。确认 continuation 必须在同一 `task_id` 下重新校验 `user_id`、`member_id`、draft version、request fingerprint、idempotency key 和 Safety decision，再串行推进 `DRAFT -> CONFIRMED -> EXECUTED`。任何外部医院、药店、支付或通知状态都保持 `not_submitted`。
 
@@ -28,6 +30,8 @@
 - 本地 DRAFT 可以自动生成；复诊、购药、提醒、健康档案写入等执行动作必须经过用户确认。
 - 用户确认通过同一 task 下新的 continuation run 处理，不恢复旧 scratchpad，并重新读取可变业务事实。
 - PostgreSQL 保存权威 checkpoint；Redis 只做 TTL 缓存，故障时回源 PostgreSQL。
+
+评测边界：4D-B3 的 shadow run 会生成本地 `DRAFT`，并在冻结审核产物中保留 `ConfirmationDraftSnapshot`，用于核对草稿编号、摘要、关键提醒字段、成员、动作、版本和 `external_action_status=not_submitted`。该快照不是可继续确认的业务记录；正常 `/api/business-tasks` 响应才返回完整 `confirmation_draft` 并由 Task Checkpoint 保存。用户可见回答不能只说“已生成草稿”，还必须提供可审计的草稿编号、关键字段和安全摘要。
 
 任务八把共用续跑契约具体化为：首次 run 写入 `task_checkpoints` 的版本 1，确认 run 在同一 `task_id` 下创建新的 `run_id` 和 `parent_run_id`，并把 checkpoint/confirmation version 推进到新版本。Redis 只缓存带 `user_id/member_id/task_id/thread_id/version` 作用域的投影；缓存 miss、过期、版本错配或不可用时由 PostgreSQL 重建。偏好写入必须通过 `/api/preferences` 的显式确认、同成员 source version 和已执行状态校验。
 

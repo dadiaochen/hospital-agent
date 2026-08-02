@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 import json
 from time import perf_counter
-from typing import Any, Protocol, TypeVar, runtime_checkable
+from typing import Any, Literal, Protocol, TypeVar, runtime_checkable
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -91,6 +91,7 @@ class OpenAICompatibleModelProvider:
         api_key: str,
         model_name: str,
         timeout_ms: int,
+        thinking_mode: Literal["default", "disabled", "enabled"] = "default",
         client: httpx.Client | None = None,
     ) -> None:
         if not api_base.strip() or not api_key.strip() or not model_name.strip():
@@ -98,6 +99,7 @@ class OpenAICompatibleModelProvider:
         self._api_base = api_base.rstrip("/")
         self._api_key = api_key
         self._model_name = model_name
+        self._thinking_mode = thinking_mode
         self._client = client or httpx.Client(timeout=timeout_ms / 1000)
         self._owns_client = client is None
 
@@ -106,17 +108,20 @@ class OpenAICompatibleModelProvider:
         return self._model_name
 
     def invoke(self, request: ModelCallRequest) -> ProviderRawResponse:
+        request_payload: dict[str, Any] = {
+            "model": self.model_name,
+            "messages": [message.model_dump() for message in request.messages],
+            "temperature": request.temperature,
+            "max_tokens": request.max_output_tokens,
+            "response_format": {"type": "json_object"},
+        }
+        if self._thinking_mode != "default":
+            request_payload["thinking"] = {"type": self._thinking_mode}
         try:
             response = self._client.post(
                 f"{self._api_base}/chat/completions",
                 headers={"Authorization": f"Bearer {self._api_key}"},
-                json={
-                    "model": self.model_name,
-                    "messages": [message.model_dump() for message in request.messages],
-                    "temperature": request.temperature,
-                    "max_tokens": request.max_output_tokens,
-                    "response_format": {"type": "json_object"},
-                },
+                json=request_payload,
             )
             response.raise_for_status()
         except httpx.TimeoutException as exc:
@@ -336,6 +341,7 @@ def create_model_gateway(
         api_key=configured.model_api_key.get_secret_value(),
         model_name=configured.model_name,
         timeout_ms=configured.model_timeout_ms,
+        thinking_mode=configured.model_thinking_mode,
         client=http_client,
     )
     return ModelGateway(

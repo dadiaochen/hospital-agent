@@ -182,11 +182,19 @@ python -m app.rag.indexer
 
 评测需要同时读取 `ExpectedCase`、`RetrievalResult`、`SourceRef`、`FinalAnswer` 和 `RunTrace`。`LLM-as-a-Judge` 只能作为辅助评审，引用正确性和无来源医疗结论必须优先采用规则、标注与人工抽查。
 
+4D-B 最终报告分别运行 keyword、PostgreSQL pgvector、hybrid RRF 和向量故障后的关键词降级，并计算 Recall@3、Recall@5、MRR、引用正确率、无答案拒答率和过期来源拒绝率。当前 12 条 `KeywordRetriever` 本地结果不能替代 Docker pgvector 指标；4D-B2.3 已接入 FinalClaim，4D-B2.4 已生成待审核的 v2 Query，B2.5 的 `rag_grader` 已能在内存 projection 上检查 source coverage 和 stale source 拒绝，但不能替代真实索引召回。执行方案见 [Agent 评测与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。
+
 医疗知识 RAG 与个人状态严格隔离：系统不建立个人健康向量记忆，不把完整聊天、处方、报告原值、过敏史或药箱库存嵌入知识库。此类事实每次 run 从业务数据库或 Provider 重新读取；RAG 只检索经过版本管理的通用医疗规则、流程和解释资料。
 
 4B 任务五的 Router 和任务六的 deterministic 领域编排只输出固定领域、步骤和来源需求契约，不执行检索；真实 RAG 来源仍由后续 Tool/Provider 接线后的领域 Agent 获取。任务六不会把没有 `SourceRef` 的工作流占位结果当作医学事实。
 
 4B 任务七不改变 RAG 的召回和 embedding 规则。它只把已有 `SourceRef`、RAG source pointer 和安全决策带入 Action Policy/Final Output Safety 边界；没有有效来源时，最终答案仍不能把模型解释升级为医疗事实。任务八已将 `SourceRef` 的 source id、member 和版本指针纳入 PostgreSQL 权威 checkpoint；Redis 只缓存这些指针的短期投影，恢复后仍需按当前成员和来源版本校验，不能把个人健康数据写入知识 namespace。
+
+## 4D-B2.6 真实集成边界
+
+4D-B2.6 增加了真实评测适配边界，但没有把个人医疗事实写入知识库：`PostgresV2Materializer` 在 PostgreSQL 事务中按 case 创建临时数据，`IntegrationIdentityMap` 显式映射 benchmark 身份，`ScopedPostgresRetriever` 只允许当前 case 的 source alias，`ScopedProviderSandbox` 记录 Provider attempt 和故障注入结果，`UnifiedHealthGraphIntegrationExecutor` 执行真实业务图并冻结 `RunTrace`。
+
+因此，真实集成报告可以证明数据、RAG、Provider 和业务图的连接方式，但仍不能把单个开发样例外推成 300/1200 数据集的最终质量指标。A/B/C/D 当前已提供 deterministic preview；正式消融必须使用审核后的 gold、同一版本的 PostgreSQL 物化和完整 v2 runner。Docker 19/19 回归通过只证明启动、迁移、seed、pgvector、API、Redis 回源和并发确认链路可运行。
 
 ## 10. 验证
 
