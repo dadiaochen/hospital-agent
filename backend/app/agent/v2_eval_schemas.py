@@ -115,8 +115,12 @@ class V2RunArtifacts(ContractModel):
     route_mode: ExpectedRoute
     observed_intent: Intent
     observed_agent_roles: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
-    observed_steps: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
-    observed_dependency_edges: tuple[EvalDependencyEdge, ...] = Field(
+    observed_domain_steps: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    observed_domain_dependency_edges: tuple[EvalDependencyEdge, ...] = Field(
+        default_factory=tuple
+    )
+    observed_governance_steps: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    observed_governance_edges: tuple[EvalDependencyEdge, ...] = Field(
         default_factory=tuple
     )
     observed_tool_names: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
@@ -134,6 +138,27 @@ class V2RunArtifacts(ContractModel):
 
     @model_validator(mode="after")
     def validate_trace_scope(self) -> "V2RunArtifacts":
+        domain_steps = set(self.observed_domain_steps)
+        governance_steps = set(self.observed_governance_steps)
+        if domain_steps & governance_steps:
+            raise ValueError("observed domain and governance steps must be disjoint")
+        if any(
+            edge.upstream_step_id not in domain_steps
+            or edge.downstream_step_id not in domain_steps
+            for edge in self.observed_domain_dependency_edges
+        ):
+            raise ValueError(
+                "observed domain dependency edges must reference domain steps"
+            )
+        known_steps = domain_steps | governance_steps
+        if any(
+            edge.upstream_step_id not in known_steps
+            or edge.downstream_step_id not in known_steps
+            for edge in self.observed_governance_edges
+        ):
+            raise ValueError(
+                "observed governance edges must reference known steps"
+            )
         trace = self.run_trace
         observed_sources = set(self.observed_source_ids)
         trace_sources = {

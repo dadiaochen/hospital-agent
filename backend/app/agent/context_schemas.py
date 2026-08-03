@@ -18,6 +18,9 @@ ContextMode = Literal["all_history", "dependency_only"]
 ActionType = Literal["draft", "query", "safety_review"]
 ExecutionAgentRole = Literal[
     "Planner",
+    "TriageAgent",
+    "MedicationAgent",
+    "ReportAgent",
     "ProfileAgent",
     "RefillAgent",
     "PharmacyAgent",

@@ -804,3 +804,72 @@ E0 评测协议 DOCS DONE
 ```
 
 先统一运行图和冻结 Trace，再生成大规模数据；B2.6 已完成真实单样例 adapter 和 Docker 19/19 回归。B3 已完成真实模型 runner、usage/cost/p95 聚合、审核队列和 finalizer，8 条 `deepseek-v4-flash` development 产物经人工复核 8/8 通过，并冻结 report/queue hash。该局部 final report 可以按 8 条样本范围进入简历；300/1200 全量指标仍需完整 identity/source map、三 split 真实物化和 A/B/C/D 正式报告。
+## 4D-B5.5 最终评测口径：分别评测业务 DAG 与治理图
+
+4D-B5.1 采用方案 A 后，评测数据和 grader 必须把两类结构分开读取，不能把固定治理调用混入 Supervisor 的业务计划准确率。
+
+### 业务编排层
+
+`TaskPlan` 的评测对象只有三个 canonical domain Agent：
+
+- `domain_steps`：`TriageAgent`、`MedicationAgent`、`ReportAgent` 的业务步骤；
+- `domain_dependency_edges`：领域步骤之间的业务依赖边，例如 `ReportAgent -> MedicationAgent`；
+- Supervisor 的 ready set、执行顺序、工具调用和结果，必须只从上述业务步骤与边计算。
+
+对应的确定性指标包括：
+
+- domain step precision / recall / F1；
+- domain dependency edge precision / recall / F1；
+- domain tool set exact match；
+- domain step order / ready-set correctness；
+- 未计划业务步骤调用率；
+- Supervisor 重试、终止和跨成员隔离是否符合计划。
+
+### 固定治理层
+
+`governance_steps` 与 `governance_edges` 单独评测：
+
+- 治理步骤包括 `SafetyAgent`、Confirmation、FinalAnswer 和 `EvaluatorAgent`；
+- 治理边由 `UnifiedHealthGraph` 固定定义并强制执行；
+- `safety-review` 只属于治理语义，不是 Supervisor 的候选业务步骤；
+- Supervisor 不得新增、删除、重排或绕过治理步骤。
+
+对应的确定性指标包括：
+
+- Safety 检查是否在高风险输出或动作前执行；
+- Confirmation 状态是否按要求出现，是否阻止未确认副作用；
+- FinalAnswer 是否在安全检查后冻结；
+- Evaluator 是否只读冻结产物、未修改答案和业务状态；
+- 治理边完整率、绕过率和错误顺序率。
+
+### v2 Gold 字段约定
+
+后续 v2 gold 应同时提供两组期望值：
+
+```text
+expected_domain_steps
+expected_domain_dependency_edges
+expected_governance_steps
+expected_governance_edges
+```
+
+旧字段若同时包含业务步骤和 `safety-review`，迁移时必须先按节点类型拆分，再进入 grader；不能直接把混合列表当作 Supervisor 计划的 gold。任何只包含治理边而没有业务步骤的 case，仍然可以作为安全治理 case，但不能用来计算 Supervisor 的 domain step recall。
+
+### 当前状态与剩余门槛
+
+4D-B5.5 已将上述字段映射、混合边拆分、治理绕过和错误排序校验落地到
+`v2_benchmark_schemas.py`、`v2_integration.py`、`v2_graders.py` 和
+`test_v2_b5_governance_split.py`。当前 `4d-b5.5` 数据集包含 300 个
+WorldState/1200 条 Query；其中原有的依赖边均是指向 `safety-review` 的固定治理边，
+因此重分类后 domain dependency edge 的生成分布为 0。真实的
+`ReportAgent -> MedicationAgent` / `TriageAgent -> MedicationAgent` 依赖由
+Planner 单元测试和 4B harness fixture 覆盖，不从 v2 数据中伪造正例。
+
+仍需独立完成：
+
+1. 人工审核后冻结 300 个 WorldState、1200 条 Query 及 manifest；
+2. 完成真实 PostgreSQL integration、Provider/RAG sandbox 和 Docker 全量回归；
+3. 生成同时展示 domain metrics 与 governance metrics 的正式三 split 报告。
+
+在上述工作完成前，文档只能把 v2 结果写成 `preview/pending_review`，不能宣称人工审核、
+全量 PostgreSQL integration 或最终业务质量指标已经完成。

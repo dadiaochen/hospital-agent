@@ -13,63 +13,38 @@ afterEach(() => {
 });
 
 describe("AgentPage", () => {
-  it.each([
-    {
-      label: "正常续方",
-      memberId: "member-father",
-      userInput: "我爸的降压药快吃完了，帮我看看能不能续方。",
-      medicationName: "苯磺酸氨氯地平片",
-    },
-    {
-      label: "复诊材料",
-      memberId: "member-mother",
-      userInput: "我妈上次开的中药快喝完了，帮我整理复诊材料。",
-      medicationName: "中药颗粒",
-    },
-    {
-      label: "用药提醒",
-      memberId: "member-mother",
-      userInput: "帮我给妈妈设置每天早晚的用药提醒。",
-      medicationName: "二甲双胍",
-    },
-    {
-      label: "高风险拦截",
-      memberId: "member-father",
-      userInput: "我爸这个降压药能不能加量？",
-      medicationName: "苯磺酸氨氯地平片",
-    },
-  ])("sends the $label preset in the selected member scope", async ({
-    label,
-    memberId,
-    userInput,
-    medicationName,
-  }) => {
-    const fetchMock = runtimeFetch(makeAgentExecution({ memberId }));
+  it("starts with an empty state and submits a natural-language question", async () => {
+    const userInput = "我爸的降压药快吃完了，帮我看看能不能续方。";
+    const fetchMock = runtimeFetch(makeAgentExecution());
     vi.stubGlobal("fetch", fetchMock);
     renderPage();
 
-    await screen.findByRole("button", { name: label });
-    if (memberId !== "member-father") {
-      await userEvent.selectOptions(
-        screen.getByLabelText("当前家庭成员"),
-        memberId,
-      );
-    }
-    await userEvent.click(screen.getByRole("button", { name: label }));
-    await userEvent.click(screen.getByRole("button", { name: "运行 Agent" }));
+    expect(await screen.findByText("你好，想从哪件事开始？")).toBeTruthy();
+    await screen.findByText("正在为：陈父");
+    const submitButton = await screen.findByRole("button", { name: "开始咨询" });
+    const input = screen.getByRole("textbox", { name: "输入你的问题" });
+    expect(submitButton).toHaveProperty("disabled", true);
 
-    await screen.findByText("结构化答案");
+    await userEvent.click(screen.getByRole("button", { name: "用药与续方" }));
+    expect(input).toHaveProperty("value", "家人的药快吃完了，帮我整理续方需要准备的信息。");
+    await userEvent.clear(input);
+    await userEvent.type(input, userInput);
+    expect(submitButton).toHaveProperty("disabled", false);
+    await userEvent.click(submitButton);
+
+    await screen.findByText("整理结果");
+    expect(screen.getAllByText(userInput).length).toBeGreaterThan(0);
     const postCall = fetchMock.mock.calls.find(
       ([, init]) => (init as RequestInit | undefined)?.method === "POST",
     );
     const body = JSON.parse(String((postCall?.[1] as RequestInit).body));
     expect(body).toMatchObject({
-      member_id: memberId,
+      member_id: "member-father",
       user_input: userInput,
-      medication_name: medicationName,
-      city: "上海",
       human_confirmation_granted: false,
     });
+    expect(body.medication_name).toBeUndefined();
+    expect(body.city).toBeUndefined();
   });
 
   it("renders a grounded answer and sends the initial unconfirmed contract", async () => {
@@ -78,51 +53,56 @@ describe("AgentPage", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "正常续方" }));
-    await userEvent.click(screen.getByRole("button", { name: "运行 Agent" }));
+    await submitPrompt("我爸的降压药快吃完了，帮我看看能不能续方。");
 
-    expect(await screen.findByText("结构化答案")).toBeTruthy();
-    expect(screen.getByText("DRAFT")).toBeTruthy();
-    expect(screen.getByText("task-3b-demo")).toBeTruthy();
+    expect(await screen.findByText("整理结果")).toBeTruthy();
+    expect(screen.getByText("信息已经整理好了")).toBeTruthy();
     expect(screen.getByText(execution.artifacts.run_trace.final_answer.content)).toBeTruthy();
-    expect(screen.getByText(/source_id: source-tool-1/)).toBeTruthy();
-    expect(screen.getByText("human_confirmation_required")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "确认并创建本地草稿" })).toBeTruthy();
+    expect(screen.getByText("参考信息")).toBeTruthy();
+    expect(screen.getByText("安全提示")).toBeTruthy();
+    expect(screen.queryByText("DRAFT")).toBeNull();
+    expect(screen.queryByText("task-3b-demo")).toBeNull();
+    expect(screen.queryByText(/source_id:/)).toBeNull();
+    expect(screen.getByText("请确认是否继续")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "确认并继续" })).toBeTruthy();
+    expect(screen.queryByText(/本地草稿|外部提交|continuation run/)).toBeNull();
 
     const postCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST");
     const body = JSON.parse(String((postCall?.[1] as RequestInit).body));
     expect(body).toMatchObject({
       member_id: "member-father",
       human_confirmation_granted: false,
-      medication_name: "苯磺酸氨氯地平片",
+      user_input: "我爸的降压药快吃完了，帮我看看能不能续方。",
     });
   });
 
-  it("continues only after the local-draft acknowledgement", async () => {
-    const initial = makeAgentExecution();
+  it("continues only after the user-readable acknowledgement", async () => {
+    const initial = makeAgentExecution({ intent: "reminder" });
     const continued = makeAgentExecution({
       runId: "run-3b-continued",
       status: "completed",
       confirmationPresent: true,
+      intent: "reminder",
       finalAnswer: "本地提醒草稿已创建，尚未提交到外部系统。",
     });
     const fetchMock = runtimeFetch(initial, continued);
     vi.stubGlobal("fetch", fetchMock);
     renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "用药提醒" }));
-    await userEvent.click(screen.getByRole("button", { name: "运行 Agent" }));
-    const confirmButton = await screen.findByRole("button", { name: "确认并创建本地草稿" });
+    await submitPrompt("帮我给妈妈设置每天早晚的用药提醒。");
+    const confirmButton = await screen.findByRole("button", { name: "确认并继续" });
     expect(confirmButton).toHaveProperty("disabled", true);
 
-    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("checkbox", { name: "确认继续" }));
     await userEvent.click(confirmButton);
 
-    expect(await screen.findByText("本地提醒草稿已创建，尚未提交到外部系统。")).toBeTruthy();
-    expect(screen.getByText("LOCAL_COMPLETED")).toBeTruthy();
-    expect(screen.getByText("continuation run")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "确认并创建本地草稿" })).toBeNull();
-    expect(screen.getByText(/外部提交状态：/)).toBeTruthy();
+    expect(await screen.findByText("我已经根据现有健康记录整理了用药提醒准备内容。")).toBeTruthy();
+    expect(screen.getByText("这次咨询已完成")).toBeTruthy();
+    expect(screen.getByText("这次整理已经完成，可以回看这次咨询结果。")).toBeTruthy();
+    expect(screen.queryByText("相关信息已经整理好，下一步需要你确认后才能继续。")).toBeNull();
+    expect(screen.queryByRole("button", { name: "确认并继续" })).toBeNull();
+    expect(screen.queryByText(/外部提交状态：/)).toBeNull();
+    expect(screen.queryByText(/本地提醒草稿|外部系统/)).toBeNull();
 
     const postBodies = fetchMock.mock.calls
       .filter(([, init]) => (init as RequestInit | undefined)?.method === "POST")
@@ -136,8 +116,7 @@ describe("AgentPage", () => {
     vi.stubGlobal("fetch", runtimeFetch(execution));
     renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "正常续方" }));
-    await userEvent.click(screen.getByRole("button", { name: "运行 Agent" }));
+    await submitPrompt("我爸的降压药快吃完了，帮我看看能不能续方。");
     expect(await screen.findByText(execution.artifacts.run_trace.final_answer.content)).toBeTruthy();
 
     await userEvent.selectOptions(screen.getByLabelText("当前家庭成员"), "member-mother");
@@ -161,8 +140,7 @@ describe("AgentPage", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "正常续方" }));
-    await userEvent.click(screen.getByRole("button", { name: "运行 Agent" }));
+    await submitPrompt("我爸的降压药快吃完了，帮我看看能不能续方。");
     await userEvent.selectOptions(screen.getByLabelText("当前家庭成员"), "member-mother");
 
     await act(async () => {
@@ -171,7 +149,7 @@ describe("AgentPage", () => {
     });
 
     expect(screen.queryByText(execution.artifacts.run_trace.final_answer.content)).toBeNull();
-    expect(screen.getByText("当前成员：陈母")).toBeTruthy();
+    expect(screen.getByText("正在为：陈母")).toBeTruthy();
   });
 
   it("does not offer a business confirmation after a safety block", async () => {
@@ -184,12 +162,24 @@ describe("AgentPage", () => {
     vi.stubGlobal("fetch", runtimeFetch(blocked));
     renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "高风险拦截" }));
-    await userEvent.click(screen.getByRole("button", { name: "运行 Agent" }));
+    await submitPrompt("我爸这个降压药能不能加量？");
 
-    expect(await screen.findByText("安全拦截")).toBeTruthy();
-    expect(screen.getByText("dosage_change_request")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "确认并创建本地草稿" })).toBeNull();
+    expect(await screen.findByText("安全提示")).toBeTruthy();
+    expect(screen.getByText("这件事需要专业人员确认")).toBeTruthy();
+    expect(screen.queryByText("dosage_change_request")).toBeNull();
+    expect(screen.queryByRole("button", { name: "确认并继续" })).toBeNull();
+  });
+
+  it("projects internal backend answer language into a user-readable result", async () => {
+    const internalAnswer = "Prepared a local refill result from sources: health_profiles, prescriptions, medicine_box_items. No hospital, purchase, payment, or reminder action was submitted.";
+    vi.stubGlobal("fetch", runtimeFetch(makeAgentExecution({ finalAnswer: internalAnswer })));
+    renderPage();
+
+    await submitPrompt("请帮我整理父亲最近的用药记录");
+
+    expect(await screen.findByText("我已经根据家庭健康记录整理了续方准备所需的信息。")).toBeTruthy();
+    expect(screen.queryByText(internalAnswer)).toBeNull();
+    expect(screen.queryByText(/Prepared a local|No hospital, purchase/)).toBeNull();
   });
 });
 
@@ -200,6 +190,12 @@ function renderPage() {
       <AgentPage />
     </MemberProvider>,
   );
+}
+
+async function submitPrompt(userInput: string) {
+  await screen.findByText("正在为：陈父");
+  await userEvent.type(screen.getByRole("textbox", { name: "输入你的问题" }), userInput);
+  await userEvent.click(screen.getByRole("button", { name: "开始咨询" }));
 }
 
 function runtimeFetch(initial: ReturnType<typeof makeAgentExecution>, continued?: ReturnType<typeof makeAgentExecution>) {

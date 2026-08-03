@@ -80,18 +80,21 @@ def test_complex_request_uses_one_shot_planner_and_parallel_supervisor() -> None
     assert run.used_supervisor is True
     assert run.completed is True
     assert [result.agent_role for result in run.results] == [
-        "MedicationAgent",
         "ReportAgent",
+        "MedicationAgent",
     ]
     assert [decision.action for decision in run.decisions] == [
         "call_role",
         "call_role",
         "finish",
     ]
-    assert run.plan.steps[1].dependencies == ()
+    assert run.plan.steps[0].dependencies == ()
+    assert run.plan.steps[1].dependencies == ("step_1",)
+    assert run.plan.dependency_edges[0].upstream_step_id == "step_1"
+    assert run.plan.dependency_edges[0].downstream_step_id == "step_2"
     assert run.plan.max_parallelism == 2
     assert run.execution_mode == "parallel"
-    assert run.parallel_batches == (("step_1", "step_2"),)
+    assert run.parallel_batches == ()
 
 
 def test_planner_rejects_simple_route() -> None:

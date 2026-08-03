@@ -12,6 +12,7 @@ from app.models import (
     AgentToolCall,
     FamilyMember,
     HealthProfile,
+    MedicalDocument,
     MedicineBoxItem,
     Pharmacy,
     PharmacyInventory,
@@ -63,6 +64,45 @@ def test_family_and_medication_reads_are_scoped_to_demo_user(
     purchases = client.get(f"/api/family-members/{ids['father_id']}/purchase-records")
     assert purchases.status_code == 200
     assert purchases.json()["items"][0]["medicine_name"] == "amlodipine"
+
+
+def test_report_reads_follow_the_frozen_detail_contract_and_member_scope(
+    api_client: tuple[TestClient, dict[str, str]],
+) -> None:
+    client, ids = api_client
+
+    reports = client.get(f"/api/family-members/{ids['father_id']}/reports")
+    assert reports.status_code == 200
+    assert reports.json()["items"][0] == {
+        "id": ids["report_id"],
+        "member_id": ids["father_id"],
+        "title": "Father sample health report",
+        "document_type": "checkup_report",
+        "status": "ready",
+        "reported_at": reports.json()["items"][0]["reported_at"],
+        "updated_at": reports.json()["items"][0]["updated_at"],
+        "document_version": "1.0",
+        "source_name": "Father sample health report",
+        "metric_count": 1,
+    }
+
+    detail = client.get(
+        f"/api/family-members/{ids['father_id']}/reports/{ids['report_id']}"
+    )
+    assert detail.status_code == 200
+    payload = detail.json()
+    assert payload["report"]["member_id"] == ids["father_id"]
+    assert payload["metrics"][0]["name"] == "空腹血糖"
+    assert payload["metrics"][0]["interpretation_status"] == "within_range"
+    assert payload["metrics"][0]["source_ref"] == payload["sources"][0]["id"]
+    assert payload["safety"]["requires_professional_review"] is True
+    assert "诊断" in payload["summary"]["disclaimer"]
+
+    cross_member = client.get(
+        f"/api/family-members/{ids['other_member_id']}/reports/{ids['report_id']}"
+    )
+    assert cross_member.status_code == 404
+    assert cross_member.json()["error"]["code"] == "not_found"
 
 
 def test_cross_member_reads_return_a_uniform_not_found_error(
@@ -143,6 +183,8 @@ def test_openapi_includes_the_implemented_read_endpoints(
     assert "/api/family-members/{member_id}/medicine-box" in paths
     assert "/api/pharmacy-inventory" in paths
     assert "/api/agent-runs/{run_id}/tool-calls" in paths
+    assert "/api/family-members/{member_id}/reports" in paths
+    assert "/api/family-members/{member_id}/reports/{report_id}" in paths
 
 
 def _seed_api_data(session: Session) -> dict[str, str]:
@@ -173,6 +215,47 @@ def _seed_api_data(session: Session) -> dict[str, str]:
             safety_notes=["do not change dosage"],
         )
     )
+    report = MedicalDocument(
+        id="report-api",
+        user_id=demo_user.id,
+        member_id=father.id,
+        document_type="checkup_report",
+        title="Father sample health report",
+        source_text="Synthetic report source text",
+        status="parsed",
+        extracted_content={
+            "summary": {
+                "text": "报告中的一项指标已整理。",
+                "disclaimer": "这是信息整理，不是诊断。",
+            },
+            "metrics": [
+                {
+                    "id": "metric-api",
+                    "name": "空腹血糖",
+                    "value": "5.6",
+                    "unit": "mmol/L",
+                    "reference_range": {
+                        "low": 3.9,
+                        "high": 6.1,
+                        "display_text": "3.9–6.1 mmol/L",
+                    },
+                    "interpretation_status": "within_range",
+                    "trend": "unknown",
+                    "explanation": "结果与报告提供的参考范围相符。",
+                }
+            ],
+            "sections": [
+                {
+                    "id": "section-api",
+                    "title": "检查说明",
+                    "content": "这是测试用报告说明。",
+                }
+            ],
+        },
+        document_version="1.0",
+        need_human_confirmation=True,
+    )
+    session.add(report)
     session.add(
         MedicineBoxItem(
             id="box-father",
@@ -283,6 +366,7 @@ def _seed_api_data(session: Session) -> dict[str, str]:
     return {
         "father_id": father.id,
         "other_member_id": other_member.id,
+        "report_id": report.id,
         "run_id": run.id,
         "other_run_id": other_run.id,
     }

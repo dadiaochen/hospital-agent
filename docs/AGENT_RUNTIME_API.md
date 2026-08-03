@@ -1,6 +1,6 @@
 # Agent Runtime 与运行 API
 
-> 本文主要记录当前 2G-2 可运行兼容实现。它仍保留“确认后创建草稿”的旧接口语义；4B 任务七的“首次 run 自动创建本地 DRAFT，确认 run 执行动作”已经接入新 `/api/business-tasks` 链路，任务八的 PostgreSQL Task Checkpoint 与 Redis TTL 回源也已接入新链路。最终状态以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
+> 本文主要记录当前 2G-2 可运行兼容实现。它仍保留“确认后创建草稿”的旧接口语义；4B 任务七的“首次 run 自动创建本地 DRAFT，确认 run 执行动作”已经接入新 `/api/business-tasks` 链路，任务八的 PostgreSQL Task Checkpoint 与 Redis TTL 回源也已接入新链路。4D-B4 进一步让新业务链由 `UnifiedHealthGraph -> SupervisorBusinessWorkflow -> 运行时领域 Agent -> Tool Registry` 执行；本文所述 `AgentRuntimeService -> LangGraphAgentWorkflow` 仍是 `/api/agent-runs` 的兼容入口。最终状态以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
 
 ## 1. 定位
 

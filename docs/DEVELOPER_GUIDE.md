@@ -250,3 +250,38 @@ python -m app.agent.runtime_harness `
 - 合成 fixture 可以提交，但必须使用合成 ID，并明确标记为测试数据；不得把本机 PostgreSQL 导出或真实模型原始输出伪装成 fixture。
 
 本项目明确不以 MCP Server、OpenTelemetry/Jaeger 或复杂自动重规划作为目标。当前 bounded Supervisor 已支持有界 DAG，只并行相互独立、依赖已满足、只读且无副作用的领域步骤。确认、写操作、Checkpoint、安全治理和评测保持串行，任务状态和副作用仍由 PostgreSQL 事务、幂等键和状态条件更新保证一致性。
+
+## UX-06 报告详情验证
+
+报告详情契约冻结后，前端使用 `/reports` 和 `/reports/[reportId]` 读取报告列表与详情，后端使用现有 `medical_documents` 数据。增量验证命令为：
+
+```powershell
+Set-Location E:\project_code\hospital
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+.\.venv\Scripts\python.exe -m pytest backend\tests\test_read_api.py -q -p no:cacheprovider --basetemp=var\pytest\ux06-read-api
+Set-Location frontend
+npm run test
+npm run typecheck
+npm run build
+```
+
+本次验证结果为报告接口测试 6 个通过、后端全量 361 个通过、前端 34 个测试通过、类型检查通过和生产构建通过；UX-08 之前不新增上传写入或内部入口清理。
+
+## UX-08 用户端入口清理
+
+在 `frontend` 目录验证：
+
+```powershell
+npm run typecheck
+npm run test
+npm run build
+npm run test:e2e -- e2e/portal-entry-cleanup.spec.ts
+```
+
+UX-08 的兼容跳转配置位于 `frontend/next.config.mjs`；公共导航只由 `frontend/lib/navigation.ts` 提供。本次类型检查、35 个前端测试、生产构建和 2 个公共入口 E2E 均通过；E2E 使用明确的 `127.0.0.1` 基址，避免命中机器上的其他 `localhost:3000` 服务。下一步按路线图进入 UX-09。
+
+## UX-09 开发者验收边界
+
+UX-09 的联调只允许修正既有接口契约，不新增页面背后的业务动作。检查顺序为：启动 Docker 前后端 → 验证成员切换和确认续跑 → 验证历史、家庭、报告的成员隔离 → 验证兼容路由 → 执行桌面/移动视觉与可访问性检查 → 执行前端全量测试、类型检查、构建和真实 E2E。低库存工具输入缺少药品名时，只能从当前成员已成功读取的药箱/处方事实补齐；没有事实不得猜测。
+
+本次收口使用 deterministic provider，前端 36 个测试、9 条真实 Playwright E2E、类型检查、生产构建和后端 1 条契约单测均通过。UX-09 完成后不再自动新增 UX 子阶段，后续需求须先更新 `docs/DEVELOPMENT_ROADMAP.md`。

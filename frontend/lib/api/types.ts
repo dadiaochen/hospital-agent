@@ -64,6 +64,85 @@ export type PurchaseRecord = {
   purchase_channel: string | null;
 };
 
+export type ReportStatus =
+  | "uploaded"
+  | "processing"
+  | "ready"
+  | "needs_review"
+  | "failed";
+
+export type ReportSummary = {
+  id: string;
+  member_id: string;
+  title: string;
+  document_type: string;
+  status: ReportStatus;
+  reported_at: string | null;
+  updated_at: string;
+  document_version: string;
+  source_name: string;
+  metric_count: number;
+};
+
+export type ReportReferenceRange = {
+  low: number | null;
+  high: number | null;
+  display_text: string;
+};
+
+export type ReportMetric = {
+  id: string;
+  name: string;
+  value: string | number | null;
+  unit: string | null;
+  reference_range: ReportReferenceRange | null;
+  interpretation_status:
+    | "within_range"
+    | "above_range"
+    | "below_range"
+    | "not_available";
+  trend: "up" | "down" | "stable" | "unknown";
+  measured_at: string | null;
+  explanation: string;
+  source_ref: string;
+};
+
+export type ReportSection = {
+  id: string;
+  title: string;
+  content: string;
+  source_ref: string;
+};
+
+export type ReportSource = {
+  id: string;
+  source_type: "medical_report" | "doctor_note" | "knowledge_base";
+  display_name: string;
+  document_version: string;
+  page_number: number | null;
+  excerpt: string | null;
+  verified: boolean;
+};
+
+export type ReportDetail = {
+  report: ReportSummary;
+  summary: {
+    text: string;
+    disclaimer: string;
+  };
+  metrics: ReportMetric[];
+  sections: ReportSection[];
+  sources: ReportSource[];
+  safety: {
+    requires_professional_review: boolean;
+    notice: string;
+  };
+};
+
+export type ReportListResponse = {
+  items: ReportSummary[];
+};
+
 export type PharmacyInventoryItem = {
   inventory_id: string;
   pharmacy_id: string;

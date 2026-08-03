@@ -1,0 +1,17 @@
+{
+  "report_id": "report-1",
+  "status": "completed",
+  "finalized_at": "2026-08-02T08:53:30.478798Z",
+  "dataset_version": "v2-test",
+  "dataset_split": "development",
+  "sample_count": 1,
+  "reviewed_pass_count": 1,
+  "reviewed_fail_count": 0,
+  "review_queue_canonical_sha256": "9e207a1b67c795511fdcfa924024e30685c3be9eb6f54699e2f8efb5004a1a25",
+  "artifact_sha256": {
+    "agent_eval_report.4d-b3.real-llm.json": "6e771e9ec15c9c461cbc8841c94b90996ff8e997272bb62703ebd6a5e274bd4b",
+    "agent_eval_report.4d-b3.real-llm.md": "7017f1a91477440157201654c6dfc0a5881ec5b4dc02065865c472a0bab022fa",
+    "badcase_review_queue.4d-b3.json": "450a4574e304b886c4680659c260016213c90e2e6287bfac09ee6ea8c0854257",
+    "badcase_review_queue.4d-b3.md": "27a2b023c965cfdc50d6f51a2b39dc66ed61c34877b5701e3236caf441e66fa1"
+  }
+}

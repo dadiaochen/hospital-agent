@@ -12,9 +12,23 @@ html {
 
 body {
   margin: 0;
+  background: #f7fbf9;
+  color: #173c38;
+  font-family: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
 a {
   text-decoration: none;
 }
 
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: #c9eee4;
+  color: #173c38;
+}

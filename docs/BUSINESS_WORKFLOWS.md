@@ -17,7 +17,7 @@
 -> 冻结产物 -> Context Reset -> Deterministic Evaluator
 ```
 
-4D-B2.1 已将患者端入口接入 `UnifiedHealthGraph`：统一图先执行 Router、一次性 Planner/Supervisor 和领域结果投影，再进入现有 ProductWorkflow 适配器完成业务 Tool、草稿、确认和冻结。4D-B2.2 已把复杂计划表示成有界 DAG：只有依赖已满足、只读且无写工具的领域步骤可以 fan-out 并行，结果按 `step_id` 确定性合并；任何确认、写操作、Checkpoint、安全检查和评测节点仍按固定边串行执行。4D-B2.3 已在同一次最终答案产物中保存 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`，4D-B2.4 已生成待审核的 300/1200 v2 数据；B2.5 已完成内存 projection、九类 grader 和 preview Runner；B2.6 已接入 PostgreSQL shadow transaction、case-scoped RAG、Provider sandbox、真实图执行和 Docker 19/19 回归，但全量正式消融报告仍未冻结。
+4D-B2.1/B4 已将患者端入口接入 `UnifiedHealthGraph` 和 `SupervisorBusinessWorkflow`：Router 形成目标角色，复杂任务由一次性 Planner 冻结计划，Supervisor 再实际调用运行时 Triage/Medication/Report Agent；领域 Agent 通过 Tool Registry 获取业务 Tool、Provider 和 RAG 证据，结果返回同一个业务 state。`FamilyHealthProductWorkflow` 只提供共享的 Safety、Confirmation、FinalAnswer 和 artifact helper，不再由外部 `business_domain` 直接选择最终执行分支。4D-B2.2 已把复杂计划表示成有界 DAG，但正式业务路径强制串行，避免确认和写状态竞争；独立只读并行仍用于受控评测。4D-B2.3 已在同一次最终答案产物中保存 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`，4D-B2.4 已生成待审核的 300/1200 v2 数据；B2.5 已完成内存 projection、九类 grader 和 preview Runner；B2.6 已接入 PostgreSQL shadow transaction、case-scoped RAG、Provider sandbox、真实图执行和 Docker 19/19 回归，但全量正式消融报告仍未冻结。
 
 任务七把“可选本地 DRAFT”固定为受保护动作的状态机入口：新业务任务首轮在作用域、动作和来源检查通过后自动产生本地 `DRAFT`；用户确认的是后续本地执行，不是是否允许生成草稿。确认 continuation 必须在同一 `task_id` 下重新校验 `user_id`、`member_id`、draft version、request fingerprint、idempotency key 和 Safety decision，再串行推进 `DRAFT -> CONFIRMED -> EXECUTED`。任何外部医院、药店、支付或通知状态都保持 `not_submitted`。
 
@@ -143,7 +143,7 @@
 
 Router、TaskPlanner、三个 Domain Agent 和 Supervisor 在 4B 目标架构中可以使用 Model Gateway 输出固定 schema 的候选决策；无 Key 时使用 deterministic policy。模型不能产生任意角色/工具、覆盖成员或安全策略。业务执行完成后，Gateway 根据压缩任务摘要和 SourceRefs 生成用户可见候选答案，再由 Final Output SafetyAgent 检查后冻结。
 
-当前任务六已经提供不依赖模型、数据库和业务工具的三个 deterministic 领域 Agent、一次性 Planner 和串行 bounded Supervisor；它们只返回结构化工作流结果，不伪造处方、库存或报告事实。Model-assisted 领域决策仍必须等后续接线，并且只能在固定 schema、角色/工具白名单和安全规则内运行。任何 timeout、HTTP、schema 或安全失败都必须记录 attempt，并结构化降级或回退 deterministic。Key、完整 Prompt 和 provider 原文不持久化。
+当前任务六仍提供不依赖模型、数据库和业务工具的三个 deterministic 领域 Agent、一次性 Planner 和 bounded Supervisor，供离线契约与消融使用。4D-B4 的 `runtime_domain_agents.py` 提供正式业务路径使用的 Tool-backed 三个角色；它们不直接持有数据库或 Provider，而是通过 Supervisor runtime 请求已注册 Tool。Model-assisted 领域决策仍必须受固定 schema、角色/工具白名单和安全规则约束。任何 timeout、HTTP、schema 或安全失败都必须记录 attempt，并结构化降级或回退 deterministic。Key、完整 Prompt 和 provider 原文不持久化。
 
 ## 9. 任务九 Provider 失败语义
 
@@ -164,3 +164,21 @@ Router、TaskPlanner、三个 Domain Agent 和 Supervisor 在 4B 目标架构中
 ## 4B 任务十二：真实后端链路
 
 任务十二没有改变业务状态机：首次请求仍只生成本地 `DRAFT`，确认续跑才允许本地状态推进。Docker 验收验证了三条业务任务 API、知识搜索和 422 错误映射；4 个并发确认只允许 1 次真实执行，Redis 停止时仍由 PostgreSQL checkpoint 恢复任务。该验收证明实现链路可运行，不代表已经接入真实医院、药店、支付或通知系统。
+
+## 用户端 UX-04 交互投影
+
+用户先看到咨询整理结果，再通过“我已阅读上面的整理内容，确认继续”完成显式确认；确认动作仍进入既有 continuation 和安全校验。历史咨询复用按 `member_id` 隔离的运行记录，只展示咨询内容、状态、时间和整理结果，不把内部 Trace、工具调用或外部动作状态当作用户任务。
+
+## 用户端 UX-06 报告详情投影
+
+用户从报告列表进入详情后，先看到报告摘要，再按指标查看数值、单位、参考范围、趋势和通俗解释，最后可以查看来源和阅读提示。该链路只读取已经存在的报告事实，不触发上传、解析、诊断、治疗、处方或外部提交；没有可解释指标或来源未核对时，页面展示相应状态并提示进一步核对。报告列表和详情始终按当前用户与家庭成员隔离。
+
+## 用户端 UX-08 业务入口
+
+用户端从首页进入四条业务主线：AI 健康助手用于自然语言咨询，历史咨询用于回看结果，家庭管理用于查看成员健康记录，报告解读用于查看报告事实。知识检索、药店库存、续方计划、药箱、提醒草稿和单条执行详情不再作为首页或顶部导航入口；历史地址只跳转到对应业务入口，不改变原有确认和安全流程。
+
+## 用户端 UX-09 前后端联调
+
+联调主线为：成员选择 → AI 健康助手首轮整理 → 必要时显式确认 → 结果回看 → 历史咨询/家庭管理/报告解读按成员读取。服务端继续负责成员权限、来源、Safety 和确认状态；浏览器只负责提交用户输入、展示冻结结果和执行确认，不重算医疗事实。
+
+低库存续方场景中，药店库存查询需要药品名时，输入构建器从本轮同一成员的药箱或处方读取结果补齐参数；无来源时保持失败。联调不创建购药、复诊、支付或提醒外部动作，页面不展示这些内部执行边界。

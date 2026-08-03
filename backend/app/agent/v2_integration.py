@@ -29,9 +29,13 @@ from sqlalchemy.orm import Session
 
 from app.agent.product_artifacts import build_run_trace
 from app.agent.final_claim_schemas import FinalClaim
-from app.agent.product_workflow import FamilyHealthProductWorkflow
+from app.agent.supervised_workflow import SupervisorBusinessWorkflow
 from app.agent.unified_health_graph import UnifiedHealthGraph
-from app.agent.v2_benchmark_schemas import EvalQueryVariant, EvalWorldState
+from app.agent.v2_benchmark_schemas import (
+    EvalDependencyEdge,
+    EvalQueryVariant,
+    EvalWorldState,
+)
 from app.agent.v2_eval_schemas import (
     ConfirmationDraftSnapshot,
     MaterializationReceipt,
@@ -551,11 +555,12 @@ class UnifiedHealthGraphIntegrationExecutor:
                     set(materialized.rag_source_aliases),
                 )
                 graph = UnifiedHealthGraph(
-                    product_workflow=FamilyHealthProductWorkflow(
+                    product_workflow=SupervisorBusinessWorkflow(
                         materialized.session,
                         model_configuration=self.model_configuration,
                         provider_registry=ScopedProviderSandbox(materialized.world),
                         knowledge_retriever=retriever,
+                        runtime_options=self.runtime_options,
                     ),
                     runtime_options=self.runtime_options,
                 )
@@ -722,14 +727,19 @@ class UnifiedHealthGraphIntegrationExecutor:
             result.agent_role
             for result in orchestration.domain_agent_results
         ) if orchestration is not None else ()
-        steps = _benchmark_steps(state, orchestration)
-        edges = (
-            tuple(
-                edge
-                for edge in orchestration.plan.dependency_edges
-            )
-            if orchestration is not None and orchestration.plan is not None
-            else ()
+        (
+            domain_steps,
+            domain_edges,
+            governance_steps,
+            governance_edges,
+        ) = _benchmark_plan_projection(
+            state,
+            orchestration,
+            safety_review_executed=(
+                "safety_review" in {str(item) for item in state.get("visited_nodes", [])}
+                or bool(trace.safety_trace.flags)
+                or trace.safety_trace.requires_human_confirmation
+            ),
         )
         source_ids = tuple(
             dict.fromkeys(
@@ -783,8 +793,10 @@ class UnifiedHealthGraphIntegrationExecutor:
             ),
             observed_intent=trace.intent,
             observed_agent_roles=roles,
-            observed_steps=steps,
-            observed_dependency_edges=edges,
+            observed_domain_steps=domain_steps,
+            observed_domain_dependency_edges=domain_edges,
+            observed_governance_steps=governance_steps,
+            observed_governance_edges=governance_edges,
             observed_tool_names=tuple(call.tool_name for call in trace.tool_calls),
             observed_source_ids=source_ids,
             observed_rag_source_ids=tuple(rag.source_id for rag in trace.rag_traces),
@@ -830,29 +842,72 @@ def _business_domain(intent: str) -> BusinessDomain:
     return "health_record"
 
 
-def _benchmark_steps(
+_ROLE_TO_BENCHMARK_STEP = {
+    "TriageAgent": "triage-read",
+    "MedicationAgent": "medication-read",
+    "ReportAgent": "report-read",
+}
+
+
+def _benchmark_plan_projection(
     state: Mapping[str, Any],
     orchestration,
-) -> tuple[str, ...]:
-    """Normalize product graph nodes into v2 capability steps."""
+    *,
+    safety_review_executed: bool,
+) -> tuple[
+    tuple[str, ...],
+    tuple[EvalDependencyEdge, ...],
+    tuple[str, ...],
+    tuple[EvalDependencyEdge, ...],
+]:
+    """Project the real graph into separate domain and governance evidence.
 
-    visited = {str(item) for item in state.get("visited_nodes", [])}
-    steps: list[str] = []
-    if "chronic_care" in visited:
-        steps.append("medication-read")
-    elif "health_record" in visited:
-        steps.append("report-read")
-    elif "preconsultation" in visited:
-        steps.append("triage-read")
-    if "safety_review" in visited:
-        steps.append("safety-review")
-    if steps:
-        return tuple(steps)
-    return tuple(
-        result.step_id
-        for result in orchestration.domain_agent_results
-        if result.step_id
-    ) if orchestration is not None else ()
+    The old adapter inferred one capability from ``visited_nodes`` and then
+    appended ``safety-review`` to the same list. That hid multi-Agent plans
+    and made a fixed governance node look like a Supervisor step. The plan is
+    now the source of truth for domain steps and domain edges; safety is a
+    fixed projection derived from the completed safety boundary.
+    """
+
+    domain_steps: tuple[str, ...] = ()
+    domain_edges: tuple[EvalDependencyEdge, ...] = ()
+    if orchestration is not None and orchestration.plan is not None:
+        plan = orchestration.plan
+        step_names = {
+            step.step_id: _ROLE_TO_BENCHMARK_STEP[step.role]
+            for step in plan.steps
+            if step.role in _ROLE_TO_BENCHMARK_STEP
+        }
+        domain_steps = tuple(
+            step_names[step.step_id]
+            for step in plan.steps
+            if step.step_id in step_names
+        )
+        domain_edges = tuple(
+            EvalDependencyEdge(
+                upstream_step_id=step_names[edge.upstream_step_id],
+                downstream_step_id=step_names[edge.downstream_step_id],
+            )
+            for edge in plan.dependency_edges
+            if edge.upstream_step_id in step_names
+            and edge.downstream_step_id in step_names
+        )
+    elif orchestration is not None:
+        domain_steps = tuple(
+            _ROLE_TO_BENCHMARK_STEP[result.agent_role]
+            for result in orchestration.domain_agent_results
+            if result.agent_role in _ROLE_TO_BENCHMARK_STEP
+        )
+
+    governance_steps = ("safety-review",) if safety_review_executed else ()
+    governance_edges = tuple(
+        EvalDependencyEdge(
+            upstream_step_id=step_id,
+            downstream_step_id="safety-review",
+        )
+        for step_id in domain_steps
+    ) if safety_review_executed else ()
+    return domain_steps, domain_edges, governance_steps, governance_edges
 
 
 def _integration_input_payload(

@@ -67,19 +67,35 @@ class DeterministicTaskPlanner:
         if len(route.target_roles) > self.max_steps:
             raise ValueError("route contains more roles than the planner bound")
 
+        ordered_roles = _topological_roles(route)
+        role_to_step_id = {
+            role: f"step_{index}"
+            for index, role in enumerate(ordered_roles, start=1)
+        }
+        dependencies_by_role: dict[DomainAgentRole, tuple[str, ...]] = {
+            role: tuple(
+                role_to_step_id[hint.upstream_role]
+                for hint in route.dependency_hints
+                if hint.downstream_role == role
+            )
+            for role in ordered_roles
+        }
+
         steps: list[PlanStep] = []
-        for index, role in enumerate(route.target_roles, start=1):
+        for index, role in enumerate(ordered_roles, start=1):
+            allowed_tools = tuple(allowed_tools_for_role(role))
             steps.append(
                 PlanStep(
                     step_id=f"step_{index}",
                     role=role,
                     objective=_OBJECTIVES[role],
-                    read_only=True,
-                    allowed_tools=tuple(
-                        tool
-                        for tool in allowed_tools_for_role(role)
-                        if tool in _READ_ONLY_TOOLS
-                    ),
+                    dependencies=dependencies_by_role[role],
+                    # A full role allowlist can include a draft/write tool.
+                    # Marking that step read-only would allow unsafe fan-out;
+                    # explicit read-only plans can still be constructed for
+                    # offline DAG tests with a narrower allowlist.
+                    read_only=all(tool in _READ_ONLY_TOOLS for tool in allowed_tools),
+                    allowed_tools=allowed_tools,
                     required_source_types=("tool_evidence",),
                 )
             )
@@ -101,6 +117,35 @@ class DeterministicTaskPlanner:
             ),
             max_parallelism=min(self.max_parallelism, len(steps)),
         )
+
+
+def _topological_roles(route: ComplexityRoute) -> tuple[DomainAgentRole, ...]:
+    """Order hinted roles before their dependants without changing the route.
+
+    The route preserves the Router's signal order for auditability.  The
+    Planner is the first component allowed to turn that set into execution
+    order.  A cycle is intentionally left for ``TaskPlan`` to reject with its
+    normal acyclic-DAG validation error.
+    """
+
+    roles = list(route.target_roles)
+    dependencies = {role: set() for role in roles}
+    for hint in route.dependency_hints:
+        dependencies[hint.downstream_role].add(hint.upstream_role)
+
+    ordered: list[DomainAgentRole] = []
+    remaining = set(roles)
+    while remaining:
+        ready = [
+            role
+            for role in roles
+            if role in remaining and dependencies[role].issubset(ordered)
+        ]
+        if not ready:
+            return tuple(roles)
+        ordered.extend(ready)
+        remaining.difference_update(ready)
+    return tuple(ordered)
 
 
 class DeterministicBoundedSupervisor:
@@ -182,6 +227,11 @@ class DeterministicBoundedSupervisor:
             step_id="direct",
             role=route.target_role,
             objective=_OBJECTIVES[route.target_role],
+            read_only=all(
+                tool in _READ_ONLY_TOOLS
+                for tool in allowed_tools_for_role(route.target_role)
+            ),
+            allowed_tools=tuple(allowed_tools_for_role(route.target_role)),
         )
         result = self._execute_step(
             request=request,

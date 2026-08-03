@@ -1,6 +1,6 @@
 # 后端与大模型应用开发面经问答
 
-> 当前实现与最终目标必须分开：现有代码已经实现三个领域 Agent、简单任务直达、一次性 Planner 和串行 bounded Supervisor 内核；4D-B 的最终目标是把它们接入 UnifiedHealthGraph，并对依赖已满足、只读且无副作用的 DAG 步骤做有界并行。确认、写操作、Checkpoint、Agent 安全和 Agent 评测仍保持串行，也不实现无限循环或复杂自动重规划。PostgreSQL 保存权威任务检查点、确认记录和偏好，Redis 只做 TTL 缓存并可回源，医疗知识使用独立 pgvector RAG。
+> 当前实现与最终目标必须分开：项目已经把 `/api/business-tasks` 接入 UnifiedHealthGraph，由 Supervisor 实际选择并调用运行时的 Triage、Medication、Report 三个领域 Agent；领域 Agent 通过 Tool Registry 获取业务数据、Provider 和 RAG 证据。正式业务路径采用串行 bounded Supervisor，确认、写操作、Checkpoint、Agent 安全和 Agent 评测保持串行；独立 deterministic 编排内核仍保留只读 DAG 并行实验能力，不实现无限循环或复杂自动重规划。PostgreSQL 保存权威任务检查点、确认记录和偏好，Redis 只做 TTL 缓存并可回源，医疗知识使用独立 pgvector RAG。
 
 这份文档根据近期面试题和项目当前路线整理。回答默认遵循：先给结论，再讲设计、取舍、项目证据和边界。
 

@@ -1,0 +1,376 @@
+{
+  "report_id": "35a7a6d3-99dd-5125-8ffa-2fdbf8dd1b8a",
+  "dataset_version": "4d-b2.4",
+  "runner_mode": "synthetic_projection",
+  "status": "preview",
+  "dataset_split": "all",
+  "generated_at": "2026-08-02T08:53:32.474790Z",
+  "sample_count": 2,
+  "case_results": [
+    {
+      "query_id": "world-v2-0001:query:01",
+      "world_state_id": "world-v2-0001",
+      "dataset_split": "development",
+      "run_id": "af5e9d6e-180c-51a0-9230-fffc229614ae",
+      "task_success": true,
+      "layer_grades": [
+        {
+          "grader": "route",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_route": "simple_single_domain",
+            "observed_route": "simple_single_domain",
+            "expected_intent": "reminder",
+            "observed_intent": "reminder"
+          }
+        },
+        {
+          "grader": "plan",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_roles": [
+              "MedicationAgent"
+            ],
+            "observed_roles": [
+              "MedicationAgent"
+            ],
+            "expected_steps": [
+              "medication-read",
+              "safety-review"
+            ],
+            "observed_steps": [
+              "medication-read",
+              "safety-review"
+            ]
+          }
+        },
+        {
+          "grader": "tool",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_tools": [
+              "query_medicine_box",
+              "search_safety_knowledge"
+            ],
+            "observed_tools": [
+              "query_medicine_box",
+              "search_safety_knowledge"
+            ],
+            "extra_tools": []
+          }
+        },
+        {
+          "grader": "claim",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_claim_count": 2,
+            "observed_claim_count": 2
+          }
+        },
+        {
+          "grader": "rag",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_source_count": 5,
+            "referenced_source_count": 5
+          }
+        },
+        {
+          "grader": "safety",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_flags": [
+              "reminder_confirmation_required"
+            ],
+            "observed_flags": [
+              "reminder_confirmation_required"
+            ]
+          }
+        },
+        {
+          "grader": "context",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_member": "world-v2-0001:member:primary",
+            "observed_member": "world-v2-0001:member:primary"
+          }
+        },
+        {
+          "grader": "reliability",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "fault_type": "none",
+            "provider_attempts": 1,
+            "retry_count": 0,
+            "fallback_action": "none"
+          }
+        },
+        {
+          "grader": "database_state",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_changes": [
+              "local_confirmation_draft"
+            ],
+            "observed_changes": [
+              "local_confirmation_draft"
+            ],
+            "external_action_status": "local_draft"
+          }
+        }
+      ],
+      "failure_reasons": [],
+      "latency_ms": 22,
+      "materialization_backend": "in_memory_projection",
+      "cleanup_succeeded": true,
+      "review_status": "pending_review"
+    },
+    {
+      "query_id": "world-v2-0001:query:02",
+      "world_state_id": "world-v2-0001",
+      "dataset_split": "development",
+      "run_id": "e2e261a8-d803-5746-bd7c-b39719c979e1",
+      "task_success": true,
+      "layer_grades": [
+        {
+          "grader": "route",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_route": "simple_single_domain",
+            "observed_route": "simple_single_domain",
+            "expected_intent": "reminder",
+            "observed_intent": "reminder"
+          }
+        },
+        {
+          "grader": "plan",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_roles": [
+              "MedicationAgent"
+            ],
+            "observed_roles": [
+              "MedicationAgent"
+            ],
+            "expected_steps": [
+              "medication-read",
+              "safety-review"
+            ],
+            "observed_steps": [
+              "medication-read",
+              "safety-review"
+            ]
+          }
+        },
+        {
+          "grader": "tool",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_tools": [
+              "query_medicine_box",
+              "search_safety_knowledge"
+            ],
+            "observed_tools": [
+              "query_medicine_box",
+              "search_safety_knowledge"
+            ],
+            "extra_tools": []
+          }
+        },
+        {
+          "grader": "claim",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_claim_count": 2,
+            "observed_claim_count": 2
+          }
+        },
+        {
+          "grader": "rag",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_source_count": 5,
+            "referenced_source_count": 5
+          }
+        },
+        {
+          "grader": "safety",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_flags": [
+              "reminder_confirmation_required"
+            ],
+            "observed_flags": [
+              "reminder_confirmation_required"
+            ]
+          }
+        },
+        {
+          "grader": "context",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_member": "world-v2-0001:member:primary",
+            "observed_member": "world-v2-0001:member:primary"
+          }
+        },
+        {
+          "grader": "reliability",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "fault_type": "none",
+            "provider_attempts": 1,
+            "retry_count": 0,
+            "fallback_action": "none"
+          }
+        },
+        {
+          "grader": "database_state",
+          "passed": true,
+          "score": 1.0,
+          "failure_reasons": [],
+          "details": {
+            "expected_changes": [
+              "local_confirmation_draft"
+            ],
+            "observed_changes": [
+              "local_confirmation_draft"
+            ],
+            "external_action_status": "local_draft"
+          }
+        }
+      ],
+      "failure_reasons": [],
+      "latency_ms": 22,
+      "materialization_backend": "in_memory_projection",
+      "cleanup_succeeded": true,
+      "review_status": "pending_review"
+    }
+  ],
+  "metrics": [
+    {
+      "name": "task_success_rate",
+      "value": 1.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "fraction of cases passing all nine deterministic graders"
+    },
+    {
+      "name": "avg_latency_ms",
+      "value": 22.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "synthetic trace latency; not a production latency measurement"
+    },
+    {
+      "name": "p95_latency_ms",
+      "value": 22.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "nearest-rank percentile of synthetic trace latency"
+    },
+    {
+      "name": "route_pass_rate",
+      "value": 1.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "fraction passing the route grader"
+    },
+    {
+      "name": "plan_pass_rate",
+      "value": 1.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "fraction passing the plan grader"
+    },
+    {
+      "name": "tool_pass_rate",
+      "value": 1.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "fraction passing the tool grader"
+    },
+    {
+      "name": "claim_pass_rate",
+      "value": 1.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "fraction passing the claim grader"
+    },
+    {
+      "name": "rag_pass_rate",
+      "value": 1.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "fraction passing the rag grader"
+    },
+    {
+      "name": "safety_pass_rate",
+      "value": 1.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "fraction passing the safety grader"
+    },
+    {
+      "name": "context_pass_rate",
+      "value": 1.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "fraction passing the context grader"
+    },
+    {
+      "name": "reliability_pass_rate",
+      "value": 1.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "fraction passing the reliability grader"
+    },
+    {
+      "name": "database_state_pass_rate",
+      "value": 1.0,
+      "sample_count": 2,
+      "status": "preview",
+      "note": "fraction passing the database_state grader"
+    }
+  ],
+  "failure_counts": {},
+  "world_states_sha256": "d3e11b9a70efdc1cd551f3a25b1e668848fcbc0d34bfc1172f564b05cd6c2623",
+  "queries_sha256": "a587449e25b9ea731d428c0aa70f4418ae19e8c374c19bf58f84b7cfa388f6c9",
+  "notes": [
+    "synthetic_projection does not call PostgreSQL, Provider, RAG or LLM",
+    "preview metrics are pipeline checks, not final resume metrics"
+  ]
+}

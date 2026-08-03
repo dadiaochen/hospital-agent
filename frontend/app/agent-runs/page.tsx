@@ -1,13 +1,12 @@
 "use client";
 
-import Link from "next/link";
-
 import { AsyncContent } from "@/components/AsyncContent";
+import { toUserFacingAnswer } from "@/components/AgentRunResult";
 import { PageHeader } from "@/components/PageHeader";
 import { useMember } from "@/components/providers/MemberProvider";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api/client";
-import { formatDateTime, formatStatus } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/useApiResource";
 
 export default function AgentRunsPage() {
@@ -27,9 +26,9 @@ export default function AgentRunsPage() {
   return (
     <div className="grid gap-5">
       <PageHeader
-        description="按当前成员查询真实 agent_runs；可进入详情查看冻结答案、工具链、来源、安全、fallback 和评估结果。"
-        eyebrow="Agent Runs"
-        title="Agent 执行记录"
+        description="查看当前家庭成员过去的咨询内容和整理结果。切换成员后，只显示该成员的记录。"
+        eyebrow="历史咨询"
+        title="历史咨询"
       >
         {selectedMember ? (
           <span className="text-sm font-semibold text-[#31534f]">
@@ -40,8 +39,8 @@ export default function AgentRunsPage() {
 
       <AsyncContent
         empty={(runs.data?.length ?? 0) === 0}
-        emptyDescription="当前成员还没有 Agent run；可先通过后端 API 创建一次运行。"
-        emptyTitle="暂无执行记录"
+        emptyDescription="完成一次咨询后，记录会出现在这里。"
+        emptyTitle="还没有咨询记录"
         error={membersError ?? runs.error}
         loading={membersLoading || (Boolean(memberId) && runs.loading)}
         onRetry={membersError ? reloadMembers : runs.reload}
@@ -56,58 +55,29 @@ export default function AgentRunsPage() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
-                      tone={
-                        run.status === "completed"
-                          ? "success"
-                          : run.status === "failed"
-                            ? "danger"
-                            : "warning"
-                      }
+                      tone={runStatusTone(run.status)}
                     >
-                      {formatStatus(run.status)}
+                      {readableRunStatus(run.status)}
                     </StatusBadge>
-                    {run.intent ? <StatusBadge>{run.intent}</StatusBadge> : null}
+                    {run.intent ? <StatusBadge>{readableIntent(run.intent)}</StatusBadge> : null}
                     {run.need_human_confirmation ? (
-                      <StatusBadge tone="warning">需要人工确认</StatusBadge>
+                      <StatusBadge tone="warning">需要你确认</StatusBadge>
                     ) : null}
                   </div>
                   <h3 className="mt-3 font-bold leading-6 text-[#173c38]">
                     {run.user_goal}
                   </h3>
-                  <p className="mt-2 break-all font-mono text-[11px] text-[#94a3b8]">
-                    run_id: {run.id}
-                  </p>
                 </div>
-                <dl className="grid shrink-0 grid-cols-2 gap-x-6 gap-y-3 text-sm lg:min-w-72">
-                  <RunField label="开始时间" value={formatDateTime(run.started_at)} />
-                  <RunField
-                    label="耗时"
-                    value={run.duration_ms === null ? "未记录" : `${run.duration_ms} ms`}
-                  />
-                  <RunField label="步骤数" value={String(run.step_count)} />
-                  <RunField
-                    label="Groundedness"
-                    value={
-                      run.groundedness_score === null
-                        ? "未评估"
-                        : run.groundedness_score.toFixed(2)
-                    }
-                  />
-                </dl>
+                <p className="shrink-0 text-sm text-[#71847f]">{formatDateTime(run.started_at)}</p>
               </div>
               {run.final_answer ? (
-                <p className="mt-4 line-clamp-2 rounded-xl bg-[#f4f8f6] px-4 py-3 text-sm leading-6 text-[#475569]">
-                  {run.final_answer}
-                </p>
+                <div className="mt-4 rounded-xl bg-[#f4f8f6] px-4 py-3">
+                  <p className="text-xs font-bold text-[#53726b]">整理结果</p>
+                  <p className="mt-1 line-clamp-3 text-sm leading-6 text-[#475569]">
+                    {toUserFacingAnswer({ answer: run.final_answer, intent: run.intent })}
+                  </p>
+                </div>
               ) : null}
-              <div className="mt-4 flex justify-end">
-                <Link
-                  className="rounded-lg border border-[#bcd2cc] px-3 py-2 text-xs font-bold text-[#0f766e] hover:bg-[#edf7f3]"
-                  href={`/agent-runs/${encodeURIComponent(run.id)}`}
-                >
-                  查看 Trace 与评估
-                </Link>
-              </div>
             </article>
           ))}
         </div>
@@ -116,11 +86,41 @@ export default function AgentRunsPage() {
   );
 }
 
-function RunField({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs font-semibold text-[#71847f]">{label}</dt>
-      <dd className="mt-1 text-[#334155]">{value}</dd>
-    </div>
-  );
+function readableRunStatus(status: string) {
+  switch (status) {
+    case "completed":
+      return "已完成";
+    case "needs_confirmation":
+      return "待确认";
+    case "blocked":
+      return "已暂停";
+    case "failed":
+      return "未完成";
+    case "running":
+      return "处理中";
+    default:
+      return "已记录";
+  }
+}
+
+function runStatusTone(status: string): "neutral" | "success" | "warning" | "danger" {
+  if (status === "completed") return "success";
+  if (status === "failed" || status === "blocked") return "danger";
+  if (status === "needs_confirmation" || status === "running") return "warning";
+  return "neutral";
+}
+
+function readableIntent(intent: string) {
+  switch (intent) {
+    case "refill":
+      return "续方准备";
+    case "reminder":
+      return "用药提醒";
+    case "pharmacy":
+      return "购药准备";
+    case "safety_check":
+      return "用药安全";
+    default:
+      return "健康咨询";
+  }
 }

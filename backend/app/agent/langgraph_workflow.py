@@ -7,6 +7,7 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from app.agent.context_manager import ContextManager, ResetContextState
+from app.agent.legacy_role_adapter import map_role
 from app.agent.context_schemas import (
     ContextEnvelope,
     RAGSourceRef,
@@ -322,6 +323,11 @@ class LangGraphAgentWorkflow:
         role: str,
         node_name: str,
     ) -> dict[str, Any]:
+        mapping = map_role(role)
+        if mapping.layer not in {"legacy_skill", "governance"}:
+            raise ValueError(
+                f"legacy workflow received non-legacy role: {role}"
+            )
         context = state["context_envelope"]
         plan = state["plan"]
         tools = [

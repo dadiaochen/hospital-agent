@@ -180,6 +180,116 @@ def test_chronic_care_task_waits_then_resumes_after_confirmation(
     assert replay.json()["confirmation_state"] == "EXECUTED"
 
 
+def test_supervisor_executes_runtime_medication_agent_and_registry_tools(
+    business_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = business_client
+
+    response = client.post(
+        "/api/business-tasks",
+        json={
+            "business_domain": "chronic_care",
+            "member_id": FATHER_ID,
+            "user_input": "请整理父亲的降压药续方材料。",
+            "input_payload": {
+                "action_type": "refill_request",
+                "medicine_name": "amlodipine",
+            },
+            "idempotency_key": "supervisor-medication-runtime-1",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    orchestration = payload["run_trace"]["orchestration"]
+    assert [item["agent_role"] for item in orchestration["domain_agent_results"]] == [
+        "MedicationAgent"
+    ]
+    medication_result = orchestration["domain_agent_results"][0]
+    assert medication_result["status"] == "completed"
+    assert "query_health_profile" in medication_result["tool_calls"]
+    assert "consultation_prepare_draft" in medication_result["tool_calls"]
+    assert all(
+        call["agent_role"] == "MedicationAgent"
+        for call in payload["tool_calls"]
+    )
+
+
+def test_supervisor_executes_both_runtime_agents_for_cross_domain_request(
+    business_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = business_client
+
+    response = client.post(
+        "/api/business-tasks",
+        json={
+            # This field is only the API task default.  the Supervisor still
+            # derives the actual role set from the user request below.
+            "business_domain": "chronic_care",
+            "member_id": FATHER_ID,
+            "user_input": "请先解读检查报告，再整理降压药续方材料。",
+            "input_payload": {
+                "action_type": "refill_request",
+                "medicine_name": "amlodipine",
+                "text": "检查报告示例文本",
+                "document_type": "medical_report",
+            },
+            "idempotency_key": "supervisor-cross-domain-runtime-1",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    orchestration = payload["run_trace"]["orchestration"]
+    assert orchestration["route"]["route_mode"] == "complex_cross_domain"
+    assert {item["agent_role"] for item in orchestration["domain_agent_results"]} == {
+        "MedicationAgent",
+        "ReportAgent",
+    }
+    report_result = next(
+        item
+        for item in orchestration["domain_agent_results"]
+        if item["agent_role"] == "ReportAgent"
+    )
+    assert "parse_medical_document" in report_result["tool_calls"]
+    assert any(
+        call["agent_role"] == "ReportAgent"
+        and call["tool_name"] == "parse_medical_document"
+        for call in payload["tool_calls"]
+    )
+    assert all(call["member_id"] == FATHER_ID for call in payload["tool_calls"])
+
+
+def test_supervisor_does_not_call_unselected_agents_for_report_request(
+    business_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = business_client
+
+    response = client.post(
+        "/api/business-tasks",
+        json={
+            "business_domain": "chronic_care",
+            "member_id": MOTHER_ID,
+            "user_input": "请解读这份检查报告并生成健康记录草稿。",
+            "input_payload": {
+                "text": "检查报告示例文本",
+                "document_type": "medical_report",
+            },
+            "idempotency_key": "supervisor-report-only-runtime-1",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    orchestration = payload["run_trace"]["orchestration"]
+    assert orchestration["route"]["target_role"] == "ReportAgent"
+    assert orchestration["route"]["intent"] == "health_record"
+    assert {item["agent_role"] for item in orchestration["domain_agent_results"]} == {
+        "ReportAgent"
+    }
+    assert all(call["agent_role"] == "ReportAgent" for call in payload["tool_calls"])
+
+
 def test_preconsultation_uses_mock_provider_without_claiming_real_data(
     business_client: tuple[TestClient, Session],
 ) -> None:

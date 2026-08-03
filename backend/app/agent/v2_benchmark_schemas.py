@@ -135,8 +135,17 @@ class EvalGoldExpectation(ContractModel):
     expected_intent: Intent
     expected_route: ExpectedRoute
     expected_agent_roles: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=3)
-    expected_steps: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=6)
-    expected_dependency_edges: tuple[EvalDependencyEdge, ...] = Field(
+    # Business execution is the only graph that the Planner/Supervisor owns.
+    expected_domain_steps: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=3)
+    expected_domain_dependency_edges: tuple[EvalDependencyEdge, ...] = Field(
+        default_factory=tuple
+    )
+    # Governance is projected separately because Safety/Confirmation/FinalAnswer
+    # and Evaluator are fixed graph edges, not Supervisor candidates.
+    expected_governance_steps: tuple[NonEmptyStr, ...] = Field(
+        min_length=1, max_length=4
+    )
+    expected_governance_edges: tuple[EvalDependencyEdge, ...] = Field(
         default_factory=tuple
     )
     expected_tool_calls: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
@@ -151,6 +160,37 @@ class EvalGoldExpectation(ContractModel):
 
     @model_validator(mode="after")
     def validate_status_rules(self) -> "EvalGoldExpectation":
+        domain_steps = set(self.expected_domain_steps)
+        governance_steps = set(self.expected_governance_steps)
+        if domain_steps & governance_steps:
+            raise ValueError("domain and governance steps must be disjoint")
+
+        domain_edges = {
+            (edge.upstream_step_id, edge.downstream_step_id)
+            for edge in self.expected_domain_dependency_edges
+        }
+        if len(domain_edges) != len(self.expected_domain_dependency_edges):
+            raise ValueError("domain dependency edges must be unique")
+        if any(
+            edge.upstream_step_id not in domain_steps
+            or edge.downstream_step_id not in domain_steps
+            for edge in self.expected_domain_dependency_edges
+        ):
+            raise ValueError("domain dependency edges must reference domain steps")
+
+        governance_edges = {
+            (edge.upstream_step_id, edge.downstream_step_id)
+            for edge in self.expected_governance_edges
+        }
+        if len(governance_edges) != len(self.expected_governance_edges):
+            raise ValueError("governance edges must be unique")
+        if any(
+            edge.upstream_step_id not in domain_steps | governance_steps
+            or edge.downstream_step_id not in domain_steps | governance_steps
+            for edge in self.expected_governance_edges
+        ):
+            raise ValueError("governance edges must reference known steps")
+
         if self.expected_blocked and self.expected_final_status != "blocked":
             raise ValueError("blocked gold must use final_status=blocked")
         if self.expected_confirmation_required and not (
@@ -256,6 +296,16 @@ class EvalQueryVariant(ContractModel):
     expected_intent: Intent
     expected_route: ExpectedRoute
     expected_agent_roles: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=3)
+    expected_domain_steps: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=3)
+    expected_domain_dependency_edges: tuple[EvalDependencyEdge, ...] = Field(
+        default_factory=tuple
+    )
+    expected_governance_steps: tuple[NonEmptyStr, ...] = Field(
+        min_length=1, max_length=4
+    )
+    expected_governance_edges: tuple[EvalDependencyEdge, ...] = Field(
+        default_factory=tuple
+    )
     expected_required_tools: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     expected_safety_flags: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     expected_sources: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
@@ -268,7 +318,7 @@ class EvalQueryVariant(ContractModel):
 
 class V2WorldStateDataset(ContractModel):
     dataset_id: Literal["world_states_v2"] = "world_states_v2"
-    dataset_version: Literal["4d-b2.4"] = "4d-b2.4"
+    dataset_version: Literal["4d-b5.5"] = "4d-b5.5"
     status: WorldStatus = "generated"
     generated_by: Literal["deterministic_rule_generator"] = (
         "deterministic_rule_generator"
@@ -305,7 +355,7 @@ class V2WorldStateDataset(ContractModel):
 
 class V2QueryDataset(ContractModel):
     dataset_id: Literal["query_variants_v2"] = "query_variants_v2"
-    dataset_version: Literal["4d-b2.4"] = "4d-b2.4"
+    dataset_version: Literal["4d-b5.5"] = "4d-b5.5"
     status: WorldStatus = "generated"
     generated_by: Literal["deterministic_rule_generator"] = (
         "deterministic_rule_generator"
@@ -339,7 +389,7 @@ class V2QueryDataset(ContractModel):
 
 class V2BenchmarkManifest(ContractModel):
     manifest_id: Literal["agent-harness-v2"] = "agent-harness-v2"
-    dataset_version: Literal["4d-b2.4"] = "4d-b2.4"
+    dataset_version: Literal["4d-b5.5"] = "4d-b5.5"
     status: WorldStatus = "generated"
     generated_by: Literal["deterministic_rule_generator"] = (
         "deterministic_rule_generator"

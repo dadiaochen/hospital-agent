@@ -13,6 +13,7 @@ type ExecutionOptions = {
   waitingForConfirmation?: boolean;
   confirmationPresent?: boolean;
   finalAnswer?: string;
+  intent?: string;
 };
 
 export function makeAgentExecution(options: ExecutionOptions = {}): AgentRunExecution {
@@ -23,6 +24,7 @@ export function makeAgentExecution(options: ExecutionOptions = {}): AgentRunExec
   const waiting = options.waitingForConfirmation ?? status === "needs_confirmation";
   const confirmationPresent = options.confirmationPresent ?? status === "completed";
   const finalAnswer = options.finalAnswer ?? "已根据药箱和处方记录整理续方草稿，请确认后创建本地记录。";
+  const intent = options.intent ?? (blocked ? "safety_check" : "refill");
   const safetyFlags = blocked ? ["dosage_change_request"] : ["human_confirmation_required"];
 
   const toolRef = {
@@ -55,7 +57,7 @@ export function makeAgentExecution(options: ExecutionOptions = {}): AgentRunExec
       user_id: "user-demo",
       member_id: memberId,
       user_goal: "帮我整理续方材料",
-      intent: blocked ? "safety_check" : "refill",
+      intent,
       status,
       final_answer: finalAnswer,
       need_human_confirmation: waiting,

@@ -14,6 +14,15 @@ describe("apiPaths", () => {
     );
   });
 
+  it("builds member-scoped report list and detail paths", () => {
+    expect(apiPaths.reports("member/father 1")).toBe(
+      "/api/family-members/member%2Ffather%201/reports",
+    );
+    expect(apiPaths.reportDetail("member/father 1", "report/1")).toBe(
+      "/api/family-members/member%2Ffather%201/reports/report%2F1",
+    );
+  });
+
   it("builds optional inventory query parameters", () => {
     expect(apiPaths.pharmacyInventory(" 氨氯地平 ", " 上海 ")).toBe(
       "/api/pharmacy-inventory?medicine_name=%E6%B0%A8%E6%B0%AF%E5%9C%B0%E5%B9%B3&city=%E4%B8%8A%E6%B5%B7",
@@ -83,6 +92,30 @@ describe("assertMemberScoped", () => {
       "http://localhost:8000/api/family-members/member-father/medicine-box",
       expect.objectContaining({ cache: "no-store" }),
     );
+  });
+
+  it("rejects report details with an unresolved source reference", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            report: { member_id: "member-father" },
+            summary: {},
+            metrics: [{ source_ref: "missing-source" }],
+            sections: [],
+            sources: [],
+            safety: {},
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+
+    await expect(api.getReportDetail("member-father", "report-1")).rejects.toMatchObject({
+      code: "report_contract_failed",
+      status: 409,
+    });
   });
 });
 

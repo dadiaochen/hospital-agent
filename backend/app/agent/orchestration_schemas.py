@@ -76,6 +76,25 @@ class EvalRuntimeOptions(ContractModel):
         return self
 
 
+class DependencyHint(ContractModel):
+    """A deterministic business relationship between two domain roles.
+
+    The Planner converts role-level hints into step IDs after freezing the
+    plan. Safety, Confirmation and Evaluator are fixed governance edges and
+    therefore cannot appear here.
+    """
+
+    upstream_role: DomainAgentRole
+    downstream_role: DomainAgentRole
+    reason: NonEmptyStr = Field(max_length=200)
+
+    @model_validator(mode="after")
+    def validate_roles(self) -> "DependencyHint":
+        if self.upstream_role == self.downstream_role:
+            raise ValueError("a dependency hint cannot point to the same role")
+        return self
+
+
 class ComplexityRoute(ContractModel):
     """A frozen routing decision; it never contains raw conversation history."""
 
@@ -92,6 +111,7 @@ class ComplexityRoute(ContractModel):
     reason_code: RouteReasonCode
     matched_signals: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     required_capabilities: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    dependency_hints: tuple[DependencyHint, ...] = Field(default_factory=tuple)
     requires_planner: bool
 
     @model_validator(mode="after")
@@ -112,6 +132,20 @@ class ComplexityRoute(ContractModel):
                 raise ValueError("complex routes require at least two target roles")
             if not self.requires_planner:
                 raise ValueError("complex routes must require a planner")
+
+        target_roles = set(self.target_roles)
+        hint_pairs = {
+            (hint.upstream_role, hint.downstream_role)
+            for hint in self.dependency_hints
+        }
+        if len(hint_pairs) != len(self.dependency_hints):
+            raise ValueError("dependency hints must be unique")
+        if any(
+            hint.upstream_role not in target_roles
+            or hint.downstream_role not in target_roles
+            for hint in self.dependency_hints
+        ):
+            raise ValueError("dependency hints must reference target roles")
 
         if self.reason_code == "multiple_domain_signals" and len(self.target_roles) < 2:
             raise ValueError("multiple-domain reason requires multiple target roles")
@@ -208,21 +242,8 @@ class TaskPlan(ContractModel):
             for step_id, dependencies in dependency_map.items()
             for dependency in dependencies
         }
-        if self.dependency_edges:
-            if edge_pairs != declared_pairs:
-                raise ValueError("dependency edges must match step dependencies")
-        else:
-            # Preserve the original serial contract. Arbitrary DAG edges must
-            # be explicit so old callers cannot silently change semantics.
-            completed_step_ids: set[str] = set()
-            for step in self.steps:
-                forward_only = set(step.dependencies) - completed_step_ids
-                if forward_only:
-                    raise ValueError(
-                        "step dependencies must reference an earlier step: "
-                        + ", ".join(sorted(forward_only))
-                    )
-                completed_step_ids.add(step.step_id)
+        if edge_pairs != declared_pairs:
+            raise ValueError("dependency edges must match step dependencies")
 
         visiting: set[str] = set()
         visited: set[str] = set()
@@ -423,6 +444,7 @@ __all__ = [
     "ComplexityRoute",
     "ComplexityRoutingRequest",
     "ContextMode",
+    "DependencyHint",
     "DependencyEdge",
     "DomainAgentRole",
     "ExecutionMode",

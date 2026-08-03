@@ -149,12 +149,17 @@ class WorkflowToolInputBuilder:
         tool_results: Sequence[ToolResult] = (),
     ) -> dict[str, Any]:
         fields = registry.get_spec(tool_name).input_schema.model_fields
+        derived_medicine_name = (
+            _medicine_name_from_tool_results(tool_results)
+            if tool_name == "check_pharmacy_inventory"
+            else None
+        )
         values: dict[str, Any] = {
             "user_id": request.user_id,
             "member_id": request.member_id,
             "query": request.user_input,
             "medication_name": request.medication_name,
-            "medicine_name": request.medication_name,
+            "medicine_name": request.medication_name or derived_medicine_name,
             "city": request.city,
             "action_type": plan.draft_action_type,
             "idempotency_key": f"{request.run_id}:{plan.draft_action_type or 'none'}",
@@ -279,6 +284,21 @@ def _successful_output(
         ),
         {},
     )
+
+
+def _medicine_name_from_tool_results(results: Sequence[ToolResult]) -> str | None:
+    medicine_box = _successful_output(results, "query_medicine_box")
+    medicine = _first_mapping(
+        medicine_box.get("items") or medicine_box.get("medicines")
+    )
+    medicine_name = _text(medicine.get("medicine_name"))
+    if medicine_name:
+        return medicine_name
+
+    prescriptions = _successful_output(results, "query_prescriptions")
+    prescription = _first_mapping(prescriptions.get("prescriptions"))
+    prescription_medicine = _first_mapping(prescription.get("medicine_items"))
+    return _text(prescription_medicine.get("medicine_name"))
 
 
 def _first_mapping(value: Any) -> dict[str, Any]:

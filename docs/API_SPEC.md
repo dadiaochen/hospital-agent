@@ -122,7 +122,7 @@ draft -> rejected
 
 Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider 的未校验原始文本。2G-2 Agent Runtime 只通过 Gateway 获得结构化结果，并持久化脱敏 Trace；Router 不能直接调用模型 HTTP endpoint。
 
-4B 任务五新增的 `ComplexityRoute`、`TaskPlan`、`AgentTaskResult`、`SupervisorDecision` 和三阶段 `SafetyDecision`，以及任务六的 `OrchestrationRunResult`，仍然不是独立 HTTP endpoint。4D-B2.1 已由 `UnifiedHealthGraph` 将 `/api/business-tasks` 接入这条编排边界；4D-B2.2 又将 `execution_mode`、`context_mode` 和 `parallel_batches` 写入冻结 `run_trace.orchestration`；4D-B2.3 进一步在业务冻结产物中加入 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`；4D-B2.4 已生成独立的 300/1200 v2 评测文件；B2.5 已在 `backend/app/agent/` 增加内存 Materializer、九类 grader 和 preview Runner；B2.6 又增加了离线的 PostgreSQL shadow transaction、Provider sandbox、case-scoped RAG 和真实图执行适配器，但这些仍不是 HTTP endpoint。业务响应只返回经过校验的 route/plan/decision/domain-result 投影，不直接暴露原始请求或内部临时状态；Docker 19/19 已通过，完整 300/1200 正式评测仍需人工审核后运行。
+4B 任务五新增的 `ComplexityRoute`、`TaskPlan`、`AgentTaskResult`、`SupervisorDecision` 和三阶段 `SafetyDecision`，以及任务六的 `OrchestrationRunResult`，仍然不是独立 HTTP endpoint。4D-B2.1/B4 已由 `UnifiedHealthGraph` 将 `/api/business-tasks` 接入这条编排边界，并由默认 `SupervisorBusinessWorkflow` 实际调用运行时领域 Agent 和 Tool Registry；4D-B2.2 又将 `execution_mode`、`context_mode` 和 `parallel_batches` 写入冻结 `run_trace.orchestration`；4D-B2.3 进一步在业务冻结产物中加入 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`；4D-B2.4 已生成独立的 300/1200 v2 评测文件；B2.5 已在 `backend/app/agent/` 增加内存 Materializer、九类 grader 和 preview Runner；B2.6 又增加了离线的 PostgreSQL shadow transaction、Provider sandbox、case-scoped RAG 和真实图执行适配器，但这些仍不是 HTTP endpoint。业务响应只返回经过校验的 route/plan/decision/domain-result 投影，不直接暴露原始请求或内部临时状态；Docker 19/19 已通过，完整 300/1200 正式评测仍需人工审核后运行。
 
 ## 8. 2G-2 Agent Runtime API
 
@@ -239,10 +239,20 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 | Agent 对话 | `POST /api/agent-runs` |
 | 确认续跑 | `POST /api/agent-runs/{run_id}/continue` |
 | Run 详情 | `/api/agent-runs/{run_id}`、`/tool-calls`、`/artifacts` |
+| 报告解读 | `GET /api/family-members/{member_id}/reports`、`GET /api/family-members/{member_id}/reports/{report_id}` |
+
+UX-06 已按冻结的 `report-detail.v1` 契约接入以下只读接口：
+
+- `GET /api/family-members/{member_id}/reports`
+- `GET /api/family-members/{member_id}/reports/{report_id}`
+
+字段、状态、指标解释、来源和安全提示以 [REPORT_DETAIL_CONTRACT.md](REPORT_DETAIL_CONTRACT.md) 的 `report-detail.v1` 为准。
+
+接口只读取当前用户和当前家庭成员范围内的 `medical_documents`，不会触发上传、解析任务、健康事件写入、诊断或治疗动作。详情响应中的指标和章节必须引用同一响应内的来源；前端发现来源引用不完整时直接进入错误态，不自行补造来源。
 
 所有成员类 response 在后端作用域校验后，还会被浏览器检查 `member_id`。不匹配时前端抛出 `context_isolation_failed` 并停止展示；这不是认证替代品，而是防止异常 response 造成可见串扰的第二道防线。
 
-当前前端首次请求固定发送 `human_confirmation_granted=false`。只有后端返回 `needs_confirmation` 且没有 Agent 安全阻断时，页面才允许用户勾选本地草稿声明并调用 `/continue`。详情页只读消费冻结的 FinalAnswer、Tool/RAG refs、SafetyTrace、ModelCallTrace 和 EvaluationResult，不在浏览器重算或修改它们。完整交互见 [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md)。
+当前前端首次请求固定发送 `human_confirmation_granted=false`。只有后端返回 `needs_confirmation` 且没有 Agent 安全阻断时，页面才允许用户勾选“我已阅读上面的整理内容，确认继续”，再调用 `/continue`；确认消息由代码生成，不把内部草稿或外部提交约束暴露给用户。历史咨询通过同一 `GET /api/agent-runs?member_id=` 按当前成员读取，页面只展示用户可读的状态、时间和整理结果。详情页仍只读消费冻结的 FinalAnswer、Tool/RAG refs、SafetyTrace、ModelCallTrace 和 EvaluationResult，不在浏览器重算或修改它们。完整交互见 [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md)。
 
 ## 11. API 设计规则
 
@@ -270,3 +280,13 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 任务十二没有新增 HTTP 路径，而是通过 `scripts/task12_acceptance.py` 对现有 `/health`、`/api/family-members`、三类 `/api/business-tasks` 操作和 `/api/knowledge/search` 做 Docker smoke。验收确认业务接口仍返回结构化 DTO、缺少知识查询参数映射为 422、重复确认只执行一次；Redis 不可用时，业务 API 从 PostgreSQL 恢复权威 checkpoint。该脚本不调用 LLM 或真实外部 Provider。
 
 4D-B3 的真实模型 runner 是离线评测脚本，不新增 HTTP endpoint。它的审核队列会保存脱敏 `ConfirmationDraftSnapshot`，证明 shadow run 生成了本地草稿但没有提交外部提醒；正常业务 API 的 `confirmation_draft` 字段和 Task Checkpoint 才是可供前端展示、查询和确认的业务契约。
+
+## 用户端 UX-08 入口边界
+
+UX-08 没有新增或删除 API。前端公共入口只消费既有的 Agent、历史咨询、家庭记录和报告读取接口；`/knowledge`、`/purchase-plans`、`/refill-plans`、`/medicine-box`、`/reminders` 以及 `/agent-runs/{run_id}` 只作为兼容地址跳转，不再作为用户端的内部操作页面。知识检索、库存查询、草稿状态和 Trace 仍是服务端业务/治理能力，不能因入口隐藏而解除成员隔离、来源校验或人工确认。
+
+## 用户端 UX-09 联调边界
+
+UX-09 没有新增 HTTP 路径、数据库字段或外部动作。前端真实消费既有成员、Agent run、家庭记录和报告 DTO，并验证 `user_id + member_id` 隔离、确认续跑和兼容跳转。用户端只展示用户可读结果，原始运行标识、工具调用和来源指针继续留在服务端冻结产物中。
+
+联调发现既有低库存续方请求在用户没有显式填写药品名时，药店库存工具输入无法通过契约校验。现由 `WorkflowToolInputBuilder` 从同一成员已成功读取的药箱或处方事实补齐 `medicine_name`；如果没有可验证事实仍保持缺失并失败，不由模型或浏览器猜测。该修正只同步既有 Tool 输入契约，不改变接口语义、确认规则或外部提交能力。

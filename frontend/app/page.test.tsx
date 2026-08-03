@@ -1,13 +1,7 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import HomePage from "./page";
-
-const push = vi.fn();
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
-}));
 
 vi.mock("@/components/providers/MemberProvider", () => ({
   useMember: () => ({
@@ -38,34 +32,31 @@ vi.mock("@/components/providers/MemberProvider", () => ({
 }));
 
 describe("patient portal home", () => {
-  beforeEach(() => {
-    push.mockReset();
-  });
-
   afterEach(() => {
     cleanup();
   });
 
-  it("shows member-scoped health services and safety boundaries", () => {
+  it("shows the four public health entry points", () => {
     render(<HomePage />);
 
-    expect(screen.getByRole("heading", { name: "家庭用药事务，清楚地整理，安心地确认" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "先说一件事，我们一起整理" })).toBeTruthy();
     expect(screen.getByText("陈先生")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /整理续方材料/ }).getAttribute("href")).toBe("/agent");
-    expect(screen.getByText(/系统不诊断、不开方/)).toBeTruthy();
-    expect(screen.getByText(/页面拒绝展示跨成员数据/)).toBeTruthy();
+    const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
+    expect(hrefs).toContain("/agent");
+    expect(hrefs).toContain("/reports");
+    expect(hrefs).toContain("/family");
+    expect(hrefs).toContain("/agent-runs");
   });
 
-  it("routes the portal search to the knowledge API page", () => {
+  it("does not expose internal implementation language or routes", () => {
     render(<HomePage />);
-    fireEvent.change(screen.getByRole("textbox", { name: "搜索健康事务或知识" }), {
-      target: { value: "续方需要哪些确认" },
-    });
-    const searchInput = screen.getByRole("textbox", { name: "搜索健康事务或知识" });
-    const searchForm = searchInput.closest("form");
-    if (!searchForm) throw new Error("search form not found");
-    fireEvent.submit(searchForm);
 
-    expect(push).toHaveBeenCalledWith("/knowledge?q=%E7%BB%AD%E6%96%B9%E9%9C%80%E8%A6%81%E5%93%AA%E4%BA%9B%E7%A1%AE%E8%AE%A4");
+    expect(screen.queryByText(/安全知识检索|附近药店库存|固定演示场景|可审计执行记录|DRAFT|Trace/)).toBeNull();
+    const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
+    expect(hrefs).not.toContain("/knowledge");
+    expect(hrefs).not.toContain("/purchase-plans");
+    expect(hrefs).not.toContain("/refill-plans");
+    expect(hrefs).not.toContain("/medicine-box");
+    expect(hrefs).not.toContain("/reminders");
   });
 });

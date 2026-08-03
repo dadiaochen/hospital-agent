@@ -1,18 +1,11 @@
-"""Unified patient-facing graph for the 4D-B2 orchestration migration.
+"""Unified patient-facing graph with Supervisor-owned business execution.
 
-The project already has two useful pieces:
-
-* ``DeterministicBoundedSupervisor`` proves the Router/Planner/domain-agent
-  contract without touching business data.
-* ``FamilyHealthProductWorkflow`` performs the real local business work,
-  including Tool Registry calls, confirmation state transitions, output safety,
-  and frozen artifacts.
-
-This graph is the migration boundary between them.  It makes the orchestration
-kernel part of the patient-facing run and records its result in the same frozen
-state, while keeping business data access inside the existing product graph.
-4D-B2.2 extends the orchestration kernel with bounded read-only DAG execution;
-the business graph still owns side effects and keeps them serial.
+The graph keeps one stable service boundary, but the default executor is now
+``SupervisorBusinessWorkflow``.  That workflow creates fresh TriageAgent,
+MedicationAgent and ReportAgent instances for each run.  The Supervisor
+selects and executes those Agents; every database, RAG and Provider access is
+still forced through Tool Registry, while Safety and confirmation remain fixed
+governance stages.
 """
 
 from __future__ import annotations
@@ -25,11 +18,9 @@ from sqlalchemy.orm import Session
 
 from app.agent.orchestration import DeterministicBoundedSupervisor
 from app.agent.orchestration_schemas import (
-    ComplexityRoutingRequest,
     EvalRuntimeOptions,
-    OrchestrationRunResult,
 )
-from app.agent.product_workflow import FamilyHealthProductWorkflow
+from app.agent.supervised_workflow import SupervisorBusinessWorkflow
 from app.schemas.business import BusinessDomain, ProviderMode
 
 
@@ -106,11 +97,13 @@ class UnifiedHealthGraph:
     ) -> None:
         if product_workflow is None and db is None:
             raise ValueError("db or product_workflow is required")
-        self.product_workflow = product_workflow or FamilyHealthProductWorkflow(
-            cast(Session, db)
-        )
         self.supervisor = supervisor or DeterministicBoundedSupervisor()
         self.runtime_options = runtime_options or EvalRuntimeOptions()
+        self.product_workflow = product_workflow or SupervisorBusinessWorkflow(
+            cast(Session, db),
+            supervisor=self.supervisor,
+            runtime_options=self.runtime_options,
+        )
         self.graph = self._build_graph()
 
     def close(self) -> None:
@@ -173,26 +166,10 @@ class UnifiedHealthGraph:
 
     def _build_graph(self):
         graph = StateGraph(UnifiedHealthGraphState)
-        graph.add_node("orchestration", self._orchestration_node)
-        graph.add_node("business_graph", self._business_graph_node)
-        graph.add_edge(START, "orchestration")
-        graph.add_edge("orchestration", "business_graph")
-        graph.add_edge("business_graph", END)
+        graph.add_node("supervised_execution", self._business_graph_node)
+        graph.add_edge(START, "supervised_execution")
+        graph.add_edge("supervised_execution", END)
         return graph.compile()
-
-    def _orchestration_node(
-        self,
-        state: UnifiedHealthGraphState,
-    ) -> dict[str, Any]:
-        request = ComplexityRoutingRequest(
-            task_id=state["task_id"],
-            user_id=state["user_id"],
-            member_id=state["member_id"],
-            user_input=state["user_input"],
-            intent=state["business_domain"],
-        )
-        result = self.supervisor.run(request, runtime_options=self.runtime_options)
-        return {"orchestration_run": result.model_dump(mode="json")}
 
     def _business_graph_node(
         self,
@@ -221,9 +198,8 @@ class UnifiedHealthGraph:
             )
 
         result = dict(business_state)
-        orchestration = dict(state["orchestration_run"])
-        result["orchestration_run"] = orchestration
-        result["unified_graph_version"] = "4d-b2.2"
+        orchestration = dict(result.get("orchestration_run") or {})
+        result["unified_graph_version"] = "4d-b3-supervisor-execution"
         result["unified_visited_nodes"] = list(self._unified_nodes(orchestration))
         result["visited_nodes"] = [
             *self._unified_nodes(orchestration),
@@ -238,7 +214,9 @@ class UnifiedHealthGraph:
             "unified_complexity_router",
         ]
         if orchestration.get("plan") is not None:
-            nodes.extend(("unified_planner", "unified_supervisor"))
+            nodes.append("unified_planner")
+        if orchestration:
+            nodes.append("unified_supervisor")
         roles = [
             str(item.get("agent_role"))
             for item in orchestration.get("results", [])
@@ -246,7 +224,7 @@ class UnifiedHealthGraph:
         ]
         if roles:
             nodes.append("unified_domain_agents")
-        nodes.append("unified_business_graph")
+        nodes.append("unified_supervised_execution")
         return tuple(dict.fromkeys(nodes))
 
     @staticmethod

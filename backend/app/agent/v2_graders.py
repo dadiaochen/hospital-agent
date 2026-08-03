@@ -97,28 +97,48 @@ class V2DeterministicGraders:
         failures: list[str] = []
         if set(artifacts.observed_agent_roles) != set(gold.expected_agent_roles):
             failures.append("plan.agent_roles_mismatch")
-        if tuple(artifacts.observed_steps) != tuple(
-            context.world.gold.expected_steps
+        if tuple(artifacts.observed_domain_steps) != tuple(
+            context.world.gold.expected_domain_steps
         ):
-            failures.append("plan.steps_mismatch")
-        expected_edges = {
+            failures.append("plan.domain_steps_mismatch")
+        expected_domain_edges = {
             (edge.upstream_step_id, edge.downstream_step_id)
-            for edge in context.world.gold.expected_dependency_edges
+            for edge in context.world.gold.expected_domain_dependency_edges
         }
-        observed_edges = {
+        observed_domain_edges = {
             (edge.upstream_step_id, edge.downstream_step_id)
-            for edge in artifacts.observed_dependency_edges
+            for edge in artifacts.observed_domain_dependency_edges
         }
-        if observed_edges != expected_edges:
-            failures.append("plan.dependency_edges_mismatch")
+        if observed_domain_edges != expected_domain_edges:
+            failures.append("plan.domain_dependency_edges_mismatch")
+        if tuple(artifacts.observed_governance_steps) != tuple(
+            context.world.gold.expected_governance_steps
+        ):
+            failures.append("plan.governance_steps_mismatch")
+        expected_governance_edges = {
+            (edge.upstream_step_id, edge.downstream_step_id)
+            for edge in context.world.gold.expected_governance_edges
+        }
+        observed_governance_edges = {
+            (edge.upstream_step_id, edge.downstream_step_id)
+            for edge in artifacts.observed_governance_edges
+        }
+        if observed_governance_edges != expected_governance_edges:
+            failures.append("plan.governance_edges_mismatch")
         return _grade(
             "plan",
             passed=not failures,
             failures=failures,
             expected_roles=gold.expected_agent_roles,
             observed_roles=artifacts.observed_agent_roles,
-            expected_steps=context.world.gold.expected_steps,
-            observed_steps=artifacts.observed_steps,
+            expected_domain_steps=context.world.gold.expected_domain_steps,
+            observed_domain_steps=artifacts.observed_domain_steps,
+            expected_domain_dependency_edges=tuple(sorted(expected_domain_edges)),
+            observed_domain_dependency_edges=tuple(sorted(observed_domain_edges)),
+            expected_governance_steps=context.world.gold.expected_governance_steps,
+            observed_governance_steps=artifacts.observed_governance_steps,
+            expected_governance_edges=tuple(sorted(expected_governance_edges)),
+            observed_governance_edges=tuple(sorted(observed_governance_edges)),
         )
 
     def _tool_grader(self, context: V2GradingContext) -> LayerGrade:

@@ -1,6 +1,6 @@
 {
   "manifest_id": "agent-harness-v2",
-  "dataset_version": "4d-b2.4",
+  "dataset_version": "4d-b5.5",
   "status": "generated",
   "generated_by": "deterministic_rule_generator",
   "human_reviewed": false,
@@ -9,6 +9,6 @@
   "frozen_now": "2026-08-01T00:00:00Z",
   "world_state_count": 300,
   "query_count": 1200,
-  "world_states_sha256": "d3e11b9a70efdc1cd551f3a25b1e668848fcbc0d34bfc1172f564b05cd6c2623",
-  "queries_sha256": "a587449e25b9ea731d428c0aa70f4418ae19e8c374c19bf58f84b7cfa388f6c9"
+  "world_states_sha256": "16468b04f227cfe687aeeb07c7c27739b451deb2de76596e21ef597e377afcc3",
+  "queries_sha256": "d14d79e43cd327c709dc8f1b4ed7efb5f02d02340fe426b426cf33eab5218e95"
 }

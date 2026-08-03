@@ -167,9 +167,25 @@ provider、base URL、API Key、模型和 timeout 来自服务端环境。Gatewa
 
 4B 目标允许 Router/Planner/Domain Agent/Supervisor 使用各自固定 schema，但它们不能自由生成工具和身份字段。FinalAnswer 仍经过单独输出 schema 和 Final Output SafetyAgent。规则安全、Tool 权限和数据库状态机不能被模型输出覆盖。
 
-任务五已落地 `ComplexityRoute`、`TaskPlan`、`AgentTaskResult`、`SupervisorDecision` 和三阶段 `SafetyDecision` 契约，并提供不依赖外部系统的 `DeterministicComplexityRouter`。任务六已经把这些契约接入三个 deterministic 领域 Agent、一次性 `DeterministicTaskPlanner` 和串行 `DeterministicBoundedSupervisor`；这层仍不访问数据库、Provider、Tool Registry 或 LLM。
+任务五已落地 `ComplexityRoute`、`TaskPlan`、`AgentTaskResult`、`SupervisorDecision` 和三阶段 `SafetyDecision` 契约，并提供不依赖外部系统的 `DeterministicComplexityRouter`。任务六保留三个 deterministic 领域 Agent、一次性 `DeterministicTaskPlanner` 和 `DeterministicBoundedSupervisor` 作为离线编排内核；4D-B4 另外把同一 Supervisor 接入 `runtime_domain_agents.py`，由运行时 Triage/Medication/Report Agent 通过 Tool Registry 读取数据库、Provider 和 RAG。正式业务路径不把 Supervisor 结果当日志，而是使用它决定真实执行角色。
 
-任务六的聚合结果是 `OrchestrationRunResult`：简单请求保留一个直达结果，复杂请求保留一次性计划、按顺序的 Agent 结果、重试/降级/终止决策和最终终止原因。它是任务七治理接线、任务八 checkpoint 和任务十一 Harness 的输入边界，不等于已经完成真实医疗数据查询。
+### 11.1 4D-B5 已冻结并实现的编排契约
+
+4D-B4 的运行时接线已经让 Supervisor 能真正调用三个 Tool-backed 领域 Agent，但代码审查发现三个需要收口的工程问题：
+
+1. `DeterministicTaskPlanner` 能执行显式依赖，却主要按角色遍历生成步骤，当前很多复杂请求的 `dependency_edges` 仍为空。
+2. `PlanStep.allowed_tools` 已存在于计划契约，但运行时 Agent 还需要在每次 `call_tool` 时携带当前 `step_id`，并由 Tool Registry 再做一次计划级白名单校验。
+3. canonical 三领域 Agent 与旧兼容入口中的 Profile/Refill/Pharmacy/Reminder 角色仍同时可见，需要把旧角色限制在适配层，避免角色、权限和上下文投影出现两套真相。
+
+路线图 4D-B5.1 已按 A+A+A 冻结以下选择：
+
+- 推荐将业务 DAG 与固定治理边分开。`TaskPlan` 只表达领域步骤和业务依赖；Safety、Confirmation、FinalAnswer、Evaluator 由 `UnifiedHealthGraph` 固定调用，并单独记录治理边。
+- 推荐 Planner 使用确定性业务依赖模板生成边，不依赖 LLM。模板由结构化 intent、action_type、required_capabilities 驱动，结果经过无环、成员、角色、步数和上游失败校验。
+- 不采用统一类型图或 model-assisted Planner；这两种方案需要额外的 `node_kind`/候选依赖 schema、拒绝与 deterministic fallback 规则，当前阶段不引入。
+
+B5.2 至 B5.4 已由互不重叠的工作单元完成；B5.5 v2 评测对齐和 B5.6 全链路回归也已按线性依赖收口。当前实现可以宣称：Planner 对明确业务顺序生成确定性依赖、runtime 强制执行步骤白名单、旧角色通过兼容适配层映射；不能把没有明确顺序的任务夸大为“自动推断出的依赖图”。
+
+任务六的聚合结果是 `OrchestrationRunResult`：简单请求保留一个直达结果，复杂请求保留一次性计划、按顺序的 Agent 结果、重试/降级/终止决策和最终终止原因。4D-B4 的运行时 Agent 会把实际 `tool_calls`、`source_refs` 和成员作用域填入同一结果，再交给任务七治理、任务八 checkpoint 和任务十一 Harness；因此需要区分“纯内核结果”和“真实业务执行结果”。
 
 ## 12. 可观测性
 
@@ -243,7 +259,7 @@ source_ids
 
 | 当前实现 | 收口目标 | 对应任务 |
 | --- | --- | --- |
-| UnifiedHealthGraph 已接入患者端业务入口，内部业务执行由 ProductWorkflow 适配器负责；Router/三领域 Agent/bounded DAG Supervisor 已独立评测 | 已增加 FinalClaim、AnswerEnvelope、Trace v2 和正文/Claim 一致性校验 | 4D-B2.3 DONE |
+| UnifiedHealthGraph 已接入患者端业务入口，默认由 SupervisorBusinessWorkflow 让 Supervisor 实际调用三个运行时领域 Agent；Router/三领域 Agent/bounded DAG Supervisor 已独立评测 | 已增加 FinalClaim、AnswerEnvelope、Trace v2 和正文/Claim 一致性校验 | 4D-B2.3 / B4 DONE |
 | 任务六领域编排默认 deterministic | 领域决策可选 model-assisted，始终受约束 | 后续 Provider/模型增强 |
 | 新业务链路已自动生成本地 DRAFT，确认后执行本地状态迁移；旧 Runtime 保留兼容 | 任务八已落地 PG 权威 checkpoint + Redis TTL cache/协调 | 8 |
 | `TaskCheckpointService` 写入不可变 checkpoint，`TaskCheckpointCache` 校验作用域和版本；确认 run 使用最小投影 | 后续任务九的 Tool/Provider 可靠性和真实外部联调 | 8–9 |
@@ -313,3 +329,23 @@ Harness fixture 在宿主机离线执行，避免把测试数据打进 backend �
 4D-B3 不改变业务图的治理边界。真实模型仍只通过 `ModelGateway` 进入最终答案草稿节点；`run_4d_b3_real_llm.py` 复用 PostgreSQL shadow transaction、Provider/RAG 隔离和九层 deterministic grader，并额外从脱敏 `model` Observation 读取 provider usage、fallback 和模型耗时。
 
 真实 token 只能来自 provider 返回的完整 `input/output/total` usage。成本计算需要本机 `.env` 提供每百万输入/输出 token 价格；缺少 usage 或价格时保持 `N/A`。没有 `--live`、没有 Key 或 provider 不是 `openai_compatible` 时，runner 只生成 blocked 报告，不访问网络。B3 的 deterministic contract pass rate 不是自然语言答案质量；答案质量必须经过人工复核。审核队列额外保存只读 `ConfirmationDraftSnapshot`。审核完成后，finalizer 校验队列未修改 FinalAnswer、成员、来源和期望字段，规范化 pass/fail，计算人工通过率并冻结 canonical queue hash 与输出文件 manifest。当前 8 条 development 固定样本已经完成该流程。
+
+## 19. 2026-08-02 用户端 UX-04
+
+UX-04 只调整前端投影，不改变后端运行图、数据库 schema、Tool Registry 或 Agent 状态机：首次请求仍由代码发送未确认状态，后端 continuation 仍需要显式人工确认；页面将确认提示和历史记录改成用户可理解的自然语言，并按当前成员读取 `agent_runs`。内部运行标识、草稿边界和工具链不作为患者端操作说明展示。
+
+## 20. 2026-08-03 用户端 UX-06
+
+UX-06 在冻结 `report-detail.v1` 后实现报告读取链路：Router 只负责 HTTP 参数和 DTO，`ReportReadService` 按 `user_id + member_id` 查询既有 `medical_documents`，再将状态、指标、章节、来源和安全提示归一为前端契约。前端报告列表和 `/reports/[reportId]` 详情页只读消费该 DTO，不直接读取数据库 JSON，也不在浏览器执行医疗判断。
+
+本步没有新增上传、解析任务、Agent 工作流、Tool、RAG 写入或外部动作。来源指针必须在同一详情响应内可解析，跨成员响应由服务端和客户端双重阻断；下一步只进入路线图中的 UX-08，不扩展报告写入能力。
+
+## 21. 2026-08-03 用户端 UX-08 入口收敛
+
+UX-08 只调整前端路由投影，不改变后端 Agent、Tool Registry、RAG、Safety 或数据库结构。公共入口固定为 `/agent`、`/agent-runs`、`/family` 和 `/reports`；旧的知识、库存、续方、药箱、提醒和单条 Trace 地址由 Next.js 兼容重定向收回到业务入口。内部约束继续存在于代码和接口契约，不作为患者端页面说明。
+
+## 22. 2026-08-03 用户端 UX-09 联调收口
+
+UX-09 复用既有前后端契约完成真实 Docker 联调，没有新增数据库迁移、Agent 角色、Tool、RAG 索引或外部写操作。前端验证成员切换、首轮咨询/确认、历史与家庭数据隔离、报告权限和旧地址跳转；结果页、历史页和家庭页只做用户语言投影。
+
+为满足既有 `check_pharmacy_inventory` 输入契约，工作流输入构建器在缺少用户显式药品名时只从当前成员已成功返回的药箱/处方 Tool 证据推导药品名；没有证据则不补值。该同步保持工具注册、来源、成员和安全边界不变。

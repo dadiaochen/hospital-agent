@@ -272,6 +272,27 @@ class ToolRegistry:
             SourceRef.model_validate(item)
             for item in output.get("source_refs", [])
         ]
+        # Database tools expose one canonical ``source_id`` because their
+        # output schemas describe the domain payload, not a second nested
+        # source-reference list.  Promote that identifier at the registry
+        # boundary so every successful evidence-producing tool contributes a
+        # traceable SourceRef to the workflow and final answer.
+        canonical_source_id = output.get("source_id")
+        if (
+            not evidence_refs
+            and isinstance(canonical_source_id, str)
+            and canonical_source_id
+            and bool(output.get("evidence_present", False))
+        ):
+            evidence_refs.append(
+                SourceRef(
+                    source_id=canonical_source_id,
+                    source_type="structured_database",
+                    provider=str(output.get("source_name") or tool_name),
+                    member_id=execution_context.member_id,
+                    verified=True,
+                )
+            )
         semantic_success = output.get("success") is not False
         if not semantic_success:
             error_type = str(output.get("error_type") or "provider_unavailable")

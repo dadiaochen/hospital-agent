@@ -33,6 +33,11 @@ ROLE_ALLOWED_TOOLS: dict[DomainAgentRole, tuple[str, ...]] = {
     "TriageAgent": (
         "query_health_profile",
         "search_safety_knowledge",
+        "hospital_list_departments",
+        "hospital_list_slots",
+        "consultation_prepare_draft",
+        "search_business_knowledge",
+        "create_confirmation_draft",
     ),
     "MedicationAgent": (
         "query_health_profile",
@@ -40,11 +45,19 @@ ROLE_ALLOWED_TOOLS: dict[DomainAgentRole, tuple[str, ...]] = {
         "query_medicine_box",
         "check_pharmacy_inventory",
         "search_safety_knowledge",
+        "search_business_knowledge",
+        "consultation_prepare_draft",
+        "pharmacy_search_inventory",
+        "notification_prepare_reminder",
         "create_confirmation_draft",
     ),
     "ReportAgent": (
         "query_health_profile",
         "search_safety_knowledge",
+        "parse_medical_document",
+        "inspect_medical_image",
+        "search_business_knowledge",
+        "create_health_record_draft",
     ),
 }
 

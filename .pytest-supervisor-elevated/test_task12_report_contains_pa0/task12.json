@@ -1,0 +1,31 @@
+{
+  "task": "4B-12 PostgreSQL/Redis/Docker backend acceptance",
+  "mode": "baseline",
+  "base_url": "http://localhost:8000",
+  "started_at": "2026-08-02T08:53:31.226894+00:00",
+  "finished_at": "2026-08-02T08:53:31.226894+00:00",
+  "checks": [
+    {
+      "name": "migration",
+      "status": "PASS",
+      "detail": "head=0007"
+    },
+    {
+      "name": "redis",
+      "status": "SKIP",
+      "detail": "outage test deferred"
+    },
+    {
+      "name": "api",
+      "status": "FAIL",
+      "detail": "status=503"
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 1,
+    "skipped": 1,
+    "p95_wall_clock_ms": 7.0,
+    "sample_count": 2
+  }
+}

@@ -15,6 +15,9 @@ import type {
   PharmacyInventoryItem,
   Prescription,
   PurchaseRecord,
+  ReportDetail,
+  ReportListResponse,
+  ReportSummary,
 } from "@/lib/api/types";
 
 const API_BASE_URL = (
@@ -42,6 +45,10 @@ export const apiPaths = {
     `/api/family-members/${encodeURIComponent(memberId)}/prescriptions`,
   purchaseRecords: (memberId: string) =>
     `/api/family-members/${encodeURIComponent(memberId)}/purchase-records`,
+  reports: (memberId: string) =>
+    `/api/family-members/${encodeURIComponent(memberId)}/reports`,
+  reportDetail: (memberId: string, reportId: string) =>
+    `/api/family-members/${encodeURIComponent(memberId)}/reports/${encodeURIComponent(reportId)}`,
   confirmationDrafts: (memberId: string) =>
     `/api/confirmation-drafts?member_id=${encodeURIComponent(memberId)}`,
   pharmacyInventory: (medicineName: string, city: string) => {
@@ -237,6 +244,41 @@ export const api = {
       signal,
     );
     return assertMemberScoped(result.items, memberId, "购药记录");
+  },
+
+  async listReports(
+    memberId: string,
+    signal?: AbortSignal,
+  ): Promise<ReportSummary[]> {
+    const result = await getJson<ReportListResponse>(
+      apiPaths.reports(memberId),
+      signal,
+    );
+    return assertMemberScoped(result.items, memberId, "报告记录");
+  },
+
+  async getReportDetail(
+    memberId: string,
+    reportId: string,
+    signal?: AbortSignal,
+  ): Promise<ReportDetail> {
+    const result = await getJson<ReportDetail>(
+      apiPaths.reportDetail(memberId, reportId),
+      signal,
+    );
+    assertMemberScoped([result.report], memberId, "报告详情");
+    const sourceIds = new Set(result.sources.map((source) => source.id));
+    if (
+      result.metrics.some((metric) => !sourceIds.has(metric.source_ref)) ||
+      result.sections.some((section) => !sourceIds.has(section.source_ref))
+    ) {
+      throw new ApiClientError(
+        "报告详情来源引用不完整，页面已停止展示",
+        409,
+        "report_contract_failed",
+      );
+    }
+    return result;
   },
 
   async listConfirmationDrafts(

@@ -19,6 +19,9 @@ NonEmptyStr = Annotated[
 ]
 AgentRole = Literal[
     "Planner",
+    "TriageAgent",
+    "MedicationAgent",
+    "ReportAgent",
     "ProfileAgent",
     "RefillAgent",
     "PharmacyAgent",

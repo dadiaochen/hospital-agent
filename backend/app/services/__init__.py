@@ -16,6 +16,7 @@ from app.services.confirmation_draft_service import (
 )
 from app.services.confirmation_draft_api_service import ConfirmationDraftApiService
 from app.services.read_api_service import ReadApiService
+from app.services.report_read_service import ReportReadService
 
 __all__ = [
     "MedicineService",
@@ -30,4 +31,5 @@ __all__ = [
     "get_prescription_context",
     "search_safety_knowledge_context",
     "ReadApiService",
+    "ReportReadService",
 ]
