@@ -8,6 +8,7 @@
 - 子系统文档只解释本领域设计，不新增阶段编号或改变任务状态。
 - 已实现、正在实现和计划能力必须分开表述。
 - 同一时间只允许一个 `NEXT`；完成当前任务后才能移动 `NEXT`。
+- 已授权且互不重叠的独立支线可以同时标记为 `IN_PROGRESS`，但不得提前启动其后置任务，也不得改变主线 `NEXT` 顺序。
 - Git 历史保留已经完成的阶段事实，不为“最终架构看起来整齐”而改写过去。
 
 ## 2. 产品定位
@@ -30,6 +31,7 @@
 | --- | --- |
 | `DONE` | 代码、测试、文档和必要运行验证均已完成 |
 | `NEXT` | 当前唯一允许开始的任务 |
+| `IN_PROGRESS` | 已授权并正在执行的独立任务；完成代码、测试、文档和验证后才能标记 `DONE` |
 | `PLANNED` | 已确定范围，但前置任务尚未完成 |
 | `OUT` | 明确不属于当前最终产品范围 |
 
@@ -605,23 +607,23 @@ docs/4D_B_BENCHMARK_GUIDE.md
 
 - `B1 DONE`：Pydantic 契约、manifest/hash 校验、deterministic 数据契约 runner、报告和 `N/A` 真实性边界。
 - `B2 PARTIAL`：本地观测 runner 已执行 32 次 bounded Supervisor、12 次真实 `KeywordRetriever` 查询、40 次 ContextManager compact/reset 和 30 次 Provider 故障注入；结果写入 `docs/local_benchmark_report.4d.md`。这些使用合成 fixture 和本地实现，不是 Docker pgvector、真实外部 Provider 或真实 LLM 指标。
-- `B2.1 DONE`：新增 `UnifiedHealthGraph`，将 `/api/business-tasks` 接入统一 Router/Planner/Supervisor 边界；业务执行继续由现有 ProductWorkflow 适配器负责数据库工具、确认和冻结，`RunTrace.orchestration` 已保存编排投影。
-- `B2.2 DONE`：Supervisor 已支持依赖 ready-set、有界只读 fan-out/fan-in、确定性 reducer 和写步骤串行隔离；`EvalRuntimeOptions` 与 ContextManager 已提供仅评测可用的结构化 `all_history`，生产默认仍为 `dependency_only`。
+- `B2.1 DONE`：新增 `UnifiedHealthGraph`，将 `/api/business-tasks` 接入统一 Router/Planner/Supervisor 边界；当前默认执行器为 `SupervisorBusinessWorkflow`，由 Supervisor 实际调用运行时 `TriageAgent`、`MedicationAgent` 和 `ReportAgent`，业务 Tool、Provider、确认和冻结仍复用既有安全边界。
+- `B2.2 DONE`：独立编排内核仍支持依赖 ready-set、有界只读 fan-out/fan-in 和确定性 reducer；患者端正式业务执行默认强制串行 bounded Supervisor，避免多个 Agent 竞争同一个确认/写入作用域。`all_history` 仍仅限评测，生产默认 `dependency_only`。
 - `B2.3 DONE`：已增加结构化 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`，产品业务冻结产物会保存成员、来源指针、依赖结果和 token usage（若 provider 提供），deterministic Evaluator 已增加 Claim 覆盖率、来源精度和正文/Claim 一致性校验。
-- `B2.4 DONE（待人工审核/物化）`：已用固定 seed 生成独立的 300 个 WorldState 和 1200 条 v2 Query，完成 development/validation/holdout 切分、四种表达变体、关联校验和 SHA-256 manifest；数据明确标记为 `pending_review`，不能当作临床 gold 或最终评测结果。
+- `B2.4 DONE`：已用固定 seed 生成独立的 300 个 WorldState 和 1200 条 v2 Query，完成 development/validation/holdout 切分、四种表达变体、关联校验和 SHA-256 manifest；用户已审核 300/300 WorldState 与 1200/1200 Query，全部标记为 `pass`。这仍是合成 Gold，不是临床数据或最终回答质量结果。
 - `B2.5 DONE（本地 preview）`：已实现隔离的内存 WorldState Materializer、九类确定性 Grader、失败原因分类和统一 v2 Eval Runner；可生成 1200 条 preview 报告。当前 runner 不访问 PostgreSQL、Provider、RAG、LLM，preview 数字不进入简历。
 - `B3 OPTIONAL`：配置真实 OpenAI-compatible provider 后，执行回答质量、真实 token/cost 和模型延迟评测；没有 Key 时继续保持 `N/A`，不影响 deterministic 项目运行。
 
-4D-B 的最终数据规模、架构升级、指标公式、执行任务和简历口径统一见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。DAG 并行、`all_history` 评测基线、UnifiedHealthGraph、FinalClaim/Trace v2、v2 数据生成、Materializer、分层 grader 和本地 preview Runner 已完成；人工审核后的 PostgreSQL/Provider/RAG 物化、真实业务图执行、消融和正式报告仍属于后续目标；LLM Judge 仍只作为离线辅助。
+4D-B 的最终数据规模、架构升级、指标公式、执行任务和简历口径统一见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。DAG/`all_history` 评测基线、UnifiedHealthGraph、FinalClaim/Trace v2、v2 数据生成、Materializer、分层 grader、本地 preview Runner 和患者端 Supervisor 实际执行接线已完成；300/1200 Gold 已完成人工审核，当前正在进行审核后的 PostgreSQL/Provider/RAG 三 split integration。LLM Judge 仍只作为离线辅助。
 
 #### B.1 自动化实现
 
 1. 保留现有 260 条 v1 专项 gold、32 条 A/B/C 编排 fixture 和当前 manifest，作为兼容回归基线。
-2. 新增 UnifiedHealthGraph，将 Complexity Router、一次性 Planner、bounded Supervisor、三个领域 Agent 和固定治理边接入当前 HTTP 主链。
+2. 新增 UnifiedHealthGraph，将 Complexity Router、一次性 Planner、bounded Supervisor、三个运行时领域 Agent 和固定治理边接入当前 HTTP 主链；Supervisor 的领域结果会驱动真实 Tool Registry 调用，不再只是生成编排记录。
 3. 把复杂任务建模为有界 DAG；只并行依赖已满足、无副作用的只读领域步骤，确认、写操作、Checkpoint 和治理节点保持串行。
 4. 新增仅供评测使用的 `all_history` 上下文模式，与生产默认 `dependency_only` 比较；即使在基线中也必须保持 user/member 隔离。
 5. `[DONE]` 为 FinalAnswer 增加 FinalClaim，保留成员作用域、事实键、值、类型和 `source_ids`，避免评测时再用 LLM 从正文猜事实。
-6. `[DONE]` 生成 300 个结构化 WorldState，并为每个 WorldState 生成 4 条表达，共 1200 条 v2 Query；按 base case 拆分 development、validation 和 holdout，数据状态为 `pending_review`。
+6. `[DONE]` 生成 300 个结构化 WorldState，并为每个 WorldState 生成 4 条表达，共 1200 条 v2 Query；按 base case 拆分 development、validation 和 holdout，运行前 Gold 已由用户审核并全部标记 `pass`。
 7. `[DONE]` 先用隔离内存 backend 物化 WorldState、Provider 投影、RAG namespace 和 Gold，验证 case namespace、成员来源范围、清理和失败阻断；生产 PostgreSQL/Provider/RAG adapter 已在 B2.6 增加 shadow transaction 边界。
 8. `[DONE]` 为 Route、Plan、Dependency、Tool、Claim、RAG、Agent 安全、上下文、可靠性和最终数据库状态建立确定性 grader，并统一 failure taxonomy。
 9. `[DONE]` 实现统一 v2 Eval Runner、split/max_cases/repeat、幂等 report id、JSON/Markdown 输出和 pending-review gate；B2.6 已增加 A/B/C/D preview、真实图执行器和 Docker 集成报告入口。
@@ -653,8 +655,8 @@ docs/benchmark_badcases.4d.md
 #### B.4 完成标准
 
 - 同一 manifest 和 commit 的 deterministic 结果可重复。
-- 患者端 HTTP RunTrace 已包含 Router、Plan、Supervisor decision 和领域 Agent result；当前主运行架构不再与独立编排内核相互矛盾。
-- UnifiedHealthGraph 已通过统一入口保存 Router/Plan/Supervisor/领域结果；4D-B2.2 的只读 DAG fan-out/fan-in 已在 bounded Supervisor 内核完成，固定业务适配器的安全、确认、冻结和副作用仍串行。
+- 患者端 HTTP RunTrace 已包含 Router、Plan、Supervisor decision、真实领域 Agent result 和实际 Tool/Provider 证据；当前主运行架构不再把 Supervisor 只当作旁路日志。
+- UnifiedHealthGraph 已通过统一入口保存 Router/Plan/Supervisor/领域结果，并由 `SupervisorBusinessWorkflow` 执行真实运行时领域 Agent；独立内核保留只读 DAG fan-out/fan-in 能力，正式业务路径的安全、确认、冻结和副作用仍串行。
 - 300 个 WorldState、1200 条 v2 Query 已按 base case 拆分 development、validation、holdout，并通过固定 seed、hash 和关联校验；本地物化、清理和失败恢复已完成，真实 PostgreSQL/Provider/RAG 物化仍待完成。
 - v2 本地 preview Runner 已对 1200 条 Query 生成九层 grader 结果、task success、各层通过率和 p95 preview latency；该报告只证明评测管线接线，不证明业务质量。
 - FinalClaim 可以在不解析自然语言正文的情况下完成事实、来源和成员评分。
@@ -664,6 +666,86 @@ docs/benchmark_badcases.4d.md
 - 自动化、Docker 集成和可选真实模型运行分别生成报告。
 - `README`、测试指南、面经、核心代码学习文档和简历口径同步更新。
 - 只有报告中的真实数字可以进入简历；未提供 Key 或人工 gold 时对应指标保持 `N/A`。
+
+### 10.2.1 4D-B4：Supervisor 实际执行收口
+
+状态：`DONE`。本修复阶段针对代码审查发现的架构偏差：旧入口曾经把 Router/Planner/Supervisor 只写入 `RunTrace`，随后仍由外部 `business_domain` 直接选择旧业务分支。现在 Supervisor 的角色选择真正决定领域 Agent 和 Tool Registry 的执行，同时保留简单请求直达、固定治理边和兼容 API。
+
+| 子任务 | 状态 | 目标 | 验收证据 |
+| --- | --- | --- | --- |
+| B4.1 运行链契约与路由权威 | `DONE` | 对齐三类运行时领域角色、工具权限和文本信号优先规则 | `AgentRole`、`ExecutionAgentRole`、ToolSpec allowlist 和冲突路由测试 |
+| B4.2 真实运行时领域 Agent | `DONE` | 实现 Triage/Medication/Report 三个 Tool-backed Agent，只通过运行时能力接口请求 Tool | `runtime_domain_agents.py`、工具证据和成员作用域进入 `AgentTaskResult` |
+| B4.3 Supervisor 接管 UnifiedHealthGraph | `DONE` | 由 Supervisor 选择并调用领域 Agent，禁止外部 `business_domain` 直接决定最终执行分支 | `SupervisorBusinessWorkflow` 默认接线；单域、跨域和报告/慢病冲突测试 |
+| B4.4 治理与冻结边界 | `DONE` | 保留 Request/Action/Final Output Safety、确认状态机、SourceRef、RunTrace、Checkpoint 和失败降级 | 现有业务 API 回归、确认 continuation、来源 Observation 和失败状态测试 |
+| B4.5 集成回归与消融保护 | `DONE` | 验证未选 Agent 不被调用、跨域任务调用两个 Agent、成员不串扰、Supervisor 失败可解释 | `test_business_task_api.py` 新增运行时 Agent/Tool 证据断言；Router 冲突用例通过 |
+| B4.6 文档、学习材料和 Git 收口 | `DONE` | 更新 README 流程图、核心代码走读、架构/工具/业务文档和本阶段路线记录 | 文档与实际调用链一致；全量测试和 diff review 通过 |
+
+### 10.2.2 4D-B5：编排契约、依赖图和角色边界收口
+
+状态：`DONE`（代码与回归已收口，2026-08-03；后续正式评测仍有独立门槛）。这是对 4D-B4 代码审查后新增的修复阶段，已修正契约和评测口径；后续继续 300 个 WorldState / 1200 条 Query 的人工审核、真实物化和正式报告。它不新增医疗业务能力，目标是让“Planner 生成什么、Supervisor 调度什么、领域 Agent 调用什么、治理节点何时固定执行”在代码、评测和文档中使用同一套定义。
+
+#### B5.1 架构决策门
+
+状态：`DONE`（2026-08-03，用户确认三项均采用 A 方案）。已冻结：业务 DAG 与治理边分开；Planner 使用确定性业务规则生成依赖；`PlanStep.allowed_tools` 是该步骤完整执行上限。
+
+**决策一：业务 DAG 与治理边如何建模**
+
+| 方案 | 设计 | 优点 | 代价 |
+| --- | --- | --- | --- |
+| **A：分开建模（推荐）** | `TaskPlan` 只保存 Triage/Medication/Report 业务步骤和业务依赖；Safety、Confirmation、FinalAnswer、Evaluator 仍由 `UnifiedHealthGraph` 的固定边调用，单独记录为 `governance_edges` | 保持 Supervisor 只调度业务 Agent；治理节点不能被模型或 Supervisor 删除；契约最清晰，和当前安全边界一致 | 报告中需要分别展示 `domain_dependency_edges` 与 `governance_edges` |
+| B：统一类型图 | 一个 `WorkflowPlan` 同时保存业务节点和治理节点，用 `node_kind=domain/governance` 区分；Supervisor 只能选择 domain 节点，治理节点仍由固定边触发 | 只有一份图，展示完整链路方便 | schema、grader、运行时校验更复杂，容易再次把 Safety/Evaluator 误解成 Supervisor 的候选 Agent |
+
+**决策二：依赖由谁生成**
+
+| 方案 | 设计 | 优点 | 代价 |
+| --- | --- | --- | --- |
+| **A：确定性业务规则（推荐）** | Planner 根据结构化 intent、action_type、required_capabilities 和固定业务依赖模板生成边；不依赖 LLM，生成后做角色、成员、环和步数校验 | 可复现、可解释、容易做 gold 和回归；符合医疗场景的 bounded 约束 | 新业务类型需要显式增加规则 |
+| B：模型提出、代码校验 | LLM 提出候选步骤和依赖，代码只接受合法角色、工具、成员、无环且不超限的结果；失败时回退确定性模板 | 对新表达更灵活 | 依赖边不稳定，评测和线上故障定位更难；不能作为当前正式验收前置 |
+
+本阶段最终采用 **A + A + A**。不引入 model-assisted Planner，不把治理节点加入 Supervisor registry，不增加第二套 runtime 工具权限字段。
+
+**决策三：`PlanStep.allowed_tools` 的权限语义**
+
+| 方案 | 设计 | 优点 | 代价 |
+| --- | --- | --- | --- |
+| **A：完整执行上限（推荐）** | `allowed_tools` 是该步骤运行时可以调用的完整工具集合；是否可并行另由 `read_only/parallel_safe` 判断 | 只有一个权限真相，容易审计和测试 | Planner 必须为 direct step 也生成完整工具集合，不能用空列表代表“全部允许” |
+| B：拆分调度与执行字段 | 保留当前 `allowed_tools`，新增 `runtime_allowed_tools` 表示实际执行集合 | 兼容已有部分语义 | 两套字段容易漂移，评测和面试解释成本更高 |
+
+最终按 **A** 设计；B5.3 已证明步骤白名单传到 runtime，并在计划外工具调用进入 handler 前拒绝。
+
+#### B5.2 Planner 生成真实业务依赖
+
+状态：`DONE`（2026-08-03）；前置：B5.1。已用结构化 `DependencyHint` 和确定性业务规则生成依赖：明确表达“先看报告/症状，再准备续方”时生成上游到 `MedicationAgent` 的业务边；没有明确顺序时不凭空制造依赖。Planner 会先做拓扑排序，`TaskPlan` 会校验边集合、环、未知步骤和上游失败传播。治理边不塞进 `TaskPlan` 的业务依赖集合。
+
+#### B5.3 强制执行 PlanStep 工具白名单
+
+状态：`DONE`（2026-08-03）；前置：B5.1。运行时领域 Agent 每次 `call_tool` 都携带当前 `step_id` 和该步骤的 `allowed_tools`；Supervisor 在进入 Tool Registry/handler 前先拒绝计划外工具，并写入失败 trace。角色默认工具不能覆盖计划级白名单；已补充未授权工具拒绝、计划允许和兼容入口回归测试。
+
+#### B5.4 统一角色词汇并隔离兼容适配层
+
+状态：`DONE`（2026-08-03）；前置：B5.1。正式业务只保留 `TriageAgent`、`MedicationAgent`、`ReportAgent` 三个领域 Agent；`ProfileAgent`、`RefillAgent`、`PharmacyAgent`、`ReminderAgent` 已降为 `MedicationAgent` 内部 skill/service 的显式兼容映射；`SafetyAgent` 是治理节点；`Planner` 是规划组件，不是 Tool Registry 的业务执行角色。旧 `/api/agent-runs` 通过 `legacy_role_adapter.py` 保留兼容，不再作为新业务主链的第二套角色真相。
+
+#### B5.5 对齐 v2 Gold、步骤名称和依赖评测
+
+状态：`DONE`（2026-08-03）；前置：B5.1、B5.2、B5.3、B5.4。已保留 300/1200 Gold 的业务意图，并分别校验 canonical domain steps、domain dependency edges、governance steps 和 governance edges。`safety-review` 只属于固定治理投影，不再作为 Supervisor 领域步骤；grader、integration artifact、报告字段和失败分类已同步到 `4d-b5.5`。
+
+#### B5.6 全链路回归、文档和学习材料收口
+
+状态：`DONE`（2026-08-03）；前置：B5.5。已完成 Planner -> Supervisor -> Runtime Domain Agent -> Tool Registry 的集成测试，验证依赖顺序、允许工具、跨域执行、上游失败、未选 Agent 不执行和治理边不可绕过；全量 backend 测试、v2 preview 和文档口径已收口。Docker/PostgreSQL 的真实环境验收、300/1200 Gold 人工审核和三 split 正式报告仍是后续独立门槛，不伪装成 B5.6 已完成的指标。
+
+#### B5 并行与线性执行图
+
+```text
+B5.1 决策门（必须先完成）
+  ├─> B5.2 Planner 依赖规则
+  ├─> B5.3 PlanStep 工具白名单
+  └─> B5.4 角色词汇/兼容层
+B5.2 + B5.3 + B5.4
+  └─> B5.5 v2 Gold / grader 对齐
+       └─> B5.6 集成回归与文档收口
+```
+
+B5.2、B5.3、B5.4 在契约冻结后写入集合互不重叠的代码和测试时可以并行；B5.5 与 B5.6 必须按图线性推进。任何并行分支都不能同时修改同一 schema、同一运行时入口或同一测试 fixture。
 
 ### 10.3 执行顺序
 
@@ -682,7 +764,17 @@ docs/benchmark_badcases.4d.md
   -> 4D-B3 DONE：可选真实 LLM、token、成本和性能测试；8 条 development 样本已人工复核并冻结 final report
   -> 人工复核 B3 badcase DONE（8/8 通过）
   -> 更新简历与面经真实指标 DONE（明确 8 条样本范围）
-  -> 补齐 v2 全量 identity/source map 与三 split integration/A-B-C-D 正式报告 NEXT
+  -> 4D-B4.1 至 B4.5 DONE：Supervisor 实际调用三个运行时领域 Agent，并接入患者端业务入口
+  -> 4D-B4.6 DONE：README、核心代码和架构文档已同步；全量回归通过
+  -> 4D-B5.1 架构决策门 DONE：A+A+A 已冻结
+  -> 4D-B5.2 / B5.3 / B5.4 并行实现 DONE
+  -> 4D-B5.5 v2 Gold / grader 对齐 DONE
+  -> 4D-B5.6 全链路回归与文档收口 DONE
+  -> 4D-B 最终评测收口 A：生成 300/1200 Gold 审核队列与 identity/source map 模板 NEXT
+  -> 4D-B 最终评测收口 B：补齐逐 WorldState 实际 identity/source map
+  -> 4D-B 最终评测收口 C：运行 development/validation/holdout 三 split integration
+  -> 4D-B 最终评测收口 D：在同一 manifest 下运行真实 A/B/C/D
+  -> 4D-B 最终评测收口 E：人工 badcase 复核、冻结 manifest 与正式报告
 ```
 
 ## 11. 明确非目标
@@ -701,11 +793,25 @@ docs/benchmark_badcases.4d.md
 
 `4B` 和 `4C` 已完成，MVP 产品能力已经收口。4D-A 的五组 v1 gold 已完成人工审核并冻结 manifest；4D-B2.1 至 B2.6 的实现与本机证据层已经完成，Docker 证据为 19/19 通过。4D-B3 也已完成：`deepseek-v4-flash` 在 8 条 development 固定样本上真实运行，人工对 FinalAnswer 和冻结草稿/来源快照逐条复核，8/8 通过；平均总 token `1032.5`、平均单次成本 `$0.00146525`、本机 workflow/model p95 为 `5239/4452 ms`，final report 和 manifest 已冻结。
 
-当前唯一下一步是补齐 300 个 WorldState/1200 条 Query 的人工审核与本机 identity/source map，再运行 development/validation/holdout 的完整 integration 和 A/B/C/D 正式报告。B3 的 8 条结果只能按固定样本范围写入简历，不能扩展为生产 SLO、临床安全率或开放医疗问答准确率。
+4D-B4 已收口：Supervisor 实际执行接线、运行时三个领域 Agent、Tool Evidence、成员隔离测试、README 和核心代码走读均已同步，全量 `backend/tests` 通过。4D-B5.1 冻结的 A+A+A 已全部落地：B5.2 用确定性规则生成业务依赖，B5.3 在 runtime 强制步骤工具上限，B5.4 用兼容适配层收敛角色，B5.5 将 v2 Gold 的 domain DAG 与治理图分开，B5.6 完成回归与文档收口。B3 的 8 条结果只能按固定样本范围写入简历，不能扩展为生产 SLO、临床安全率或开放医疗问答准确率。
+
+当前不是“代码功能开发的最后一步”，而是 4D-B 正式指标的最后一道证据门。MVP 业务和前端主线已经完成；只有下面的 A-E 全部完成后，才能把 v2 的真实回答质量、RAG Recall、安全召回、上下文保留率、Provider 恢复率、三 split p95 或 A/B/C/D 差异写成最终实测结果。未完成前，报告必须保持 `pending_review`、`preview` 或 `N/A`。
+
+| 子步骤 | 状态 | 内容 | 是否需要用户/本机外部条件 |
+|---|---|---|---|
+| A | `DONE` | 生成 `v2_review_queue.local.json` 和 `v2_identity_map.template.local.json`；300 个 WorldState、1200 条 Query 已由用户审核并全部标记 `pass` | 审核队列和模板位于 `var/demo/`，不进 Git |
+| B | `DONE` | 生成逐 WorldState 的 case-scoped 本机 identity/source map；Docker deterministic smoke `2/2` 通过，缺失来源保持 fail-closed | 本机 1 个 demo user、3 个 demo member；90 个 case 没有对应本机健康记录，不能伪造 |
+| C | `IN_PROGRESS` | 使用真实 `UnifiedHealthGraph` 跑 development、validation、holdout，保留 PostgreSQL shadow transaction、Provider/RAG trace 和清理结果 | Docker 和当前本机 map 已就绪；holdout 预检发现 1 个 Gold/runtime 契约不一致，正式报告暂缓 |
+| D | `PENDING` | 在同一数据 manifest、模型/Provider、seed 和环境下运行 A/B/C/D 消融；只改变约定的路由、并发或上下文开关 | 需要 C 通过 |
+| E | `PENDING` | 人工审核 FinalAnswer、FinalClaim、来源和 badcase，生成三 split 正式报告并冻结最终 manifest | 需要人工审核 |
+
+本轮已完成 A/B：`prepare_4d_final_gate.py` 生成审核队列和空模板；用户确认 300/1200 全部 `pass`。`prepare_4d_local_identity_map.py` 从本机 Docker PostgreSQL 读取 demo user/member/profile/record 元数据，生成 300 个 case map；provider/RAG 和报告运行时来源不写入假 ID。B 的 deterministic Docker smoke 只覆盖 2 条样例，报告仍为 `preview`。C 预检已启动：development `4/4`、validation `4/4` 通过；holdout `4/4` 命中同一个已审核安全检查 WorldState 的 Gold/runtime 契约不一致，失败原因包括多余的 Provider 来源要求、缺少 Provider attempt、Safety flag 与 Claim 来源不一致。该问题不会通过伪造 Provider 调用或修改运行结果掩盖；C-E 不能由 smoke、空值或合成实际 ID 代替。
 
 2026-07-30 完成一次 4C 后文档与证据维护：补充面向初学者的逐行核心代码走读、简洁版 Agent 简历、可复现指标与后续 gold set/延迟/Token/重试测量方案、测试充分性边界、本地演示数据库说明和十步 Docker 启动路径。本次维护不改变阶段状态，不把尚未接入业务 API 的 bounded Supervisor 编排内核描述为当前运行链能力。
 
 2026-07-31 完成文档信息架构收口：学习区只保留“从 0 到 1 的任务拆分与技术选型、核心代码逐行走读、完整 API 实战”三条工程主线，简历和项目面经独立分类；删除被当前设计覆盖的阶段教程、旧 3C/3D/4A 与局部 4B 报告和无关通用八股。当前有效证据只保留 32 条编排消融、Docker 后端验收、浏览器 E2E、MVP 收口和 4D 报告。本次整理不改变 4D-B 状态，也不改写简历或面经正文。
+
+2026-08-03 完成 4D-B 最终评测收口 A/B：用户确认 300 个 WorldState 和 1200 条 Query 全部 `pass`；新增本机 Docker identity/source map 生成器，覆盖 300 个 case，deterministic integration smoke `2/2` 通过。发现本机 seed 只有 1 个 demo user、3 个 demo member，90 个 case 缺少本机健康记录；这些 case 后续必须按 fail-closed 处理，不能写成全量真实质量指标。随后进入 C 预检：development `4/4`、validation `4/4` 通过，holdout `4/4` 暴露一个已审核 Gold 与运行时证据契约不一致的问题，当前 C 保持 `IN_PROGRESS`。
 
 2026-07-31 根据最终评测实施方案升级 4D-B：保留 260 条 v1 专项 gold，同时将 UnifiedHealthGraph、有界 DAG 并行、评测用 `all_history` 基线、FinalClaim、300 个 WorldState/1200 条 v2 Query、分层 grader 和统一 Eval Runner 纳入最终目标。生产默认仍使用角色最小上下文，确认、写操作和治理节点保持串行。简历继续使用简洁中文口径，所有新增百分比必须由最终报告生成。
 
@@ -727,3 +833,38 @@ docs/benchmark_badcases.4d.md
 2026-08-01 继续 4D-B3：在保留已审核的 1-case 目录后，对当前 identity map 覆盖的 `world-v2-0001` 四种表达变体运行 4-case live preview。四条均自动评测通过，真实 provider 生效率 `1.0`、fallback `0.0`、平均总 token `1018`、workflow p95 `5038 ms`、model p95 `4300 ms`；结果仍标记 `preview`，四条 badcase 仍需人工复核，不能写成最终回答质量或泛化指标。
 2026-08-01 继续 4D-B3：为 `world-v2-0001` 父亲提醒和 `world-v2-0002` 母亲购药补充本机真实成员/来源映射，运行 8 条 `deepseek-v4-flash` development live preview。8 条自动九层契约全部通过，真实 provider 生效率 `1.0`、fallback `0.0`、usage 可用率 `1.0`、平均总 token `1032.5`、workflow p95 `5239 ms`、model p95 `4452 ms`；结果仍为 `preview`，8 条仍需人工复核，不能写成最终回答质量或全量指标。当前唯一下一项仍为人工复核 badcase、补齐其余 WorldState 映射并生成正式报告。
 2026-08-01 完成 4D-B3：新增人工审核 finalizer，兼容人工填写的 `pass/fail`，校验 report id、query 顺序和不可变证据，拒绝 pending、缺少失败备注或被篡改的回答，并冻结 canonical review queue hash 与四个产物文件 hash。8 条 development 样本人工复核结果为 8/8 通过；final report 状态为 `completed`，平均总 token `1032.5`、平均成本 `$0.00146525`、workflow/model p95 为 `5239/4452 ms`。该报告只覆盖两个成员和提醒/购药场景；4D-B 整体仍需完成 300/1200 全量映射与三 split 正式报告。
+
+2026-08-02 完成 4D-B4 Supervisor 实际执行收口：代码审查发现旧统一入口曾将 Supervisor 结果作为旁路编排记录，随后仍由外部 `business_domain` 直接进入固定业务分支。新增 `SupervisorBusinessWorkflow`、运行时 Tool-backed Triage/Medication/Report Agent、角色权限同步和来源证据提升；单域、跨域、未选 Agent、冲突业务域和成员隔离回归已覆盖，README、核心代码走读、架构/工具/业务文档已与当前调用链同步。全量测试 `360 passed`。
+
+2026-08-03 代码审查新增并完成 4D-B5：确认并修复 Planner 依赖边通常为空、runtime 角色默认工具可能绕过 `PlanStep.allowed_tools`、canonical 三领域 Agent 与旧兼容角色并存、v2 Gold 将 `safety-review` 治理边混入 TaskPlan 领域步骤等问题。用户确认 B5.1 采用 A+A+A：业务 DAG 与治理边分开、确定性 Planner、`allowed_tools` 作为完整执行上限。B5.2-B5.4 并行实现，B5.5-B5.6 线性收口；全量 backend 回归为 `381 passed`。
+
+## 13. 当前用户端改版任务清单（用户授权的线性体验子任务）
+
+本清单是 4C 产品交付完成后的用户端体验收敛任务，不新增项目阶段编号，不改变 4D-B 的阶段状态、验收顺序或后端 Agent 工作范围。它是当前前端改版的唯一执行顺序。每项任务只有在代码、最小测试、相关文档和运行验证都完成后才可标记为 `DONE`；`NEXT` 表示当前体验线唯一允许开始的下一项。
+
+| 编号 | 状态 | 任务 | 范围与验收边界 | 前置任务 |
+|---|---|---|---|---|
+| UX-01 | DONE | 公共壳层 | 顶部导航、家庭成员选择、响应式布局；用户端不展示内部执行约束、Trace、工具权限等信息 | 无 |
+| UX-02 | DONE | AI 健康助手：空状态 + 输入区 | 首屏只保留面向用户的欢迎空状态、成员提示、自然语言输入框和开始咨询入口；移除固定开发者场景、内部参数和执行边界文案 | UX-01 |
+| UX-03 | DONE | AI 健康助手：消息区、快捷问题、结果卡片 | 将 Agent 运行结果改为用户可读的对话消息和摘要卡片；保留来源与安全信息的必要用户表达 | UX-02 |
+| UX-04 | DONE | AI 健康助手：确认交互与历史咨询 | 将确认前后的动作表达改为自然语言；支持历史咨询入口和当前成员隔离 | UX-03 |
+| UX-05 | DONE | 报告解读：上传区与报告列表 | 支持用户上传报告、查看报告列表和处理状态；不把解析链路、工具调用等内部实现放入页面 | UX-01 |
+| UX-06 | DONE | 报告解读：详情、指标解释与来源 | 提供报告详情、指标的通俗解释、趋势/参考范围和来源提示；不输出诊断或治疗结论 | UX-05、报告详情数据契约 |
+| UX-07 | DONE | 家庭管理 | 成员、健康档案、用药、处方、报告和历史时间线；按成员隔离展示权威业务数据 | UX-01 |
+| UX-08 | DONE | 内部入口清理与兼容 | 清理用户端内部页面入口，保留必要兼容路由；同步端到端交互、文案和回归测试 | UX-03、UX-04、UX-06、UX-07 |
+| UX-09 | DONE | 跨页面验收与交付 | 完成真实前后端核心流程联调、桌面端/移动端视觉验收、可访问性检查、前端测试、构建验证和文档收口 | UX-08 |
+
+4D-B 的正式评测和全量验收仍按本路线图既有顺序推进；本清单约束用户端改版的主线顺序和已授权并行支线。当前 UX-01～UX-09 已完成，用户端改版主线已收口。
+
+2026-08-02 完成用户端 UX-02：AI 健康助手首屏改为自然语言空状态与输入区，移除固定开发者场景、可选内部参数和执行边界文案；保留现有首轮请求、成员隔离和安全确认代码契约。组件测试覆盖空状态、空输入禁用、自然语言提交和成员切换；前端 E2E 已同步改用输入框流程。下一项为 UX-03 消息区、快捷问题和结果卡片。
+2026-08-02 完成用户端 UX-03：AI 健康助手增加可直接填入输入框的快捷问题和本轮用户消息气泡，提交结果改为用户可读的整理结果、参考信息和安全提示，隐藏运行标识、Trace、工具名、原始来源标识和安全 flag；确认区继续留给 UX-04。
+2026-08-02 完成用户端 UX-05 与 UX-07：报告解读上传/最近报告列表和家庭健康总览分别由独立子代理并行实现，补齐页面测试后完整前端回归为 7 个测试文件、27 个测试通过；UX-06 仍等待报告详情契约，UX-08/UX-09 不提前启动。
+2026-08-02 进入用户端 UX-03：主线程按 UX-02 后的线性顺序改造 AI 健康助手消息区、快捷问题和结果卡片；UX-04 作为唯一主线下一项，确认交互和历史咨询不在本步提前实现。
+2026-08-02 进入用户端 UX-04：按唯一主线改造自然语言确认交互与历史咨询记录；本步不扩展报告详情、内部入口清理或跨页面验收。
+2026-08-02 完成用户端 UX-04：确认区改为自然语言“请确认是否继续”，内部确认字段仍保留在代码契约；新增“历史咨询”导航和当前成员隔离记录页，补充确认前置勾选、确认请求与历史成员切换测试。前端类型检查通过，8 个测试文件、29 个测试通过，Next.js 生产构建通过；UX-06 继续等待报告详情数据契约。
+2026-08-03 进入用户端 UX-06：先冻结 `report-detail.v1` 报告详情数据契约，明确报告状态、指标值/参考范围/趋势、通俗解释、来源和安全提示；契约不包含上传、解析、诊断、治疗或外部提交。随后按该契约实现报告详情页面。
+2026-08-03 完成用户端 UX-06：后端新增按用户与家庭成员隔离的只读报告列表/详情接口，复用 `medical_documents` 并将状态和结构化内容归一到 `report-detail.v1`；前端接入报告列表和 `/reports/[reportId]` 详情页，展示摘要、指标、参考范围、趋势、来源和阅读提示，不展示内部标识或执行约束。前端 9 个测试文件、34 个测试通过，TypeScript 检查和 Next.js 生产构建通过；后端 `test_read_api.py` 6 个测试通过，后端全量回归 361 个测试通过。下一步按顺序进入 UX-08，清理内部入口与兼容路由。
+2026-08-03 进入用户端 UX-08：清点首页、导航和兼容路由，确认用户端主线只保留 AI 健康助手、历史咨询、家庭管理和报告解读；知识检索、购药库存、续方计划、提醒草稿和 Agent Trace 详情收回到业务入口或兼容跳转。UX-09 的视觉验收、可访问性和跨页面收口不在本步提前实现。
+2026-08-03 完成用户端 UX-08：首页、顶部导航和回归测试只保留 AI 健康助手、历史咨询、家庭管理和报告解读四类用户入口；移除搜索知识、固定演示、安全边界、草稿/Trace 等内部表达；`/knowledge`、`/purchase-plans`、`/refill-plans`、`/medicine-box`、`/reminders` 和 `/agent-runs/:id` 保留为兼容地址并跳转到对应业务入口。前端 `npm run typecheck` 通过，完整 Vitest 为 10 个测试文件、35 个测试通过，Next.js 生产构建生成 13 个页面；明确基址 `http://127.0.0.1:3000` 下 UX-08 公共入口 E2E 2 个通过。下一步唯一进入 UX-09，执行跨页面视觉、响应式、可访问性和最终交付验收。
+2026-08-03 进入用户端 UX-09：本阶段增加真实前后端联调验收，重点检查成员加载/切换、AI 健康助手首轮咨询与确认、历史咨询成员隔离、报告列表/详情成员权限、家庭管理聚合数据和旧入口兼容跳转；联调只验证并修正既有接口契约，不新增后端业务能力。随后执行桌面端、移动端视觉、可访问性、完整测试、构建和文档收口。
+2026-08-03 完成用户端 UX-09：在 Docker 前后端环境完成成员加载/切换、AI 健康助手首轮咨询与确认、历史咨询隔离、家庭管理聚合数据、报告列表/详情权限边界和旧入口兼容跳转联调；历史/家庭/咨询结果统一投影为用户可读文案，移除内部英文、run/source/草稿执行描述和报告页英文标签。发现并修正既有工具输入契约：低库存续方在缺少用户显式药品名时，从已读取的药箱/处方事实补齐药店库存查询参数；不改变数据库、外部动作或医疗安全规则。桌面 1440×900 与移动 390×844 均无横向溢出，公开五页交互控件均有可访问名称；前端全量 36 个测试、类型检查、生产构建和 9 条真实 Playwright E2E 通过，新增后端契约单测 1 个通过。下一步不新增 UX 子阶段，后续按产品需求单独立项。

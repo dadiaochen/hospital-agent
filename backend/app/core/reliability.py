@@ -20,6 +20,7 @@ _ERROR_CATEGORY_BY_TYPE: dict[str, ErrorCategory] = {
     "input_schema_error": "validation",
     "input_scope_error": "validation",
     "tool_not_allowed": "permission",
+    "tool_not_allowed_by_plan": "permission",
     "permission_denied": "permission",
     "scope_violation": "permission",
     "context_isolation_violation": "permission",

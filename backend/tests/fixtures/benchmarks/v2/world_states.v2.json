@@ -1,6 +1,6 @@
 {
   "dataset_id": "world_states_v2",
-  "dataset_version": "4d-b2.4",
+  "dataset_version": "4d-b5.5",
   "status": "generated",
   "generated_by": "deterministic_rule_generator",
   "human_reviewed": false,
@@ -86,11 +86,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -221,11 +229,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -385,12 +401,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -522,11 +541,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -677,11 +704,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -798,11 +833,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -922,11 +965,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -1055,11 +1106,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -1191,11 +1250,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -1310,11 +1377,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -1421,11 +1496,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -1580,12 +1663,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -1751,11 +1837,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -1908,11 +2002,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -2000,11 +2102,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -2131,11 +2241,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -2266,11 +2384,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -2445,13 +2571,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -2620,11 +2749,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -2705,11 +2842,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -2841,11 +2986,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -2953,11 +3106,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -3082,11 +3243,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -3243,12 +3412,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -3346,11 +3518,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -3466,11 +3646,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -3578,11 +3766,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -3715,11 +3911,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -3845,11 +4049,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -3963,11 +4175,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -4082,11 +4302,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -4203,11 +4431,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -4323,11 +4559,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -4453,11 +4697,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -4631,13 +4883,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -4817,12 +5072,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -4944,11 +5202,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -5099,11 +5365,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -5277,13 +5551,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -5456,11 +5733,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -5569,11 +5854,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -5692,11 +5985,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -5867,13 +6168,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -6011,11 +6315,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -6184,13 +6496,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -6337,11 +6652,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -6515,13 +6838,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -6659,11 +6985,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -6796,11 +7130,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -6908,11 +7250,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -7037,11 +7387,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -7165,11 +7523,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -7338,13 +7704,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -7491,11 +7860,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -7610,11 +7987,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -7747,11 +8132,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -7867,11 +8260,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -8023,11 +8424,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -8148,11 +8557,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -8279,11 +8696,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -8416,11 +8841,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -8551,11 +8984,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -8715,12 +9156,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -8844,11 +9288,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -8955,11 +9407,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -9116,12 +9576,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -9261,11 +9724,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -9387,11 +9858,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -9507,11 +9986,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -9680,13 +10167,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -9815,11 +10305,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -9945,11 +10443,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -10082,11 +10588,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -10217,11 +10731,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -10396,13 +10918,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -10532,11 +11057,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -10688,11 +11221,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -10850,12 +11391,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -10978,11 +11522,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -11108,11 +11660,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -11244,11 +11804,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -11381,11 +11949,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -11516,11 +12092,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -11647,11 +12231,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -11822,13 +12414,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -11965,11 +12560,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -12085,11 +12688,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -12198,11 +12809,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -12317,11 +12936,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -12490,13 +13117,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -12650,11 +13280,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -12824,13 +13462,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -12977,11 +13618,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -13104,11 +13753,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -13224,11 +13881,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -13398,13 +14063,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -13551,11 +14219,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -13729,13 +14405,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -13864,11 +14543,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -13984,11 +14671,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -14157,13 +14852,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -14353,13 +15051,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -14488,11 +15189,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -14640,11 +15349,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -14785,13 +15502,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -14938,11 +15658,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -15073,11 +15801,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -15210,11 +15946,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -15347,11 +16091,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -15525,13 +16277,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -15668,11 +16423,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -15806,11 +16569,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -15979,13 +16750,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -16114,11 +16888,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -16225,11 +17007,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -16337,11 +17127,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -16495,12 +17293,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -16666,11 +17467,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -16795,11 +17604,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -16910,11 +17727,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -17039,11 +17864,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -17201,11 +18034,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -17378,13 +18219,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -17522,11 +18366,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -17634,11 +18486,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -17757,11 +18617,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -17879,11 +18747,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -18053,13 +18929,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -18196,11 +19075,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -18308,11 +19195,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -18437,11 +19332,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -18617,13 +19520,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -18795,11 +19701,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -18912,11 +19826,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -19041,11 +19963,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -19169,11 +20099,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -19281,11 +20219,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -19438,12 +20384,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -19627,13 +20576,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -19806,11 +20758,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -19942,11 +20902,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -20061,11 +21029,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -20233,13 +21209,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -20377,11 +21356,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -20497,11 +21484,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -20627,11 +21622,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -20806,13 +21809,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -21003,13 +22009,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -21146,11 +22155,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -21258,11 +22275,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -21417,11 +22442,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -21552,11 +22585,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -21716,12 +22757,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -21869,11 +22913,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -21999,11 +23051,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -22179,13 +23239,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -22359,11 +23422,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -22519,11 +23590,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -22636,11 +23715,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -22766,11 +23853,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -22895,11 +23990,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -23070,13 +24173,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -23205,11 +24311,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -23317,11 +24431,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -23436,11 +24558,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -23609,13 +24739,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -23762,11 +24895,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -23906,11 +25047,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -24036,11 +25185,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -24214,13 +25371,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -24367,11 +25527,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -24505,11 +25673,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -24630,11 +25806,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -24760,11 +25944,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -24940,13 +26132,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -25137,13 +26332,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -25272,11 +26470,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -25383,11 +26589,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -25512,11 +26726,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -25649,11 +26871,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -25786,11 +27016,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -25948,11 +27186,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -26110,12 +27356,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -26239,11 +27488,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -26393,11 +27650,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -26506,11 +27771,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -26678,13 +27951,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -26832,11 +28108,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -27011,13 +28295,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -27146,11 +28433,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -27257,11 +28552,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -27387,11 +28690,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -27506,11 +28817,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -27635,11 +28954,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -27771,11 +29098,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -27934,11 +29269,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -28059,11 +29402,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -28189,11 +29540,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -28308,11 +29667,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -28438,11 +29805,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -28606,12 +29981,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -28794,13 +30172,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -28990,13 +30371,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -29126,11 +30510,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -29245,11 +30637,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -29375,11 +30775,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -29493,11 +30901,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -29605,11 +31021,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -29724,11 +31148,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -29848,11 +31280,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -30023,13 +31463,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -30177,11 +31620,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -30341,12 +31792,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -30530,13 +31984,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -30683,11 +32140,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -30863,13 +32328,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -31059,13 +32527,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -31202,11 +32673,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -31332,11 +32811,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -31470,11 +32957,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -31587,11 +33082,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -31716,11 +33219,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -31853,11 +33364,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -32032,13 +33551,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -32185,11 +33707,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -32322,11 +33852,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -32457,11 +33995,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -32584,11 +34130,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -32714,11 +34268,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -32831,11 +34393,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -33003,13 +34573,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -33147,11 +34720,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -33277,11 +34858,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -33403,11 +34992,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -33515,11 +35112,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -33645,11 +35250,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -33781,11 +35394,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -33912,11 +35533,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -34066,11 +35695,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -34159,11 +35796,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -34271,11 +35916,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -34382,11 +36035,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -34493,11 +36154,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -34605,11 +36274,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -34728,11 +36405,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -34892,12 +36577,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -35019,11 +36707,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -35192,13 +36888,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -35345,11 +37044,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -35472,11 +37179,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -35602,11 +37317,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -35733,11 +37456,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -35908,13 +37639,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -36061,11 +37795,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -36197,11 +37939,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -36365,11 +38115,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -36481,11 +38239,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -36653,13 +38419,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -36828,11 +38597,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -36913,11 +38690,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -37032,11 +38817,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -37205,13 +38998,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -37348,11 +39144,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -37522,13 +39326,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -37665,11 +39472,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -37789,11 +39604,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -37950,12 +39773,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -38139,13 +39965,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -38274,11 +40103,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -38403,11 +40240,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -38522,11 +40367,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -38642,11 +40495,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -38815,13 +40676,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -38950,11 +40814,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -39079,11 +40951,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -39216,11 +41096,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -39343,11 +41231,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -39499,11 +41395,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -39616,11 +41520,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -39771,11 +41683,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -39906,11 +41826,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -40032,11 +41960,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -40188,11 +42124,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -40324,11 +42268,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -40487,12 +42439,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -40629,11 +42584,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -40807,13 +42770,16 @@
           "MedicationAgent",
           "ReportAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
           "medication-read",
-          "report-read",
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -40989,12 +42955,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"
@@ -41135,11 +43104,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -41252,11 +43229,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -41363,11 +43348,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -41483,11 +43476,19 @@
         "expected_agent_roles": [
           "ReportAgent"
         ],
-        "expected_steps": [
-          "report-read",
+        "expected_domain_steps": [
+          "report-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "report-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -41613,11 +43614,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -41774,11 +43783,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -41911,11 +43928,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_medicine_box",
           "search_safety_knowledge"
@@ -42029,11 +44054,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "triage-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -42158,11 +44191,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "query_prescriptions",
@@ -42321,11 +44362,19 @@
         "expected_agent_roles": [
           "TriageAgent"
         ],
-        "expected_steps": [
-          "domain-read",
+        "expected_domain_steps": [
+          "triage-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "triage-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_health_profile",
           "search_safety_knowledge"
@@ -42456,11 +44505,19 @@
         "expected_agent_roles": [
           "MedicationAgent"
         ],
-        "expected_steps": [
-          "medication-read",
+        "expected_domain_steps": [
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [],
+        "expected_governance_edges": [
+          {
+            "upstream_step_id": "medication-read",
+            "downstream_step_id": "safety-review"
+          }
+        ],
         "expected_tool_calls": [
           "query_prescriptions",
           "query_medicine_box",
@@ -42620,12 +44677,15 @@
           "TriageAgent",
           "MedicationAgent"
         ],
-        "expected_steps": [
+        "expected_domain_steps": [
           "triage-read",
-          "medication-read",
+          "medication-read"
+        ],
+        "expected_domain_dependency_edges": [],
+        "expected_governance_steps": [
           "safety-review"
         ],
-        "expected_dependency_edges": [
+        "expected_governance_edges": [
           {
             "upstream_step_id": "triage-read",
             "downstream_step_id": "safety-review"

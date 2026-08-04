@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文描述最终目标架构及当前实现边界。代码已经具备固定领域 LangGraph、ContextManager、Tool Registry、SafetyAgent、Model Gateway、RunTrace、Evaluator，以及 deterministic Complexity Router、三个领域 Agent、一次性 Planner、bounded DAG Supervisor、三层安全确认状态机和 PostgreSQL 权威 checkpoint/Redis 回源。4D-B2.1 已新增 UnifiedHealthGraph 并接入患者端业务入口；4D-B2.2 已在编排内核中实现独立只读步骤受控并行和评测 `all_history`，业务 ProductWorkflow 适配器的副作用仍保持串行；4D-B2.5 已新增隔离内存 Materializer、九类 deterministic grader 和 pending-review preview Runner；4D-B3 的真实模型审核队列还会保存脱敏的本地草稿快照，但不改变业务状态。后续状态只按 [总路线图](DEVELOPMENT_ROADMAP.md) 推进。
+本文描述最终目标架构及当前实现边界。代码已经具备固定领域 LangGraph、ContextManager、Tool Registry、SafetyAgent、Model Gateway、RunTrace、Evaluator，以及 deterministic Complexity Router、三个运行时领域 Agent、一次性 Planner、bounded DAG Supervisor、三层安全确认状态机和 PostgreSQL 权威 checkpoint/Redis 回源。4D-B2.1 已新增 UnifiedHealthGraph 并接入患者端业务入口；当前默认 `SupervisorBusinessWorkflow` 由 Supervisor 实际创建并调用 Tool-backed Triage/Medication/Report Agent，结果回到同一业务 state 和 Trace；4D-B2.2 的只读 DAG 并行与评测 `all_history` 仍保留在独立内核，正式业务路径强制串行；4D-B2.5 已新增隔离内存 Materializer、九类 deterministic grader 和 pending-review preview Runner；4D-B3 的真实模型审核队列保存脱敏的本地草稿快照，但不改变业务状态。后续状态只按 [总路线图](DEVELOPMENT_ROADMAP.md) 推进。
 
 ## 2. 为什么采用有界多 Agent
 
@@ -98,6 +98,23 @@ Supervisor 选择依赖已满足的 ready set；只有相互独立、只读且�
 
 Supervisor 是业务执行层的协调器。SafetyAgent 和 EvaluatorAgent 是治理层节点，不属于 Supervisor 的候选角色。
 
+### 5.1 4D-B5 决策门：业务 DAG 与固定治理边分开
+
+代码审查确认了一个需要先冻结的契约边界：当前 `TaskPlan` 里的领域步骤可以携带依赖，但 `SafetyAgent`、Confirmation、FinalAnswer 和 `EvaluatorAgent` 是 `UnifiedHealthGraph` 的固定治理边；如果把两类边混在同一个 `dependency_edges` 集合中，评测会把治理调用误认为 Supervisor 调度的业务步骤，面试中的“谁真正决定下一步”也会变得含糊。
+
+路线图 4D-B5.1 已冻结为方案 A：
+
+| 方案 | 业务计划 | 治理调用 | 当前状态 |
+| --- | --- | --- | --- |
+| **A：分开建模（已采用）** | `TaskPlan` 只保存 `TriageAgent`、`MedicationAgent`、`ReportAgent` 及其业务依赖 | `UnifiedHealthGraph` 固定调用 Safety/Confirmation/FinalAnswer/Evaluator，并单独记录 `governance_edges` | B5.1 DONE |
+| B：统一类型图 | `WorkflowPlan` 同时保存 domain/governance 节点，通过 `node_kind` 区分 | Supervisor 不能选择治理节点，治理边仍是代码固定边 | 不采用 |
+
+采用 A 的原因是它保留了当前多 Agent 的真实边界：Planner 只规划业务工作，Supervisor 只调度业务 Agent，治理节点不能被计划覆盖。B 不采用，因为它会新增节点类型、治理不可选校验和两套 grader，并增加把 `SafetyAgent` 误解为业务候选角色的风险。
+
+Planner 依赖也已采用确定性业务规则：根据结构化 `intent`、`action_type` 和所需能力生成边，再进行角色白名单、成员作用域、环检测、最大步骤和上游失败校验；模型不能直接提交依赖图。这样“报告解析 -> 续方材料整理”可以作为可解释的业务边，而“安全检查 -> 最终输出”仍属于固定治理边，不进入 Supervisor 的业务 DAG。
+
+当前实现已完成 B5.2：Planner 只在用户表达明确业务顺序时生成 `DependencyHint`，再由拓扑排序写入 `PlanStep.dependencies`；没有明确顺序的并列只读任务仍保持无依赖。`TaskPlan` 会继续校验边集合、环和上游失败传播。
+
 ## 6. 三个领域 Agent
 
 ### 6.1 TriageAgent
@@ -148,7 +165,7 @@ Supervisor 是业务执行层的协调器。SafetyAgent 和 EvaluatorAgent 是�
 
 事实只能来自 Tool/Provider/RAG 或用户明确陈述。Agent 的候选推断不能进入 `facts`。
 
-任务六当前实现使用 deterministic domain agents：它们只返回工作流动作、是否需要来源、是否需要确认和澄清项，不声称已经读取处方、库存或报告。`DomainAgentInput` 只携带任务摘要、冻结路由、当前步骤、角色工具 allowlist 和同成员的前序结构化结果；真实 Tool/Provider 读取属于后续任务。
+任务六保留的 deterministic domain agents 仍只用于离线编排契约和消融；4D-B4 新增的 `runtime_domain_agents.py` 提供真实运行时 `RuntimeTriageAgent`、`RuntimeMedicationAgent` 和 `RuntimeReportAgent`。它们同样不接收数据库 Session，而是通过 `SupervisorAgentRuntime` 进入 Tool Registry 读取处方、药箱、报告和 RAG 事实。`DomainAgentInput` 只携带任务摘要、冻结路由、当前步骤、角色工具 allowlist 和同成员的前序结构化结果；Tool Registry 再执行成员权限和 schema 校验。
 
 ## 7. 模型决策模式
 
@@ -191,6 +208,8 @@ Supervisor 是业务执行层的协调器。SafetyAgent 和 EvaluatorAgent 是�
 6. 冻结新的答案、Trace 和 EvaluationResult。
 
 Redis 只缓存短期 checkpoint，缓存丢失不影响从 PostgreSQL 恢复。
+
+UX-04 的前端确认只投影为用户可理解的“请确认是否继续”和历史咨询摘要；`DRAFT`、continuation run、成员/版本校验等内部状态仍由代码、接口和治理节点执行，页面不承担路由或安全判断。
 
 任务八的实现由 `TaskCheckpointService`、`TaskCheckpointCache` 和 `ConfirmedPreferenceService` 分层负责：前者写入不可变 PostgreSQL checkpoint，后者只保存带 TTL 的作用域/版本投影，偏好服务只在同 task 的 `EXECUTED` 人工确认和来源版本校验通过后写入可撤销偏好。Redis miss、过期、作用域/版本不匹配或连接异常统一视为 cache miss。
 
@@ -266,7 +285,7 @@ request: evaluate_safety(user_input)
 
 | 当前已实现 | 尚未完成 |
 | --- | --- |
-| 患者端 HTTP 已通过 UnifiedHealthGraph 接入；内部业务执行仍由 ProductWorkflow 适配器负责；bounded Supervisor 已完成只读 DAG fan-out/fan-in；4D-B2.3 已完成 FinalClaim、AnswerEnvelope、Trace v2 和 Claim 一致性校验；4D-B2.4 已生成 v2 数据；B2.5 已完成内存 projection、九层 grader 和 preview runner；B2.6 已接入 PostgreSQL shadow transaction、Provider sandbox、case-scoped RAG 和真实 UnifiedHealthGraph 单样例执行 | 300 WorldState/1200 Query 的全量正式报告、人工审核冻结和真实 A/B/C/D 消融仍待完成 |
+| 患者端 HTTP 已通过 UnifiedHealthGraph 接入；默认 `SupervisorBusinessWorkflow` 由 Supervisor 实际调用三个运行时领域 Agent 和 Tool Registry；bounded Supervisor 仍保留只读 DAG fan-out/fan-in；4D-B2.3 已完成 FinalClaim、AnswerEnvelope、Trace v2 和 Claim 一致性校验；4D-B2.4 已生成 v2 数据；B2.5 已完成内存 projection、九层 grader 和 preview runner；B2.6 已接入 PostgreSQL shadow transaction、Provider sandbox、case-scoped RAG 和真实 UnifiedHealthGraph 单样例执行 | 300 WorldState/1200 Query 的全量正式报告、人工审核冻结和真实 A/B/C/D 消融仍待完成 |
 | 新业务链路已接入三层治理、自动 DRAFT、确认状态机、版本化 checkpoint 和三类重点 Provider 可靠性 | 真实外部 Provider 联调仍未实现 |
 | PostgreSQL 冻结产物、continuation、Redis TTL 回源、确认后偏好、Tool/Provider attempts、RRF、白名单 Observation、Trace v2 Claim 产物，以及 B2.6 的 Docker 19/19 回归和真实单样例物化 | 300 WorldState/1200 Query 的全量正式评测报告和最终 A/B/C/D 归因仍未冻结 |
 | Model Gateway 已支持 deterministic/真实模型双模式和结构化 FinalAnswer | 已生成 8 条 development 固定样本的人工复核、token、成本和本机延迟报告；validation/holdout 与全量稳定性仍未完成 |
@@ -278,3 +297,46 @@ Observation 不是新 Agent，也不进入 Supervisor 决策。业务图执行�
 RAG 与成员隔离也不依赖模型自觉：RRF 在 Retriever 内确定性计算；过期版本在 source hydration 边界拒绝；成员资源在 Repository SQL 和 Tool execution context 两层校验；Redis 污染或过期只会触发 PostgreSQL 回源。SafetyAgent 仍负责运行时风险，Observation 只负责记录发生了什么。
 
 4D-B 的评测数据、FinalClaim、grader、Docker runner 和简历指标规则见 [Agent 评测与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。状态和实施顺序只以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
+
+## 用户端 UX-06 与 Agent 边界
+
+UX-06 的报告列表和详情是只读业务数据投影，不新增 Agent 节点、Supervisor 路由或工具调用。`ReportReadService` 只把 `medical_documents` 中已经保存的报告事实映射为 `report-detail.v1`；页面展示来源和安全提示，但不把模型解释升级为诊断或治疗结论。后续若接入解析或知识检索，仍需沿现有 Agent、RAG 和 Safety 治理边界扩展，不能由前端自行推断。
+
+## 用户端 UX-08 与 Agent 入口边界
+
+UX-08 不改变 Router、Planner、Supervisor、业务 Agent、SafetyAgent 或 EvaluatorAgent。前端只把自然语言咨询、历史结果、家庭记录和报告读取作为用户入口；知识检索、库存、续方、提醒和 Trace 属于内部执行/治理能力。兼容跳转不能绕过 Agent 的成员作用域、工具权限、Safety 检查或人工确认。
+## 4D-B5.5 最终契约：业务 DAG 与固定治理边分离
+
+4D-B5.1 采用方案 A 后，`TaskPlan` 的边界固定如下：
+
+- `domain_steps` 只允许三个 canonical domain Agent：`TriageAgent`、`MedicationAgent`、`ReportAgent`。
+- `domain_dependency_edges` 只表示业务步骤之间的依赖，例如 `ReportAgent -> MedicationAgent`。这些边由确定性 Planner 根据业务规则生成，不能由模型自由提交。
+- `governance_steps` 记录固定治理节点：`SafetyAgent`、Confirmation、FinalAnswer 和 `EvaluatorAgent`。
+- `governance_edges` 记录状态图强制执行的治理顺序。治理边不属于 Supervisor 的业务 DAG，也不参与 Supervisor 的候选步骤选择。
+- `safety-review` 是治理节点或治理边的标识，不是 Supervisor 可以调度的业务步骤，也不是三个 canonical domain Agent 之一。
+
+最终执行关系是：
+
+```text
+Router
+  -> Planner
+  -> Supervisor(domain_steps + domain_dependency_edges)
+  -> fixed Safety / Confirmation / FinalAnswer / Evaluator governance edges
+```
+
+Supervisor 只能在冻结的 `domain_steps` 中选择依赖已满足的业务步骤；它不能新增治理步骤、移除治理边、把 `safety-review` 当作业务 Agent 调度，也不能绕过固定治理节点。
+
+### B5.5 当前状态
+
+该分层已经落地到契约、生成器、grader 和 preview runner；仍有人工审核与真实 PostgreSQL integration 的独立验收门槛：
+
+- 现有代码已经具备 canonical domain Agent、bounded Supervisor 和固定治理调用的基础。
+- v2 gold/grader 已完成 domain/governance 两类步骤与边的字段映射、分别校验及报告展示，数据版本为 `4d-b5.5`。
+- 300 个 WorldState / 1200 条 Query 的人工审核、冻结 manifest 和全量 PostgreSQL integration 尚未宣称完成。
+- 因此当前文档仍不把 v2 全量人工审核或生产级数据库验收写成已完成结果；这不影响 B5.2-B5.6 的代码回归已通过。
+
+详细的分层评测规则以 [Agent 评测执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md) 为准。
+
+## 用户端 UX-09 联调边界
+
+UX-09 没有新增 Agent 角色、路由、Supervisor 步骤或治理边。前端只消费既有运行冻结产物和 DTO；成员、来源、安全、确认、RunSummary、Context Reset 与 Evaluator 的服务端边界保持不变。`WorkflowToolInputBuilder` 的药品名补齐属于既有 Tool 输入构建契约，不是运行时自由重规划，也不改变 Agent 的职责边界。

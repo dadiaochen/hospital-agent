@@ -16,10 +16,10 @@ from app.tools.tool_schemas import ToolContractModel, ToolExecutionContext, Tool
 
 
 _ACTION_ROLES = {
-    "refill_request": {"RefillAgent"},
-    "consultation_request": {"RefillAgent"},
-    "pharmacy_option": {"PharmacyAgent"},
-    "reminder_create": {"ReminderAgent"},
+    "refill_request": {"MedicationAgent", "RefillAgent"},
+    "consultation_request": {"TriageAgent", "RefillAgent"},
+    "pharmacy_option": {"MedicationAgent", "PharmacyAgent"},
+    "reminder_create": {"MedicationAgent", "ReminderAgent"},
 }
 
 
@@ -59,7 +59,14 @@ def register_confirmation_draft_tool(registry: ToolRegistry, db: Session) -> Non
             input_schema=ConfirmationDraftInput,
             output_schema=ConfirmationDraftOutput,
             permission_scope="draft:create",
-            allowed_agent_roles=("RefillAgent", "PharmacyAgent", "ReminderAgent"),
+            allowed_agent_roles=(
+                "TriageAgent",
+                "MedicationAgent",
+                "ReportAgent",
+                "RefillAgent",
+                "PharmacyAgent",
+                "ReminderAgent",
+            ),
             requires_human_confirmation=True,
             read_only=False,
         ),

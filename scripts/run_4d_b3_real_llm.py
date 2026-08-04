@@ -8,7 +8,6 @@ with N/A metrics instead of failing the deterministic project path.
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 import sys
 
@@ -24,18 +23,7 @@ from app.agent.v2_integration import IntegrationIdentityMap  # noqa: E402
 def _load_identity_map(path: Path | None) -> IntegrationIdentityMap | None:
     if path is None:
         return None
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    return IntegrationIdentityMap(
-        benchmark_user_id=str(payload["benchmark_user_id"]),
-        actual_user_id=str(payload["actual_user_id"]),
-        member_ids={
-            str(key): str(value) for key, value in payload["member_ids"].items()
-        },
-        source_ids={
-            str(key): str(value)
-            for key, value in payload.get("source_ids", {}).items()
-        },
-    )
+    return IntegrationIdentityMap.from_json(path)
 
 
 def main() -> int:

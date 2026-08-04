@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from app.agent.orchestration_schemas import (
     AgentTaskResult,
     ComplexityRoute,
+    DependencyEdge,
     PlanStep,
     SafetyDecisionBundle,
     SupervisorDecision,
@@ -47,7 +48,7 @@ def test_complexity_route_rejects_a_simple_route_with_multiple_roles() -> None:
         )
 
 
-def test_task_plan_is_bounded_and_dependencies_are_forward_only() -> None:
+def test_task_plan_requires_dependency_edges_to_match_step_dependencies() -> None:
     plan = TaskPlan(
         task_id="task-2",
         user_id="user-1",
@@ -66,12 +67,18 @@ def test_task_plan_is_bounded_and_dependencies_are_forward_only() -> None:
                 dependencies=("report",),
             ),
         ),
+        dependency_edges=(
+            DependencyEdge(
+                upstream_step_id="report",
+                downstream_step_id="triage",
+            ),
+        ),
     )
 
     assert len(plan.steps) == 2
     assert plan.max_steps == 3
 
-    with pytest.raises(ValidationError, match="earlier step"):
+    with pytest.raises(ValidationError, match="dependency edges must match"):
         TaskPlan(
             task_id="task-3",
             user_id="user-1",

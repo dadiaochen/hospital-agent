@@ -79,7 +79,23 @@
 
 当前可运行实现位于 `backend/app/providers/`：`ProviderRequest` 和 `ProviderResponse` 是统一 Pydantic 契约，`ProviderRegistry` 校验 provider 名称与运行模式，`build_mock_provider_registry()` 提供七个离线 mock adapter。七个 adapter 作为兼容基线保留，但不再把全部深化为最终验收目标。`sandbox` 和 `real` 尚未配置时必须返回 `success=false`、`degraded=true` 以及明确的 `fallback_reason`，不能伪造外部系统成功。
 
-4B 任务六的三个领域 Agent 只携带角色工具 allowlist，不执行任何 Tool。`ROLE_ALLOWED_TOOLS` 是编排层的候选能力边界；真正调用仍必须经过本文件定义的 Tool/Provider 契约、成员权限、超时/重试和审计流程，属于后续任务九接线。
+4B 任务六保留的 deterministic 三个领域 Agent 只携带角色工具 allowlist，不执行 Tool；它们用于离线编排契约。当前正式业务路径由 `runtime_domain_agents.py` 提供 Tool-backed `RuntimeTriageAgent`、`RuntimeMedicationAgent` 和 `RuntimeReportAgent`，Supervisor 通过 `SupervisorAgentRuntime` 把它们的请求送入同一个 Registry。`ROLE_ALLOWED_TOOLS` 仍只是候选能力边界；每次真实调用必须继续经过本文件定义的 Tool/Provider 契约、成员权限、超时/重试和审计流程。
+
+### 5.1 4D-B5 步骤级工具权限（已冻结并已实现）
+
+代码审查确认：角色级 `allowed_tools` 由 Tool Registry 校验，计划级 `PlanStep.allowed_tools` 由 Supervisor runtime 在进入 handler 前强制执行。B5.1 已选择方案 A：`PlanStep.allowed_tools` 是该步骤完整的运行时执行上限。运行时 Agent 必须把当前 `step_id` 和该步骤的 allowlist 一起传给 `SupervisorAgentRuntime.call_tool`；调用链同时检查：
+
+```text
+角色允许工具
+  AND
+PlanStep 允许工具
+  AND
+成员/用户作用域
+  AND
+工具 schema、确认状态和安全策略
+```
+
+因此，角色默认能力不能自动扩大某一个冻结步骤的权限。例如 `RefillAgent` 兼容角色或 `MedicationAgent` 不能因为拥有药房查询能力，就在一个只允许处方读取的 `PlanStep` 中调用库存工具。计划外调用会在 Tool Registry/handler 之前返回 `tool_not_allowed_by_plan`，并写入失败 trace；该行为由 B5.3 测试覆盖。
 
 ## 6. 调用顺序
 
@@ -142,4 +158,16 @@ Harness 额外冻结 `AblationToolCallTrace`，仅保存工具名、角色、结
 
 ## 4D-B2.6 评测边界
 
-`V2DeterministicGraders` 仍然只读取冻结 `RunTrace` 中的 `ToolCallTrace`、source pointer 和成员作用域，不在评测阶段重新调用 Tool Registry。B2.6 的 `ScopedProviderSandbox` 复用确定性 Provider 契约，只在真实图执行阶段注入 timeout/no-source 故障并记录 attempt trace；`PostgresV2Materializer` 和 `ScopedPostgresRetriever` 负责 case-scoped 数据与 RAG 来源隔离。这样可以测试真实连接边界，同时不会把评测变成不可重复的外部服务联调。完整 300/1200 正式可靠性指标仍待人工审核后运行。
+`V2DeterministicGraders` 仍然只读取冻结 `RunTrace` 中的 `ToolCallTrace`、source pointer 和成员作用域，不在评测阶段重新调用 Tool Registry。B2.6 的 `ScopedProviderSandbox` 复用确定性 Provider 契约，只在真实图执行阶段注入 timeout/no-source 故障并记录 attempt trace；`PostgresV2Materializer` 和 `ScopedPostgresRetriever` 负责 case-scoped 数据与 RAG 来源隔离。这样可以测试真实连接边界，同时不会把评测变成不可重复的外部服务联调。300/1200 Gold 已完成人工审核，但完整正式可靠性指标仍待三 split 真实运行、消融和 badcase 复核。
+
+UX-04 不修改 Tool Contract。用户端历史咨询与确认区域不展示 `tool_name`、原始工具输入输出或 SourceRef 标识；这些证据仍由既有运行链路记录并供内部审计使用。
+
+UX-06 不新增 Tool Contract。报告详情接口只读取既有 `medical_documents`，浏览器只接收 `report-detail.v1` 允许的摘要、指标和来源 DTO；解析 provider、对象地址、原始 JSON 和内部来源标识不会成为用户端工具参数或展示内容。
+
+## 用户端 UX-08 与工具入口
+
+UX-08 不改变六类业务工具的 schema、权限、超时、重试或人工确认字段。库存、处方、药箱、知识和草稿工具不再通过首页快捷入口直接暴露；用户仍通过 AI 健康助手触发受治理的业务流程，工具调用继续记录在既有 RunTrace 和 `agent_tool_calls` 中。
+
+## 用户端 UX-09 联调契约
+
+UX-09 联调没有新增 Tool。发现低库存续方在缺少用户显式药品名时无法构造 `check_pharmacy_inventory` 输入，现由 `WorkflowToolInputBuilder` 从当前成员本轮成功的 `query_medicine_box` 或 `query_prescriptions` 结果补齐 `medicine_name`。该值必须有工具证据；没有证据时仍按原契约失败，不允许模型猜测。工具的 `input_schema`、`output_schema`、`permission_scope`、超时、重试和 `requires_human_confirmation` 保持不变。

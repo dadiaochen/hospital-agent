@@ -17,41 +17,44 @@
 5. 它失败时抛出什么错误，错误在哪里转换成 API 响应？
 6. 它如何证明自己的结果可信：Pydantic、成员作用域、来源指针、Safety 还是幂等键？
 
-本项目最重要的学习目标不是记住 `Supervisor` 这个名字，而是先分清下面三条真实存在、但尚未接成同一条的调用链：
+本项目最重要的学习目标不是记住 `Supervisor` 这个名字，而是看清“谁决定执行、谁真正执行、谁负责治理”。当前 `/api/business-tasks` 已经把三者接成同一条业务链；`/api/agent-runs` 仍保留为前端兼容入口，单独阅读时不要把它当成新业务主链。
 
 ```mermaid
 flowchart TD
-    subgraph Runtime["当前真实 API / Docker 黄金链路"]
+    subgraph Runtime["当前真实 API / Docker 业务链"]
         A["POST /api/business-tasks"] --> B["API Router"]
         B --> C["BusinessTaskService"]
-        C --> D["FamilyHealthProductWorkflow 固定领域 LangGraph"]
-        D --> E["Tool Registry / DB / Provider / RAG"]
-        E --> F["三层 Safety + Confirmation"]
-        F --> G["FinalAnswer / Trace / Checkpoint / Evaluator"]
+        C --> D["UnifiedHealthGraph"]
+        D --> E["Complexity Router"]
+        E -->|"simple"| F["SupervisorBusinessWorkflow"]
+        E -->|"complex"| PLANNER["one-shot Planner"]
+        PLANNER --> F
+        F --> G["Runtime Triage / Medication / Report Agent"]
+        G --> H["Tool Registry / DB / Provider / RAG"]
+        H --> I["AgentTaskResult + ToolEvidence"]
+        I --> J["Safety + Confirmation"]
+        J --> K["FinalAnswer / Trace / Checkpoint / Evaluator"]
     end
 
     subgraph Compatible["患者端 /agent 当前兼容链"]
         N["POST /api/agent-runs"] --> O["AgentRuntimeService"]
-        O --> P["LangGraphAgentWorkflow"]
-        P --> Q["旧角色工具链 / Safety / Frozen artifacts"]
+        O --> COMP_WORKFLOW["LangGraphAgentWorkflow"]
+        COMP_WORKFLOW --> COMP_TOOLS["旧角色工具链 / Safety / Frozen artifacts"]
     end
 
-    subgraph Kernel["已实现并独立测试的编排内核"]
-        H["ComplexityRoutingRequest"] --> I["Complexity Router"]
-        I -->|simple| J["One Domain Agent"]
-        I -->|complex| K["One-shot Planner"]
-        K --> L["Serial bounded Supervisor"]
-        L --> J
-        J --> M["AgentTaskResult / Ablation Harness"]
+    subgraph Kernel["同一 Supervisor 的离线契约内核"]
+        REQUEST["ComplexityRoutingRequest"] --> R["Deterministic Router"]
+        R --> S["DeterministicBoundedSupervisor"]
+        S --> T["AgentTaskResult / Ablation Harness"]
     end
 ```
 
 必须记住当前接线事实：
 
-- `/api/business-tasks` 由 `BusinessTaskService` 创建 `UnifiedHealthGraph`；统一图先记录 Router/Planner/Supervisor 编排投影，再由 `FamilyHealthProductWorkflow` 适配器完成业务执行。
+- `/api/business-tasks` 由 `BusinessTaskService` 创建 `UnifiedHealthGraph`；统一图进入 `SupervisorBusinessWorkflow`，Supervisor 再创建本次 run 的三个运行时领域 Agent，并让被选中的 Agent 通过 Tool Registry 获取事实。
 - 患者端 `/agent` 页面当前仍调用 `/api/agent-runs`，由 `AgentRuntimeService` 执行兼容的 `LangGraphAgentWorkflow`；所以浏览器 E2E 验证的是这条患者端兼容链。
-- `DeterministicComplexityRouter`、`DeterministicTaskPlanner`、三个领域 Agent 和 `DeterministicBoundedSupervisor` 已有完整契约、单元测试和 32 条 A/B/C 消融；4D-B2.1 已由 `UnifiedHealthGraph` 接入业务 API，并把结果写入 `RunTrace.orchestration`。
-- 当前统一入口的编排内核已支持对无依赖只读步骤做有界 DAG 并行；ProductWorkflow 适配器中的业务工具、确认、写操作和安全治理仍保持串行，不能把编排并行说成业务副作用并行。
+- `DeterministicComplexityRouter`、`DeterministicTaskPlanner`、`DeterministicBoundedSupervisor` 负责确定性编排；`runtime_domain_agents.py` 中的三个运行时 Agent 才负责真实 Tool 调用。两者都返回结构化 `AgentTaskResult`，但运行时 Agent 额外携带 Tool evidence 和 source refs。
+- 正式业务入口当前强制串行 bounded Supervisor，避免多个角色竞争同一个确认和写入作用域；独立编排内核仍保留只读 DAG 并行能力，用于受控实验和评测。`FamilyHealthProductWorkflow` 只作为兼容基类，提供 Safety、Confirmation、FinalAnswer 和 artifact helper，不再是默认业务分支选择器。
 
 为什么会有两套 API：`/api/agent-runs` 是早期 Agent Runtime 与当前前端演示的兼容入口；`/api/business-tasks` 是 4B 新增的分层状态、Provider、Safety 和确认状态机入口。保留兼容入口有利于不破坏旧页面，但也产生了技术债：面试和文档必须说清“哪条链验证了什么”，最终产品若继续演进，应选择唯一运行入口并迁移前端，而不是长期维护两套主流程。
 
@@ -85,7 +88,9 @@ flowchart TD
 | --- | --- | --- |
 | HTTP 入口 | `backend/app/api/routes/business_tasks.py` | `create_task`、`confirm_task` |
 | 业务 Service | `backend/app/services/business_task_service.py` | `create_task`、`confirm_task`、`_persist_state` |
-| LangGraph 业务图 | `backend/app/agent/product_workflow.py` | `ProductWorkflowState`、`_build_graph`、`invoke`、`resume_confirmation` |
+| 统一业务入口 | `backend/app/agent/unified_health_graph.py`、`supervised_workflow.py` | `UnifiedHealthGraph`、`SupervisorBusinessWorkflow.invoke`、`resume_confirmation` |
+| 业务 working state / 兼容图 | `backend/app/agent/product_workflow.py` | `ProductWorkflowState`、Safety/Confirmation/FinalAnswer helper |
+| 运行时领域 Agent | `backend/app/agent/runtime_domain_agents.py` | Tool-backed `RuntimeTriageAgent`、`RuntimeMedicationAgent`、`RuntimeReportAgent` |
 | 患者端兼容 Runtime | `backend/app/api/routes/agent_audit.py`、`services/agent_runtime_service.py` | `/agent` 页面当前实际调用的 create/continue run |
 | 复杂度路由 | `backend/app/agent/complexity_router.py` | `DeterministicComplexityRouter.route` |
 | Planner/Supervisor | `backend/app/agent/orchestration.py` | `DeterministicTaskPlanner.plan`、`DeterministicBoundedSupervisor.run` |
@@ -158,7 +163,7 @@ Router 不应该自己写 SQL，也不应该决定“是否安全”。它只处
 3. 查询同用户、同 `idempotency_key` 的旧任务。
 4. 如果已有相同指纹，返回 replay；如果指纹不同，返回 409 冲突。
 5. 创建 `BusinessTask` 和 `AgentRun`。
-6. 创建 `FamilyHealthProductWorkflow` 并调用 `workflow.invoke(...)`。
+6. 创建 `UnifiedHealthGraph` 并调用 `graph.invoke(...)`；统一图默认使用 `SupervisorBusinessWorkflow`。
 7. 把工作流状态投影为 checkpoint、run trace 和业务响应。
 8. 在外层事务中 commit；完成后才发布 Redis 短期缓存。
 
@@ -166,7 +171,7 @@ Router 不应该自己写 SQL，也不应该决定“是否安全”。它只处
 
 ## 3. 运行状态：系统内部的数据总线
 
-`backend/app/agent/product_workflow.py` 的 `ProductWorkflowState` 是 LangGraph 节点之间共享的结构化状态：
+`backend/app/agent/product_workflow.py` 的 `ProductWorkflowState` 是业务执行过程中共享的结构化 working state。它现在由 `SupervisorBusinessWorkflow` 复用，承载 Tool 结果、来源、确认和最终答案；它不是“由某个 business_domain 节点直接决定执行”的路由表：
 
 ```python
 class ProductWorkflowState(TypedDict, total=False):
@@ -195,45 +200,45 @@ class ProductWorkflowState(TypedDict, total=False):
 
 ### 3.1 状态图如何建立
 
-`FamilyHealthProductWorkflow._build_graph` 注册节点和边，核心结构是：
+当前默认入口的 `UnifiedHealthGraph._build_graph` 只有一个业务执行节点：
 
 ```python
-graph.add_node("safety_entry", self._safety_entry)
-graph.add_node("preconsultation", self._preconsultation)
-graph.add_node("chronic_care", self._chronic_care)
-graph.add_node("health_record", self._health_record)
-graph.add_node("safety_review", self._safety_review)
-graph.add_node("confirm", self._confirm)
-graph.add_node("finalize", self._finalize)
-
-graph.set_entry_point("safety_entry")
-graph.add_conditional_edges(
-    "safety_entry",
-    self._route_after_entry,
-    {
-        "blocked": "finalize",
-        "preconsultation": "preconsultation",
-        "chronic_care": "chronic_care",
-        "health_record": "health_record",
-    },
-)
-for node in ("preconsultation", "chronic_care", "health_record"):
-    graph.add_edge(node, "safety_review")
-graph.add_conditional_edges(
-    "safety_review",
-    self._route_after_review,
-    {"blocked": "finalize", "confirm": "confirm", "finalize": "finalize"},
-)
-graph.add_edge("confirm", "finalize")
-graph.add_edge("finalize", END)
+graph.add_node("supervised_execution", self._business_graph_node)
+graph.add_edge(START, "supervised_execution")
+graph.add_edge("supervised_execution", END)
 ```
 
-学习时重点看两件事：
+这不是把所有业务逻辑塞进一个节点。`_business_graph_node` 调用的
+`SupervisorBusinessWorkflow` 内部按固定顺序完成：
 
-1. **条件边决定控制流**：例如高风险请求不能进入普通业务节点。
-2. **固定边决定治理顺序**：Safety、确认、最终答案和冻结产物不能由模型随意跳过。
+```text
+Request Safety
+  -> Complexity Router
+  -> one-shot Planner（仅复杂任务）
+  -> bounded Supervisor
+       -> Runtime TriageAgent / MedicationAgent / ReportAgent
+            -> Tool Registry -> DB / Provider / RAG
+  -> Action Safety / Confirmation
+  -> FinalAnswer
+```
 
-这和普通 `if/else` 的区别是，状态图把“允许经过哪些节点”显式建模了，后续可以对节点访问和终止条件做测试。
+因此要分清两层：`UnifiedHealthGraph` 是统一入口和生命周期边界；
+`SupervisorBusinessWorkflow` 是业务执行协调器；三个运行时领域 Agent 才是
+被 Supervisor 选中并实际调用 Tool 的执行者。旧的
+`FamilyHealthProductWorkflow._build_graph` 仍用于兼容 helper 和局部旧测试，
+但默认业务入口不会根据 `business_domain` 直接跳进它的
+`_chronic_care`、`_health_record` 或 `_preconsultation` 节点。
+
+学习时重点看三件事：
+
+1. **统一图节点决定生命周期**：输入和输出都经过同一个可审计边界。
+2. **Supervisor 决定实际执行角色**：用户文字由 Router 形成目标角色，Supervisor 调用对应运行时 Agent，外部 `business_domain` 只是任务上下文默认值。
+3. **固定方法顺序决定治理**：Safety、确认、最终答案和冻结产物不能由模型随意跳过。
+
+这和普通 `if/else` 的区别是，状态图把统一入口显式建模，而 Supervisor
+又把“允许哪个领域 Agent 执行、该 Agent 能调用哪些 Tool”通过 Pydantic
+契约和 Registry 权限校验固定下来。测试可以同时检查图的访问顺序、真实 Tool
+调用、未选角色未被调用以及终止原因。
 
 ## 4. Router、Planner、Supervisor 到底分别做什么
 
@@ -256,47 +261,59 @@ graph.add_edge("finalize", END)
 
 文件：`backend/app/agent/orchestration.py`，`DeterministicTaskPlanner.plan`。
 
-计划代码的核心逻辑是：
+先要区分“契约支持依赖”和“Planner 生成依赖”。`PlanStep.dependencies` 与 `DeterministicBoundedSupervisor` 支持显式 DAG；当前 `DeterministicTaskPlanner.plan` 会根据 `ComplexityRoute.dependency_hints` 生成确定性业务边，再做拓扑排序。没有明确顺序的并列请求不会被强行制造依赖；这正是安全边界的一部分。
+
+当前代码的核心逻辑更接近：
 
 ```python
-steps: list[PlanStep] = []             # 创建空的可变列表，后面逐步加入 PlanStep。
-
-for index, role in enumerate(          # enumerate 同时给出序号 index 和当前元素 role。
-    route.target_roles,                # target_roles 是 Router 冻结的角色顺序。
-    start=1,                           # 序号从 1 开始，所以得到 step_1，而不是 step_0。
-):
-    dependencies = (                  # dependencies 最终必须是 tuple[str, ...]。
-        (steps[-1].step_id,)           # steps[-1] 表示列表最后一步；末尾逗号创建单元素元组。
-        if steps                       # 如果 steps 非空，当前步骤依赖上一阶段。
-        else ()                        # 第一阶段前面没有步骤，因此依赖是空元组。
+ordered_roles = _topological_roles(route)  # 把有明确上游关系的角色排到下游角色前面。
+role_to_step_id = {                       # 先建立“角色 -> 稳定 step_id”的映射。
+    role: f"step_{index}"
+    for index, role in enumerate(ordered_roles, start=1)
+}
+dependencies_by_role = {                  # 把角色级提示转换成 step 级依赖。
+    role: tuple(
+        role_to_step_id[hint.upstream_role]
+        for hint in route.dependency_hints
+        if hint.downstream_role == role
     )
-    steps.append(                      # append 修改原列表，把一个新对象放到末尾。
-        PlanStep(                      # Pydantic 会校验 step_id、role、objective 和 dependencies。
-            step_id=f"step_{index}",  # f-string 把 index 插入字符串，例如 step_2。
-            role=role,                 # 当前领域角色，类型只能是三个 Literal 之一。
-            objective=_OBJECTIVES[role], # 用 role 作为字典 key，取该角色的固定任务目标。
-            dependencies=dependencies,
+    for role in ordered_roles
+}
+
+steps: list[PlanStep] = []                # 保存最终冻结的业务步骤。
+for index, role in enumerate(ordered_roles, start=1):
+    allowed_tools = tuple(allowed_tools_for_role(role))  # 该步骤的完整工具上限。
+    steps.append(
+        PlanStep(
+            step_id=f"step_{index}",
+            role=role,
+            objective=_OBJECTIVES[role],
+            dependencies=dependencies_by_role[role],
+            allowed_tools=allowed_tools,
+            # 包含草稿/写入工具时不能作为并行只读步骤。
+            read_only=all(tool in _READ_ONLY_TOOLS for tool in allowed_tools),
         )
     )
 ```
 
-这段代码执行两轮时，变量的变化如下：
+这段代码执行多轮时，变量的变化如下：
 
 | 时刻 | `index` | `role` | `steps` 原来有什么 | 新 `dependencies` |
 | --- | ---: | --- | --- | --- |
 | 第一轮 | 1 | `TriageAgent` | `[]` | `()` |
-| 第二轮 | 2 | `MedicationAgent` | 已有 `step_1` | `("step_1",)` |
+| 第二轮 | 2 | `MedicationAgent` | 已有 `step_1` | 由 `DependencyHint` 决定 |
+| 第三轮 | 3 | `ReportAgent` | 已有前两步 | 由 `DependencyHint` 决定 |
 
-`steps[-1]` 的 `-1` 是 Python 的倒数索引；`(value,)` 的逗号不能省略，否则 `(value)` 仍只是原来的值，不是元组。
+这里的 `()` 是空元组，表示该请求没有明确的业务先后关系，不代表 Planner 永远不会生成依赖。存在“先看报告/症状，再准备续方”语义时，Planner 会把 `ReportAgent`/`TriageAgent` 的步骤放到上游，并把对应 step id 写入 `MedicationAgent.dependencies`；`TaskPlan` 再校验这些边是否合法。
 
-例如一个同时涉及症状和用药的问题，Planner 可能生成：
+4D-B5.2 已把“报告解读结果用于续方材料整理”表达为真正的业务边：
 
 ```text
-step_1: TriageAgent
+step_1: ReportAgent
 step_2: MedicationAgent, depends_on step_1
 ```
 
-Planner 的输出是 `TaskPlan`，包含目标、角色、依赖和最大步数。Planner 决定“要完成哪些步骤、步骤之间有什么依赖”，它不执行 Tool，也不直接生成最终答案。
+这是有明确顺序表达时的行为，不是当前所有输入都会得到的结果。安全检查、确认、最终答案冻结和 Evaluator 属于固定治理边，不应被塞进 Supervisor 的业务依赖集合。Planner 决定“要完成哪些业务步骤、业务步骤之间有什么依赖”，它不执行 Tool，也不直接生成最终答案。
 
 ### 4.3 Supervisor：执行已经冻结的计划
 
@@ -321,7 +338,7 @@ completed_steps: set[str] = set()      # set 自动去重，用来快速判断�
 role_calls: dict[DomainAgentRole, int] = {} # 统计每个角色调用次数，防止单角色无限重试。
 degraded = False                       # 只要任一步降级，就在最终状态中保留该事实。
 
-for step in plan.steps:                # 串行读取冻结计划；本项目不做 Agent 级并行。
+for step in plan.steps:                # 读取冻结计划；评测内核可选受控只读并行，正式业务路径传入 execution_mode="serial"。
     if not set(step.dependencies).issubset(completed_steps):
         # issubset 的含义是：当前步骤要求的每一个依赖，都必须已经出现在 completed_steps。
         return self._stopped_run(       # return 立即结束整个函数，不再执行后续 Agent。
@@ -445,7 +462,88 @@ return AgentTaskResult(
 - `MedicationAgent`：整理处方、药箱、库存、续方和提醒草稿，不改剂量、不下单。
 - `ReportAgent`：整理报告任务和来源解释需求，不篡改报告、不生成无来源诊断。
 
-注意：任务六中的三个领域 Agent 是确定性编排内核，它们本身不直接读取医疗数据。实际业务 Workflow 通过 Tool Registry 读取数据库和 Provider。不要把“Agent 的能力 allowlist”误认为“Agent 已经获得了数据”。
+这里展示的是 `domain_agents.py` 中的纯 deterministic Agent，主要用于编排契约和离线消融。正式业务入口使用 `runtime_domain_agents.py` 中的同名运行时角色；它们仍然不直接拿数据库 Session，而是通过 `RuntimeAgentContext.call_tool(...)` 请求 Tool Registry。这样既保留了可重复的离线内核，又让生产业务路径可以证明“Supervisor 真的调用了哪个 Agent 和哪个 Tool”。
+
+### 5.3 运行时 Agent 如何真正调用 Tool
+
+文件：`backend/app/agent/runtime_domain_agents.py`、`backend/app/agent/supervised_workflow.py`。
+
+先看运行时 Agent 能看到的最小能力接口：
+
+```python
+class RuntimeAgentContext(Protocol):
+    # Protocol 只描述“可以调用哪些方法”，不负责创建具体对象。
+    # 这样 RuntimeMedicationAgent 不需要知道 SQLAlchemy Session 在哪里。
+    run_id: str
+    member_id: str
+
+    def call_tool(
+        self,
+        *,
+        agent_role: DomainAgentRole,
+        tool_name: str,
+        payload: dict[str, Any],
+    ) -> ToolResult: ...
+```
+
+`Protocol` 是 Python 的结构化接口：只要一个对象拥有这些属性和方法，类型检查器就认为它可以作为运行时上下文。真正的对象是 `SupervisorAgentRuntime`，它把 Agent 的请求转给 `workflow._call(...)`；`_call` 再把请求交给 Tool Registry。因此调用链是：
+
+```text
+RuntimeMedicationAgent
+  -> RuntimeAgentContext.call_tool
+  -> SupervisorAgentRuntime.call_tool
+  -> SupervisorBusinessWorkflow._call (shared Tool boundary)
+  -> ToolRegistry.call
+  -> DB/Provider/RAG handler
+```
+
+下面是一个简化但对应真实结构的用药 Agent 片段：
+
+```python
+profile = self._call(
+    agent_input,
+    tool_name="query_health_profile",
+    payload={
+        "user_id": self.runtime.user_id,
+        "member_id": self.runtime.member_id,
+    },
+)
+
+if isinstance(profile, AgentTaskResult):
+    # _call 失败时返回结构化 AgentTaskResult，而不是抛出未分类字符串。
+    # 立即 return 能阻止后续 Agent 在没有健康档案的情况下继续编造事实。
+    return profile
+
+box = self._call(
+    agent_input,
+    tool_name="query_medicine_box",
+    payload={"member_id": self.runtime.member_id},
+)
+```
+
+每个变量的含义：
+
+- `agent_input`：Supervisor 为当前 step 创建的最小输入，包含 task/member、当前角色和工具候选，不含完整聊天历史。
+- `tool_name`：字符串工具名，但最终会被 Tool Registry 查表并按 `ToolSpec` 校验，Agent 不能凭空调用任意函数。
+- `payload`：传给工具的业务参数；成员身份还会在 ToolExecutionContext 和 Repository SQL 再校验一次。
+- `profile` / `box`：成功时是 `ToolResult`，失败时 `_call` 转成 `AgentTaskResult`，所以后续逻辑只消费结构化结果。
+
+运行时 Agent 完成后，`RuntimeDomainAgent._result(...)` 会把本次调用之后新增的工具名和证据指针带回：
+
+```python
+return AgentTaskResult(
+    task_id=agent_input.route.task_id,       # 防止结果属于别的任务。
+    member_id=agent_input.route.member_id,   # 防止结果串到别的家庭成员。
+    agent_role=self.role,                    # 必须与 Supervisor 当前 step 一致。
+    step_id=agent_input.step.step_id,        # 让 reducer 和 Trace 找回这一步。
+    status="completed",                     # 结构化状态，不用自然语言猜成功与否。
+    facts={"workflow_action": "prepare_medication_workflow"},
+    source_refs=self.runtime.evidence_refs_since(self._trace_start),
+    tool_calls=self.runtime.tool_names_since(self._trace_start),
+)
+```
+
+这就是本次修复的关键：`SupervisorBusinessWorkflow._runtime_supervisor(...)` 每次 run 都创建一个新的运行时 Agent registry；Supervisor 选择 `MedicationAgent` 时，真正执行的是 `RuntimeMedicationAgent`，而不是只在 `orchestration_run` 里写一条角色名称。测试因此可以断言：未选中的 `ReportAgent` 没有 Tool call，跨领域请求同时出现两个角色的真实 Tool call，所有 call 的 `member_id` 都等于当前任务成员。
 
 ## 6. SafetyAgent 与确认状态机
 
@@ -1143,7 +1241,7 @@ docker compose up -d --build --wait --wait-timeout 300
 
 ### 练习一：画一次简单请求
 
-选择“给父亲整理续方材料”，沿着 `business_tasks.py -> BusinessTaskService -> ProductWorkflowState -> chronic_care -> tools -> final answer` 画箭头，并在每个箭头旁写出输入和输出。
+选择“给父亲整理续方材料”，沿着 `business_tasks.py -> BusinessTaskService -> UnifiedHealthGraph -> SupervisorBusinessWorkflow -> MedicationAgent -> Tool Registry -> final answer` 画箭头，并在每个箭头旁写出输入和输出。
 
 ### 练习二：画一次复杂请求
 
@@ -1182,7 +1280,7 @@ docker compose up -d --build --wait --wait-timeout 300
 6. Context compact/reset 删除哪些临时内容，保留哪些 source pointer。
 7. Tool、Provider、RAG 和 Model Gateway 的失败分别记录在哪里。
 8. RunTrace、Observation、RunSummary 和 EvaluationResult 的职责差异。
-9. `UnifiedHealthGraph` 如何把 Router/Planner/Supervisor 接入业务 API，以及为什么内部 ProductWorkflow 仍是业务执行适配器。
+9. `UnifiedHealthGraph` 如何把 Router/Planner/Supervisor 接入业务 API，以及 Supervisor 如何实际调用运行时领域 Agent 和 Tool。
 10. 哪些代码一旦修改，必须补 schema、失败测试、文档和 migration。
 
 ## 17. 当前实现与非目标
@@ -1208,15 +1306,16 @@ docker compose up -d --build --wait --wait-timeout 300
 
 ## 4D-B2.1 UnifiedHealthGraph 代码地图
 
-这一阶段先解决“患者端入口和独立编排内核分离”的问题；4D-B2.2 在此基础上补上有界只读 DAG 并行：
+这一阶段先解决“患者端入口和独立编排内核分离”的问题；当前 Supervisor 收口还补上了“编排结果必须控制真实执行”的因果关系；4D-B2.2 的有界只读 DAG 仍作为独立评测能力保留：
 
 1. `backend/app/services/business_task_service.py` 现在创建 `UnifiedHealthGraph`，API 契约和确认续跑接口保持不变。
-2. `backend/app/agent/unified_health_graph.py` 先构造 `ComplexityRoutingRequest`，调用 deterministic Router、一次性 Planner 和 bounded Supervisor。
-3. 同一个统一图再调用 `FamilyHealthProductWorkflow`，由它继续负责数据库 Tool、Provider、草稿、确认状态、安全检查和最终答案。
-4. `backend/app/agent/product_artifacts.py` 把统一编排结果投影为 `RunTrace.orchestration`，其中包含 route、plan、Supervisor decisions 和 domain-agent results，但不嵌入原始请求文本。
+2. `backend/app/agent/unified_health_graph.py` 负责统一执行边界；默认实例化 `SupervisorBusinessWorkflow`。
+3. `backend/app/agent/supervised_workflow.py` 构造 `ComplexityRoutingRequest`，调用 deterministic Router、一次性 Planner 和 bounded Supervisor；Supervisor 的 Agent registry 是 `runtime_domain_agents.py` 中的 Tool-backed Triage/Medication/Report Agent。
+4. 运行时 Agent 通过 `SupervisorAgentRuntime.call_tool(...)` 进入同一个 Tool Registry，工具结果、Provider 来源和成员作用域再回到 `AgentTaskResult` 与业务 state。
+5. `backend/app/agent/product_artifacts.py` 把真实编排结果投影为 `RunTrace.orchestration`，其中包含 route、plan、Supervisor decisions、domain-agent results 和 Tool/Source 产物，但不嵌入原始请求文本。
 5. `backend/app/agent/run_trace_schemas.py` 对 route、plan、domain-agent result 的 `task_id/user_id/member_id` 做冻结校验，防止编排产物跨任务或跨成员混入。
 
-这一步的边界很重要：B2.1 证明“统一入口和统一审计产物”，B2.2 再由 `TaskPlan` 的依赖边、Supervisor ready set 和 fan-out/fan-in 完成只读并行；确认、写操作和治理节点仍不进入并行批次。B2.3 已由 `final_claim_schemas.py`、`product_artifacts.py` 和 `run_trace_schemas.py` 把正文、Claim、成员和来源指针冻结到同一份 AnswerEnvelope/Trace v2；B2.4 已生成待审核的 300 个 WorldState/1200 条 v2 Query，B2.5 已完成内存 projection、九层 grader 和 preview Runner，下一步是接入真实 PostgreSQL/Provider/RAG 物化。
+这一步的边界很重要：B2.1 现在不仅证明“统一入口和统一审计产物”，还证明 Supervisor 的角色选择会改变真实 Tool 调用；B2.2 的依赖边、ready set 和 fan-out/fan-in 仍只对独立只读步骤开放，正式业务路径强制串行。B2.3 已由 `final_claim_schemas.py`、`product_artifacts.py` 和 `run_trace_schemas.py` 把正文、Claim、成员和来源指针冻结到同一份 AnswerEnvelope/Trace v2；B2.4 已生成并完成人工审核的 300 个 WorldState/1200 条 v2 Query，B2.5 已完成内存 projection、九层 grader 和 preview Runner，后续仍需完成 v2 全量 PostgreSQL/Provider/RAG 物化。
 
 ### 4D-B2.3 FinalClaim 代码走读入口
 
@@ -1225,7 +1324,7 @@ docker compose up -d --build --wait --wait-timeout 300
 3. `product_artifacts.build_run_trace()` 在业务答案冻结时创建 AnswerEnvelope；`RunTrace` 额外校验 run/task/member、正文、来源集合和依赖结果集合必须一致。
 4. `DeterministicEvaluator._claim_metrics()` 只读取冻结 Claim 和 Tool/RAG source pointer，计算 evidence coverage、source precision 和 consistency，不使用 LLM 反向猜测答案事实。
 
-这套设计现在已经配合 `v2_benchmark_schemas.py` 和 `v2_benchmark_generator.py` 生成 300 个 WorldState/1200 条 Query，B2.5 的 Materializer 和 grader 已能在内存 projection 上验证管线；数据仍是 `pending_review`，不能直接当作最终 gold。下一步是把同一接口接到 PostgreSQL、Provider 和 RAG，再由真实 UnifiedHealthGraph 生成冻结 Trace。
+这套设计现在已经配合 `v2_benchmark_schemas.py` 和 `v2_benchmark_generator.py` 生成 300 个 WorldState/1200 条 Query，B2.5 的 Materializer 和 grader 已能在内存 projection 上验证管线；用户已完成运行前 Gold 审核并全部标记 `pass`，但这些审核结果不能直接当作回答质量结果。下一步是把同一接口接到 PostgreSQL、Provider 和 RAG，再由真实 UnifiedHealthGraph 生成冻结 Trace。
 
 ### 4D-B2.4 数据生成代码走读入口
 
@@ -1407,3 +1506,107 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 3. 在 `rag_traces` 中加入 `stale_source_id`：观察 `rag.stale_source`。
 
 修改测试前先复制对象，再用 `model_copy(update=...)` 构造坏产物；不要直接改 fixture 原文件。读懂这三个失败后，你就能从“输入 fixture -> 物化 -> 冻结 Trace -> 单层 grader -> 聚合报告”完整讲出一条评测链路。
+
+## 4D-B5 编排收口代码地图
+
+这一轮修复解决的是“计划写了什么，运行时是否真的遵守”三个问题。学习顺序建议固定为：
+
+1. `complexity_router.py` 先识别是否存在明确的业务先后关系；
+2. `orchestration_schemas.py` 用 `DependencyHint`、`PlanStep` 和 `TaskPlan` 固定依赖；
+3. `orchestration.py` 把角色提示转换成 step id，并由 Supervisor 按依赖执行；
+4. `runtime_domain_agents.py` 把当前 step 的权限传给 `SupervisorAgentRuntime.call_tool`；
+5. `supervised_workflow.py` 在真正进入旧 Workflow/Tool handler 前拒绝计划外工具；
+6. `legacy_role_adapter.py` 只在兼容入口把旧角色映射为 canonical 领域角色，不让旧命名进入新业务计划。
+
+### 4D-B5.2 依赖如何从用户表达变成 DAG
+
+`DependencyHint` 是“角色之间的业务关系”，例如：
+
+```python
+DependencyHint(
+    upstream_role="ReportAgent",          # 先完成报告整理
+    downstream_role="MedicationAgent",    # 再准备续方材料
+    reason="report must be reviewed before refill preparation",
+)
+```
+
+它不是模型自由生成的图，而是 Router 根据固定短语和结构化 intent 生成的候选关系。Planner 再把角色名变成稳定 step id：
+
+```python
+role_to_step_id = {
+    role: f"step_{index}"
+    for index, role in enumerate(ordered_roles, start=1)
+}
+
+dependencies_by_role = {
+    role: tuple(
+        role_to_step_id[hint.upstream_role]
+        for hint in route.dependency_hints
+        if hint.downstream_role == role
+    )
+    for role in ordered_roles
+}
+```
+
+- `role_to_step_id` 是字典：key 是业务 Agent 名，value 是计划内稳定编号。
+- `dependencies_by_role` 是字典：key 是下游角色，value 是它必须等待的上游 step id 元组。
+- `tuple(...)` 让依赖在 `TaskPlan` 创建后不可被运行时随意追加。
+- `TaskPlan` 最后检查每条依赖都指向已存在步骤、没有环，并且 `dependency_edges` 与每个 `PlanStep.dependencies` 完全一致。
+
+没有“先看报告再续方”这类明确表达时，依赖为空是正确结果；它代表并列关系，不代表 Planner 失效。`safety-review`、Confirmation 和 Evaluator 不在这里，因为它们属于固定治理图。
+
+### 4D-B5.3 计划级工具权限如何真正生效
+
+运行时 Agent 的 `_call()` 不只传工具名，还必须传当前计划步骤：
+
+```python
+result = self.runtime.call_tool(
+    agent_role=self.role,
+    tool_name=tool_name,
+    payload=payload,
+    step_id=agent_input.step.step_id,
+    allowed_tools=agent_input.allowed_tools,
+)
+```
+
+`SupervisorAgentRuntime.call_tool()` 的第一道判断是：
+
+```python
+if not step_id or tool_name not in set(allowed_tools):
+    return ToolResult.failure(
+        tool_name=tool_name,
+        error_type="tool_not_allowed_by_plan",
+        fallback_action="reject_plan_tool",
+        permission_scope="plan_step",
+    )
+return self.workflow._call(...)
+```
+
+这里有两个关键点：
+
+- `not step_id`：没有当前步骤身份时直接失败，不能靠“默认角色权限”继续执行。
+- `tool_name not in set(allowed_tools)`：先检查冻结计划，再进入角色权限、成员隔离、schema、确认和 handler 检查。
+
+因此权限是交集，而不是并集：角色允许工具、PlanStep 允许工具、成员作用域和安全状态必须同时通过。测试文件 `test_plan_tool_permissions.py` 专门验证“计划拒绝时 handler 没有被调用”。
+
+### 4D-B5.4 canonical Agent 与旧角色如何隔离
+
+正式 Supervisor registry 只接受三个业务 Agent：`TriageAgent`、`MedicationAgent`、`ReportAgent`。旧入口仍可能传入 `RefillAgent` 等名称，所以通过显式适配层处理：
+
+```python
+map_role("RefillAgent")
+# RoleMapping(
+#     input_role="RefillAgent",
+#     canonical_role="MedicationAgent",
+#     skill="refill_material_preparation",
+#     layer="legacy_skill",
+# )
+```
+
+这意味着 `RefillAgent` 不是第四个正式 Agent，而是 `MedicationAgent` 的兼容 skill。`SafetyAgent` 是治理层，`Planner` 是规划组件；它们都不能被映射成业务执行 Agent。未知角色必须 fail closed，避免拼写错误变成越权路由。
+
+### 4D-B5.5 评测为什么分两张图
+
+v2 Gold 使用四组字段：`expected_domain_steps`、`expected_domain_dependency_edges`、`expected_governance_steps`、`expected_governance_edges`。前两组回答“Supervisor 业务 DAG 是否正确”，后两组回答“Safety/Confirmation/FinalAnswer/Evaluator 固定边是否执行”。
+
+`4d-b5.5` 的 300/1200 数据中，原有依赖边都是指向 `safety-review` 的治理边，重分类后 domain dependency edge 为 0；真正的报告到续方依赖由 B5 Planner fixture 单独覆盖。这样不会为了让指标好看而给 v2 Gold 人工制造业务依赖，也不会把 SafetyAgent 错报成 Supervisor 的领域步骤。

@@ -13,15 +13,14 @@ test.describe("4C-3 患者端边界回归", () => {
     const optionCount = await options.count();
     expect(optionCount).toBeGreaterThanOrEqual(2);
 
-    await page.getByRole("button", { name: "正常续方" }).click();
-    await page.getByRole("button", { name: "运行 Agent" }).click();
-    await expect(page.getByText("结构化答案", { exact: true })).toBeVisible();
+    await submitPrompt(page, "我爸的降压药快吃完了，帮我看看能不能续方。");
+    await expect(page.getByText("整理结果", { exact: true })).toBeVisible();
 
     const switchedValue = await findDifferentMemberValue(memberSelect, initialMember, optionCount);
     await memberSelect.selectOption(switchedValue);
 
     await expect(memberSelect).toHaveValue(switchedValue);
-    await expect(page.getByText("结构化答案", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("整理结果", { exact: true })).toHaveCount(0);
     await expect(page.getByText("DRAFT", { exact: true })).toHaveCount(0);
   });
 
@@ -43,11 +42,10 @@ test.describe("4C-3 患者端边界回归", () => {
       });
     });
 
-    await page.getByRole("button", { name: "正常续方" }).click();
-    await page.getByRole("button", { name: "运行 Agent" }).click();
+    await submitPrompt(page, "我爸的降压药快吃完了，帮我看看能不能续方。");
 
     await expect(page.getByText("模拟 Provider 不可用", { exact: true })).toBeVisible();
-    await expect(page.getByText("结构化答案", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("整理结果", { exact: true })).toHaveCount(0);
     await expect(page.getByText("DRAFT", { exact: true })).toHaveCount(0);
   });
 });
@@ -62,4 +60,9 @@ async function findDifferentMemberValue(
     if (value && value !== currentValue) return value;
   }
   throw new Error("测试数据至少需要两个家庭成员");
+}
+
+async function submitPrompt(page: import("@playwright/test").Page, prompt: string) {
+  await page.getByRole("textbox", { name: "输入你的问题" }).fill(prompt);
+  await page.getByRole("button", { name: "开始咨询" }).click();
 }

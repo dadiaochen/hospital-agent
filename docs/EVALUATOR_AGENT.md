@@ -44,7 +44,7 @@ SafetyAgent 与它不能互相替代：前者在风险动作前拦截，后者�
 
 当前 HarnessRunner 批量加载 16 个固定 ExpectedCase 和对应 mock RunTrace，并聚合：任务成功率、工具准确度平均、groundedness、schema 有效率、幻觉率、安全召回、确认提示率、隔离通过率和 p95 延迟。
 
-4B 任务六新增的 `OrchestrationRunResult` 只记录 deterministic Planner/Supervisor 的路由、步骤、Agent 结果和终止原因；它不是 `EvaluationResult`，也不会替代冻结后的 RunTrace、FinalAnswer 和 Safety 产物。4D-B2.1 已由 `UnifiedHealthGraph` 把经过作用域校验的投影写入同一次 `RunTrace.orchestration`；它仍不等于真实业务质量指标，必须与 Tool/RAG/Safety/FinalAnswer 产物一起评估。
+4B 任务六新增的 `OrchestrationRunResult` 记录 deterministic Planner/Supervisor 的路由、步骤、Agent 结果和终止原因；它不是 `EvaluationResult`，也不会替代冻结后的 RunTrace、FinalAnswer 和 Safety 产物。4D-B4 之后，患者端业务的 `OrchestrationRunResult` 还包含运行时领域 Agent 的实际 Tool call 和来源指针，但评估器仍只读冻结产物，必须把它与 Tool/RAG/Safety/FinalAnswer 一起评估，不能只看“选中了哪个角色”。
 
 产品升级后的 Agent Harness 还需要增加六项 RAG 指标：
 
@@ -72,6 +72,8 @@ SafetyAgent 与它不能互相替代：前者在风险动作前拦截，后者�
 现有运行时已经把 EvaluationResult 与冻结 RunTrace 一起持久化和查询。Evaluator 没有数据库 Session、Tool Registry 或 state writer；持久化由 AgentRuntimeService 在评估返回后完成，因此评估器不能修改答案和业务状态。
 
 4D-B2.3 已将端到端业务冻结产物扩展为 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`，并由确定性规则计算 Claim 来源覆盖、来源精度和正文一致性。后续 4D-B 仍需接入 300/1200 数据、RAG 排名、Provider attempts 和报告聚合来真实计算完整指标。当前仍不是临床质量评估；LLM Judge 即使加入，也只能作为离线辅助实验，不能进入运行链路，不能替代引用、成员隔离、Agent 安全和人工确认的确定性校验，也不是验收硬门槛。
+
+4D-B5 已修正评测中的“步骤”边界：`TaskPlan` 的 `dependency_edges` 只比较 canonical 领域步骤之间的业务依赖；Safety/Confirmation/FinalAnswer/Evaluator 的固定调用单独进入 `governance_edges`。v2 Gold、integration artifact 和 grader 均使用 `expected_domain_steps`、`expected_domain_dependency_edges`、`expected_governance_steps`、`expected_governance_edges` 四组字段；`safety-review` 不再被当作 Supervisor 领域步骤，也不会通过隐式旧节点归一化掩盖口径差异。
 
 4B 新业务运行还会保存脱敏的 `ModelCallTrace`，其中的 provider、schema、safety、fallback 和耗时可作为评测输入；任务八另外冻结 `checkpoint_version`、`confirmation_version`、`checkpoint_source`、`parent_run_id` 和恢复来源指针，Evaluator 可以读取这些字段判断两次 run 和成员隔离是否成立。Evaluator 仍只读冻结的最终答案和运行产物，不读取 Key、完整 prompt 或 provider 原始文本，也不负责判断真实模型的临床质量。
 
@@ -130,7 +132,7 @@ Evaluator 可以读取冻结的 SafetyTrace、`confirmation_state`、最终答�
 
 4D-B2.6 增加了 `PostgresV2Materializer`、`ScopedPostgresRetriever`、`ScopedProviderSandbox` 和 `UnifiedHealthGraphIntegrationExecutor`。它们把一条 v2 case 放入 PostgreSQL shadow transaction，调用真实 UnifiedHealthGraph，并把工具、RAG、Provider attempt、Safety、Claim 和数据库草稿投影成同一个冻结 `RunTrace`。评测仍由 deterministic grader 只读执行，不能修改 FinalAnswer 或业务状态。
 
-Docker 全链路本机证据为 `19/19` 通过；第一条真实 integration sample 的九层 grader 全部通过。由于 v2 数据仍是 `pending_review`，这两个结果只能写成 local evidence/preview，不能写成最终回答质量、RAG Recall 或 Safety recall。A/B/C/D 的默认脚本也是 synthetic preview；真实对比必须为每个 condition 使用同一 manifest 和不同 `EvalRuntimeOptions` 创建真实 graph executor。
+Docker 全链路本机证据为 `19/19` 通过；第一条真实 integration sample 的九层 grader 全部通过。v2 的 300/1200 Gold 已由用户审核并全部标记 `pass`，但这只解决运行前 Gold 审核，不等于真实运行结果全部通过。当前 C 预检 development/validation 各 `4/4` 通过，holdout 的 `4/4` 因一个已审核 Gold 与当前运行时证据契约不一致而失败；因此仍不能写成最终回答质量、RAG Recall 或 Safety recall。A/B/C/D 的默认脚本也是 synthetic preview；真实对比必须为每个 condition 使用同一 manifest 和不同 `EvalRuntimeOptions` 创建真实 graph executor。
 
 完整运行命令和身份映射规则见 [4D-B2.6 集成状态](4D_B2.6_INTEGRATION_STATUS.md)。
 
@@ -144,8 +146,20 @@ Docker 全链路本机证据为 `19/19` 通过；第一条真实 integration sam
 
 `LocalObservedBenchmarkRunner` 把 4D-A gold 数据投影为四组本地观测：bounded Supervisor `RunTrace`、关键词 RAG 排名、ContextManager compact/reset 结果和 Provider attempt trace。4D-B2.1 之后，患者端业务的冻结 `RunTrace` 也包含 `orchestration` 投影，可以检查 Router、Plan、Supervisor decision 和领域 Agent result。它仍然只把冻结产物交给 deterministic 规则计算，不使用 LLM Judge，也不能修改 FinalAnswer 或业务状态。
 
-当前 260 条 4D-A gold 是五组专项数据，不是 260 个端到端 WorldState。4D-B2.1 已建立 UnifiedHealthGraph 接入边界，4D-B2.2 已实现 bounded DAG 并行和仅评测可用的 `all_history` 模式，4D-B2.3 已把 FinalClaim/AnswerEnvelope/Trace v2 接入业务冻结产物，4D-B2.4 已生成 300 个 WorldState/1200 条 v2 Query，4D-B2.5 已完成隔离内存物化、九类确定性 grader 和 preview runner。数据仍待人工审核，preview 不代表业务质量；下一步是把同一接口接到 PostgreSQL/Provider/RAG 和真实 UnifiedHealthGraph。完整执行顺序和指标门槛见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。
+当前 260 条 4D-A gold 是五组专项数据，不是 260 个端到端 WorldState。4D-B2.1/B4 已建立 UnifiedHealthGraph 到运行时 Supervisor/领域 Agent/Tool Registry 的接入边界，4D-B2.2 已实现 bounded DAG 并行和仅评测可用的 `all_history` 模式，4D-B2.3 已把 FinalClaim/AnswerEnvelope/Trace v2 接入业务冻结产物，4D-B2.4 已生成 300 个 WorldState/1200 条 v2 Query，4D-B2.5 已完成隔离内存物化、九类确定性 grader 和 preview runner。用户已审核 300/1200 条 Gold，4D-B2.6 还新增了 300-case 本机 identity/source map 和 deterministic Docker smoke；当前 C 预检 development/validation 各 `4/4` 通过，holdout `4/4` 暴露一项 Gold/runtime 证据契约不一致。preview 不代表全量业务质量；完成契约修正后仍需重跑三 split 并生成正式报告。完整执行顺序和指标门槛见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。
 
 [4D-B 本地观测报告](local_benchmark_report.4d.md) 使用合成 fixture 和内存 SQLite，因此该报告中的 Safety、RAG、上下文和 Provider 数字只属于固定本地样本，真实 LLM 与 Docker 指标保持 `N/A`。后续 B2.6/B3 已分别补充 Docker 集成和 8 条真实模型固定样本证据，但不能把不同报告的样本与指标混算。
 
 最终 v2 Evaluator 读取同一次 UnifiedHealthGraph run 冻结的 `RunTrace`、`FinalAnswer`、`FinalClaim`、Tool/Provider attempts、RAG 排名、Context/Checkpoint 和数据库状态投影。B2.5 的 `SyntheticProjectionExecutor` 先从 Gold 生成同形状的冻结产物，只用于验证 grader 和报告管线；评分器必须保持确定性和只读。LLM Judge 只允许离线辅助分析，不修改硬门槛，也不能回写答案或业务状态。
+
+UX-04 不改变 Evaluator 的 post-run 只读边界。历史咨询页面只投影用户可读的咨询结果，不把 EvaluationResult、评测指标或内部失败原因当作用户操作依据；确认仍由运行时安全与业务状态机先行校验。
+
+UX-06 不改变 Evaluator 的职责。报告详情页面不读取或展示 EvaluationResult、评测指标、run 标识或内部失败原因；它只消费报告读取接口返回的冻结 DTO。报告页面的来源完整性和成员隔离属于 API/client 契约校验，不把评测器引入业务执行链路。
+
+## 用户端 UX-08 与评测边界
+
+UX-08 不把 EvaluatorAgent、EvaluationResult、RunTrace 或离线评测页面加入用户端导航。入口回归只验证公共页面不暴露评测术语和内部地址；EvaluatorAgent 仍是 post-run 只读评估器，不参与兼容跳转、页面渲染或业务状态修改。
+
+## 用户端 UX-09 评测边界
+
+UX-09 的浏览器验收只检查用户可见投影、成员隔离、确认交互和页面可访问性，不重算或修改 `EvaluationResult`。EvaluatorAgent 仍在 FinalAnswer、RunTrace、Tool/RAG 证据冻结后执行 post-run 只读评估；联调使用 deterministic provider 仅为保证回归可重复，不能据此宣称真实模型质量指标。

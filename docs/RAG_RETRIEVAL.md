@@ -186,7 +186,7 @@ python -m app.rag.indexer
 
 医疗知识 RAG 与个人状态严格隔离：系统不建立个人健康向量记忆，不把完整聊天、处方、报告原值、过敏史或药箱库存嵌入知识库。此类事实每次 run 从业务数据库或 Provider 重新读取；RAG 只检索经过版本管理的通用医疗规则、流程和解释资料。
 
-4B 任务五的 Router 和任务六的 deterministic 领域编排只输出固定领域、步骤和来源需求契约，不执行检索；真实 RAG 来源仍由后续 Tool/Provider 接线后的领域 Agent 获取。任务六不会把没有 `SourceRef` 的工作流占位结果当作医学事实。
+4B 任务五的 Router 和任务六的 deterministic 领域编排只输出固定领域、步骤和来源需求契约，不执行检索；当前 4D-B4 的运行时 Triage/Medication/Report Agent 会通过 Tool Registry 的 `search_safety_knowledge` 或 `search_business_knowledge` 获取真实 RAG 结果，并把 `SourceRef` 带回 `AgentTaskResult`。任何没有 `SourceRef` 的工作流结果仍不能被当作医学事实。
 
 4B 任务七不改变 RAG 的召回和 embedding 规则。它只把已有 `SourceRef`、RAG source pointer 和安全决策带入 Action Policy/Final Output Safety 边界；没有有效来源时，最终答案仍不能把模型解释升级为医疗事实。任务八已将 `SourceRef` 的 source id、member 和版本指针纳入 PostgreSQL 权威 checkpoint；Redis 只缓存这些指针的短期投影，恢复后仍需按当前成员和来源版本校验，不能把个人健康数据写入知识 namespace。
 
@@ -219,3 +219,15 @@ $env:RAG_EMBEDDING_DIMENSIONS='512'
 ```
 
 完整结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。
+
+UX-04 不改变 RAG 检索或来源版本校验；历史咨询和确认页面只展示必要的用户可读整理结果，原始 `source_id`、检索排名和工具来源继续留在冻结产物与审计链路中。
+
+UX-06 同样不新增 RAG 检索链路：报告详情先展示报告自身的版本化来源指针，只有契约明确提供的来源才可用于页面解释。页面不把来源内部 ID、检索排名或模型记忆展示给用户；没有来源或来源未核对时必须降级为提示，不得生成无依据的医疗结论。
+
+## 用户端 UX-08 入口边界
+
+知识检索仍由 Agent/RAG 内部链路按既有来源和版本规则执行，但不再从公共首页直接进入。`/knowledge` 仅保留兼容跳转到 `/agent`；这不会删除 RAG 能力，也不会把原始来源、排名或检索参数暴露给用户。报告详情继续只展示契约允许的报告来源。
+
+## 用户端 UX-09 RAG 边界
+
+UX-09 没有新增检索、索引、embedding 或知识写入。页面隐藏 `source_id`、排名和工具来源标识，但这些指针继续保留在冻结运行产物和审计链路中；前端不根据模型记忆补造来源，也不把 RAG 结果直接转换为诊断或治疗建议。

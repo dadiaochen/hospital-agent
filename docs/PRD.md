@@ -80,7 +80,7 @@ RAG 是三条业务线共用的知识与证据能力，解决四个核心问题�
 
 当前仓库已经实现旧版四场景基线：父亲降压药续方、母亲中医复诊材料整理、母亲用药提醒和高风险用药调整拦截。已完成数据库、API、Tool Registry、关键词 RAG 基线、Model Gateway、有界 LangGraph 工作流、运行轨迹、Agent 评测和前端演示页面。
 
-新三条业务主线仍处于本地 MVP 阶段，尚未接入真实医院、药店或生产用户。当前已经完成产品重基线、业务域、Provider 模式、SourceRef、向量 RAG 路径、旧版有界工作流、Model Gateway、任务五的最终路由契约、任务六的 deterministic 三领域编排内核、任务七的新业务三层安全和确认状态机、任务八的 PostgreSQL 权威 checkpoint/Redis 回源/两次 run 续跑、任务九 Tool/Provider 可靠性、任务十 RRF/版本拒绝/成员隔离/脱敏 Observation、任务十一 32 条 deterministic Harness/A/B/C 消融、任务十二真实 Docker 后端验收、任务十三 4B Git/文档收口和 4C 患者端交付，以及 4D-B2.1 的 UnifiedHealthGraph 统一入口、4D-B2.2 的有界只读 DAG 与评测 `all_history` 基线、4D-B2.3 的 FinalClaim/AnswerEnvelope/Trace v2 和 4D-B2.4 的 300/1200 v2 数据生成。v2 数据仍待人工审核、物化和 grader；真实 Provider/LLM、生产认证和部署准备仍是后续可选或生产化工作。
+新三条业务主线仍处于本地 MVP 阶段，尚未接入真实医院、药店或生产用户。当前已经完成产品重基线、业务域、Provider 模式、SourceRef、向量 RAG 路径、旧版有界工作流、Model Gateway、任务五的最终路由契约、任务六的 deterministic 三领域编排内核、任务七的新业务三层安全和确认状态机、任务八的 PostgreSQL 权威 checkpoint/Redis 回源/两次 run 续跑、任务九 Tool/Provider 可靠性、任务十 RRF/版本拒绝/成员隔离/脱敏 Observation、任务十一 32 条 deterministic Harness/A/B/C 消融、任务十二真实 Docker 后端验收、任务十三 4B Git/文档收口和 4C 患者端交付，以及 4D-B2.1 的 UnifiedHealthGraph 统一入口、4D-B2.2 的有界只读 DAG 与评测 `all_history` 基线、4D-B2.3 的 FinalClaim/AnswerEnvelope/Trace v2 和 4D-B2.4 的 300/1200 v2 数据生成。v2 Gold 已完成运行前人工审核；真实 PostgreSQL/Provider/RAG 三 split 验收、真实 Provider/LLM、生产认证和部署准备仍是后续可选或生产化工作。
 
 ## 8. 验收原则
 

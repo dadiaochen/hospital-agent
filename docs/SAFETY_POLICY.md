@@ -77,13 +77,15 @@ DRAFT
 - 当前 EXECUTED 不等于医院提交、药店下单或通知发送，外部状态保持 `not_submitted`。
 - 相同 key/相同请求幂等回放；相同 key/不同请求返回冲突。
 
+用户端确认可以使用自然语言表达，但必须仍由明确的勾选和按钮动作触发；UX-04 将内部草稿、外部提交和运行续跑约束留在代码/接口契约中，不允许仅凭浏览页面或模型文本推进受保护动作。
+
 任务七已在新业务任务链路落地目标语义：首轮 run 将无外部副作用的草稿投影为 `DRAFT`，用户只确认后续执行；旧 `AgentRuntimeService` 和旧确认草稿 API 仍保留兼容契约，API 文档必须继续明确两者差异。
 
 实现边界：`ThreeLayerSafetyGuard` 是确定性治理组件，分别返回 `request`、`action` 和 `final_output` 决策；`ConfirmationStateMachine` 只负责纯状态转换，不持有数据库状态。`BusinessTaskService` 在确认 continuation 前对任务行使用 PostgreSQL `FOR UPDATE`，并重新校验 user/member/task/draft/version/fingerprint/idempotency 作用域。任务八已将恢复交给 PostgreSQL 权威 `TaskCheckpointService`，Redis 只提供带 TTL 的短期投影；版本冲突发生时不得创建新的 continuation run。
 
 ## 6. 治理层与业务层
 
-- Supervisor 只协调业务步骤，不能跳过或修改任何 Guard/Safety 结果。
+- Supervisor 负责选择和执行已冻结的业务步骤，但不能跳过或修改任何 Guard/Safety 结果；当前运行时 Agent 的 Tool 调用仍必须经过 Registry 和三层治理。
 - 4B 任务六的 deterministic Supervisor 只消费冻结计划和 AgentTaskResult；它不执行安全判断，也不能把任务结果当作已通过 Safety。
 - Domain Agent 可以请求草稿或澄清，不能直接确认、执行或写长期偏好。
 - Model Gateway 的 schema/output 检查不替代三层治理。
@@ -132,3 +134,15 @@ Docker 后端验收额外验证了确认并发的状态条件更新：同一幂�
 `safety_grader` 是 post-run 的确定性质量检查，读取冻结 `SafetyTrace`、确认状态和最终答案；它不能替代运行时 `SafetyAgent`，也不能在答案已经生成后补救危险输出。B2.6 的真实图执行适配器会把运行时 SafetyTrace 和 action-specific confirmation flag 冻结进 RunTrace，Provider timeout/no-source 也只能进入失败或降级结果，不能绕过安全边界。当前真实样例和 Docker 19/19 证明链路可运行，不等于 300/1200 数据集的最终安全召回率；正式指标必须来自审核后的 gold 和完整 runner。
 
 4D-B3 的 `ConfirmationDraftSnapshot` 只用于审核“本地草稿是否生成且仍未提交”，不代表提醒已经创建或发送。真实模型调用成功也不能跳过人工确认；新队列默认保持 `pending_review`，只有人工检查成员、来源、安全提示和草稿边界后，finalizer 才能冻结 `reviewed_pass/reviewed_fail`。当前 8 条 development 样本已完成该审核，不能据此声称临床安全率 100%。
+
+## 用户端 UX-06 报告阅读安全
+
+报告详情只展示来源中已有的指标信息和解释性文字，并固定保留“不是诊断或治疗建议”的语义边界。高于或低于参考范围只表示与报告参考范围的关系，不得在页面上推导疾病、用药调整或治疗方案；报告状态为待核对、失败或缺少来源时，页面必须降级提示并建议咨询专业人员。
+
+## 用户端 UX-08 入口清理
+
+入口清理不是安全规则削弱。首页不再展示“仅生成本地草稿”“外部提交”“执行边界”等实现说明，但代码仍保留安全拦截、来源要求、成员隔离和人工确认；兼容地址只能跳转到业务入口，不能直接执行购药、复诊、提醒、停药、加量、减量或换药动作。
+
+## 用户端 UX-09 联调安全边界
+
+UX-09 只验证页面投影与既有安全链路的衔接：高风险请求仍由 SafetyAgent 阻断，需确认的请求仍由运行时返回确认状态，完成后的结果不再显示相互矛盾的“等待确认”提示。页面隐藏内部执行边界不等于删除边界；浏览器不能绕过成员隔离、来源校验、人工确认或外部动作禁止规则。

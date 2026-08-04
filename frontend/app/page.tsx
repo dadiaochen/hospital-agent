@@ -1,69 +1,54 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 
 import { StatusBadge } from "@/components/StatusBadge";
 import { useMember } from "@/components/providers/MemberProvider";
-import { mvpScenarios } from "@/lib/navigation";
 
-const serviceCards = [
+const publicServices = [
   {
     href: "/agent",
-    eyebrow: "慢病续方",
-    title: "整理续方材料",
-    description: "汇总处方、药箱和购药记录，生成待确认草稿。",
-    label: "开始整理",
+    eyebrow: "AI 健康助手",
+    title: "开始一次健康咨询",
+    description: "直接说说你或家人现在想整理的健康问题。",
+    label: "开始咨询",
     tone: "teal",
   },
   {
-    href: "/agent",
-    eyebrow: "用药提醒",
-    title: "准备提醒草稿",
-    description: "根据已有药箱信息整理提醒内容，不直接推送。",
-    label: "设置提醒",
-    tone: "amber",
-  },
-  {
-    href: "/refill-plans",
-    eyebrow: "复诊材料",
-    title: "查看历史处方",
-    description: "查看医生记录与可追溯来源，准备复诊沟通材料。",
-    label: "查看材料",
+    href: "/reports",
+    eyebrow: "报告解读",
+    title: "看看检查报告",
+    description: "查看报告摘要、指标解释、趋势和来源。",
+    label: "查看报告",
     tone: "blue",
   },
   {
-    href: "/medicine-box",
-    eyebrow: "家庭药箱",
-    title: "检查剩余药量",
-    description: "查看库存、预计剩余天数和安全备注。",
-    label: "打开药箱",
+    href: "/family",
+    eyebrow: "家庭管理",
+    title: "管理家庭健康记录",
+    description: "集中查看成员档案、用药、处方和购药记录。",
+    label: "查看家庭",
     tone: "rose",
+  },
+  {
+    href: "/agent-runs",
+    eyebrow: "历史咨询",
+    title: "回看过去的咨询",
+    description: "按家庭成员查看已经整理过的咨询内容。",
+    label: "查看记录",
+    tone: "amber",
   },
 ] as const;
 
 const categoryLinks = [
-  { href: "/purchase-plans", label: "附近药店库存", detail: "配送 / 自提候选" },
-  { href: "/knowledge", label: "安全知识检索", detail: "查看来源和版本" },
-  { href: "/family", label: "家庭成员", detail: "切换任务作用域" },
-  { href: "/agent-runs", label: "执行记录", detail: "查看冻结 Trace" },
+  { href: "/agent", label: "AI 健康助手", detail: "从一句话开始" },
+  { href: "/reports", label: "报告解读", detail: "查看报告和指标" },
+  { href: "/family", label: "家庭管理", detail: "管理成员和健康记录" },
+  { href: "/agent-runs", label: "历史咨询", detail: "回看过去的内容" },
 ] as const;
 
 export default function HomePage() {
-  const router = useRouter();
   const { selectedMember, members, loading } = useMember();
-  const [query, setQuery] = useState("");
-
-  function submitSearch(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmedQuery = query.trim();
-    if (trimmedQuery) {
-      router.push(`/knowledge?q=${encodeURIComponent(trimmedQuery)}`);
-    } else {
-      router.push("/knowledge");
-    }
-  }
 
   return (
     <div className="grid gap-5">
@@ -72,43 +57,26 @@ export default function HomePage() {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[#f7b928] px-3 py-1.5 text-xs font-black text-[#553507]">
-                患者端健康服务
+                家庭健康助手
               </span>
               <span className="text-xs font-semibold text-[#936a2c]">
-                先选成员，再处理一件事
+                先选择成员，再开始
               </span>
             </div>
             <h1 className="mt-5 max-w-2xl text-3xl font-black leading-tight tracking-tight text-[#173c38] sm:text-5xl">
-              家庭用药事务，清楚地整理，安心地确认
+              先说一件事，我们一起整理
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-[#6f6046] sm:text-base">
-              从药箱、处方和来源开始，把续方、复诊材料和提醒变成可追踪的本地草稿。系统不诊断、不开方，也不会替你向医院或药店提交动作。
+              从一次自然语言咨询开始，整理家人的健康问题、检查报告和用药记录。
             </p>
 
-            <form className="mt-6 flex max-w-2xl flex-col gap-2 rounded-2xl bg-white p-2 shadow-sm sm:flex-row" onSubmit={submitSearch}>
-              <label className="sr-only" htmlFor="portal-search">
-                搜索健康事务或知识
-              </label>
-              <input
-                aria-label="搜索健康事务或知识"
-                className="min-w-0 flex-1 rounded-xl px-4 py-3 text-sm text-[#334155] outline-none placeholder:text-[#9aa69f] focus:ring-2 focus:ring-[#f7b928]/50"
-                id="portal-search"
-                maxLength={200}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索：续方需要哪些确认？为什么不能自行加量？"
-                value={query}
-              />
-              <button className="rounded-xl bg-[#173c38] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#0f766e]" type="submit">
-                搜索
-              </button>
-            </form>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#80602b]">
-              <span>热门事务：</span>
-              {["续方材料", "用药提醒", "停药风险"].map((item) => (
-                <button className="font-semibold underline decoration-[#d7ad5b] underline-offset-4 hover:text-[#173c38]" key={item} onClick={() => setQuery(item)} type="button">
-                  {item}
-                </button>
-              ))}
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link className="rounded-xl bg-[#173c38] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#0f766e]" href="/agent">
+                开始咨询
+              </Link>
+              <Link className="rounded-xl border border-[#d9bf82] bg-white/70 px-5 py-3 text-sm font-bold text-[#80530b] transition hover:bg-white" href="/family">
+                查看家庭记录
+              </Link>
             </div>
           </div>
 
@@ -116,9 +84,9 @@ export default function HomePage() {
             <div className="w-full rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm backdrop-blur">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-[#b26c09]">
-                  当前任务成员
+                  当前家庭成员
                 </p>
-                <StatusBadge tone="success">已隔离</StatusBadge>
+                <StatusBadge tone="success">已选择</StatusBadge>
               </div>
               {loading ? (
                 <div className="mt-5 h-16 animate-pulse rounded-2xl bg-[#f5ead0]" />
@@ -126,16 +94,16 @@ export default function HomePage() {
                 <>
                   <p className="mt-5 text-3xl font-black text-[#173c38]">{selectedMember.name}</p>
                   <p className="mt-2 text-sm text-[#6f6046]">
-                    当前家庭共 {members.length} 位成员，所有查询和 Agent 运行都绑定当前成员。
+                    当前家庭共 {members.length} 位成员，咨询和记录都会围绕当前成员展示。
                   </p>
                   <Link className="mt-5 inline-flex rounded-xl border border-[#d9bf82] px-4 py-2.5 text-sm font-bold text-[#80530b] transition hover:bg-[#fff4d7]" href="/family">
-                    查看健康档案
+                    管理家庭成员
                   </Link>
                 </>
               ) : (
                 <>
                   <p className="mt-5 text-xl font-black text-[#173c38]">暂未加载成员</p>
-                  <p className="mt-2 text-sm text-[#6f6046]">请检查后端服务和 seed 数据。</p>
+                  <p className="mt-2 text-sm text-[#6f6046]">暂时无法加载家庭成员，请稍后再试。</p>
                 </>
               )}
             </div>
@@ -146,13 +114,13 @@ export default function HomePage() {
       <section>
         <div className="mb-3 flex items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#b26c09]">Health Services</p>
-            <h2 className="mt-1 text-2xl font-black text-[#173c38]">你可以先处理这些事务</h2>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#b26c09]">Start Here</p>
+            <h2 className="mt-1 text-2xl font-black text-[#173c38]">你可以从这里开始</h2>
           </div>
-          <Link className="text-sm font-bold text-[#0f766e] hover:underline" href="/agent">进入 Agent</Link>
+          <Link className="text-sm font-bold text-[#0f766e] hover:underline" href="/agent">开始咨询</Link>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {serviceCards.map((card, index) => (
+          {publicServices.map((card, index) => (
             <Link className="group rounded-2xl border border-[#eadfca] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#d4b56c]" href={card.href} key={card.title}>
               <div className="flex items-start justify-between gap-3">
                 <span className={`grid h-9 w-9 place-items-center rounded-xl text-xs font-black ${toneClasses[card.tone]}`}>
@@ -172,8 +140,8 @@ export default function HomePage() {
         <div className="rounded-2xl border border-[#eadfca] bg-white p-5 shadow-sm sm:p-6">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0f766e]">Shortcuts</p>
-              <h2 className="mt-1 text-xl font-black text-[#173c38]">健康服务分类</h2>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0f766e]">Quick Access</p>
+              <h2 className="mt-1 text-xl font-black text-[#173c38]">常用入口</h2>
             </div>
             <span className="text-xs text-[#9aa69f]">当前成员：{selectedMember?.name ?? "未选择"}</span>
           </div>
@@ -191,15 +159,13 @@ export default function HomePage() {
         </div>
 
         <div className="rounded-2xl border border-[#cfe2dc] bg-[#edf8f4] p-5 shadow-sm sm:p-6">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0f766e]">Safety First</p>
-          <h2 className="mt-2 text-xl font-black text-[#173c38]">每一步都能看见边界</h2>
-          <ul className="mt-4 grid gap-3 text-sm leading-6 text-[#52706b]">
-            <li><strong className="text-[#31534f]">来源：</strong>事实来自业务工具或知识检索，不用模型记忆补全。</li>
-            <li><strong className="text-[#31534f]">确认：</strong>续方、购药和提醒先形成草稿，用户确认后才推进本地状态。</li>
-            <li><strong className="text-[#31534f]">隔离：</strong>切换成员会重新加载上下文，页面拒绝展示跨成员数据。</li>
-          </ul>
-          <Link className="mt-5 inline-flex rounded-xl bg-[#0f766e] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#115e59]" href="/agent-runs">
-            查看可审计执行记录
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0f766e]">Easy to Use</p>
+          <h2 className="mt-2 text-xl font-black text-[#173c38]">把健康记录变得更容易回看</h2>
+          <p className="mt-4 text-sm leading-6 text-[#52706b]">
+            选择家庭成员后，你可以从咨询开始，也可以直接查看报告和过去的记录。
+          </p>
+          <Link className="mt-5 inline-flex rounded-xl bg-[#0f766e] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#115e59]" href="/reports">
+            查看报告
           </Link>
         </div>
       </section>
@@ -207,19 +173,21 @@ export default function HomePage() {
       <section>
         <div className="mb-3 flex items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#b26c09]">Demo Scenarios</p>
-            <h2 className="mt-1 text-xl font-black text-[#173c38]">固定演示场景</h2>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#b26c09]">How It Works</p>
+            <h2 className="mt-1 text-xl font-black text-[#173c38]">三步开始使用</h2>
           </div>
-          <span className="text-xs text-[#9aa69f]">所有外部动作均未接入</span>
+          <span className="text-xs text-[#9aa69f]">简单、清楚、随时可回看</span>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          {mvpScenarios.map((scenario) => (
-            <article className="rounded-2xl border border-[#eadfca] bg-white p-5 shadow-sm" key={scenario.title}>
-              <div className="flex items-start justify-between gap-4">
-                <h3 className="font-bold text-[#213f3b]">{scenario.title}</h3>
-                <StatusBadge tone={scenario.title.includes("高风险") ? "danger" : "neutral"}>{scenario.status}</StatusBadge>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-[#64748b]">{scenario.boundary}</p>
+        <div className="grid gap-3 md:grid-cols-3">
+          {[
+            { title: "选择成员", description: "先选中要查看或咨询的家庭成员。" },
+            { title: "说出问题", description: "用自然语言描述症状、报告或用药问题。" },
+            { title: "查看结果", description: "回看整理后的内容和过去的咨询记录。" },
+          ].map((step, index) => (
+            <article className="rounded-2xl border border-[#eadfca] bg-white p-5 shadow-sm" key={step.title}>
+              <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#fff0c2] text-xs font-black text-[#9a670e]">0{index + 1}</div>
+              <h3 className="mt-5 font-bold text-[#213f3b]">{step.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-[#64748b]">{step.description}</p>
             </article>
           ))}
         </div>

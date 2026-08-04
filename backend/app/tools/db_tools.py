@@ -12,6 +12,7 @@ from app.services.agent_tool_query_service import (
     get_prescription_context,
     search_safety_knowledge_context,
 )
+from app.schemas.business import SourceRef
 from app.tools.tool_registry import ToolExecutionError, ToolRegistry
 from app.tools.tool_schemas import ToolContractModel, ToolExecutionContext, ToolSpec
 
@@ -88,6 +89,7 @@ class SafetyKnowledgeOutput(ToolContractModel):
     fallback_used: bool
     fallback_reason: str | None = None
     sources: list[dict[str, Any]]
+    source_refs: list[SourceRef] = Field(default_factory=list)
 
 
 def create_db_tool_registry(
@@ -112,7 +114,13 @@ def register_db_tools(registry: ToolRegistry, db: Session) -> None:
             input_schema=HealthProfileInput,
             output_schema=HealthProfileOutput,
             permission_scope="health_profile:read",
-            allowed_agent_roles=("ProfileAgent", "SafetyAgent"),
+            allowed_agent_roles=(
+                "TriageAgent",
+                "MedicationAgent",
+                "ReportAgent",
+                "ProfileAgent",
+                "SafetyAgent",
+            ),
             read_only=True,
         ),
         lambda tool_input, context: _query_health_profile(db, tool_input, context),
@@ -124,7 +132,7 @@ def register_db_tools(registry: ToolRegistry, db: Session) -> None:
             input_schema=PrescriptionsInput,
             output_schema=PrescriptionsOutput,
             permission_scope="prescriptions:read",
-            allowed_agent_roles=("RefillAgent", "ReminderAgent", "SafetyAgent"),
+            allowed_agent_roles=("MedicationAgent", "RefillAgent", "ReminderAgent", "SafetyAgent"),
             read_only=True,
         ),
         lambda tool_input, context: _query_prescriptions(db, tool_input, context),
@@ -136,7 +144,7 @@ def register_db_tools(registry: ToolRegistry, db: Session) -> None:
             input_schema=MedicineBoxInput,
             output_schema=MedicineBoxOutput,
             permission_scope="medicine_box:read",
-            allowed_agent_roles=("RefillAgent", "ReminderAgent", "SafetyAgent"),
+            allowed_agent_roles=("MedicationAgent", "RefillAgent", "ReminderAgent", "SafetyAgent"),
             read_only=True,
         ),
         lambda tool_input, context: _query_medicine_box(db, tool_input, context),
@@ -148,7 +156,7 @@ def register_db_tools(registry: ToolRegistry, db: Session) -> None:
             input_schema=PharmacyInventoryInput,
             output_schema=PharmacyInventoryOutput,
             permission_scope="pharmacy_inventory:read",
-            allowed_agent_roles=("PharmacyAgent", "SafetyAgent"),
+            allowed_agent_roles=("MedicationAgent", "PharmacyAgent", "SafetyAgent"),
             read_only=True,
         ),
         lambda tool_input, context: _check_pharmacy_inventory(db, tool_input, context),
@@ -160,7 +168,7 @@ def register_db_tools(registry: ToolRegistry, db: Session) -> None:
             input_schema=SafetyKnowledgeInput,
             output_schema=SafetyKnowledgeOutput,
             permission_scope="safety_knowledge:read",
-            allowed_agent_roles=("SafetyAgent", "RefillAgent", "ReminderAgent"),
+            allowed_agent_roles=("TriageAgent", "MedicationAgent", "SafetyAgent", "RefillAgent", "ReminderAgent"),
             read_only=True,
         ),
         lambda tool_input, context: _search_safety_knowledge(db, tool_input, context),
@@ -229,11 +237,37 @@ def _search_safety_knowledge(
 ) -> dict[str, Any]:
     parsed = cast(SafetyKnowledgeInput, tool_input)
     result = search_safety_knowledge_context(db, parsed.query)
-    return _require_evidence(
+    evidence = _require_evidence(
         result,
         "safety knowledge not found",
         fallback_action="manual_review",
     )
+    sources = evidence.get("sources", [])
+    evidence["source_refs"] = [
+        SourceRef(
+            source_id=str(source["source_id"]),
+            source_type="knowledge_base",
+            document_id=str(source["document_id"]),
+            document_version=str(source["document_version"]),
+            chunk_id=str(source["chunk_id"]),
+            retrieval_mode=str(evidence.get("effective_mode") or "keyword"),
+            provider="knowledge_base",
+            member_id=context.member_id,
+            verified=True,
+            source_metadata={
+                "title": source.get("title"),
+                "category": source.get("category"),
+                "safety_level": source.get("safety_level"),
+            },
+        )
+        for source in sources
+        if isinstance(source, dict)
+        and source.get("source_id")
+        and source.get("document_id")
+        and source.get("document_version")
+        and source.get("chunk_id")
+    ]
+    return evidence
 
 
 def _ensure_member_scope(member_id: str, context: ToolExecutionContext) -> None:

@@ -108,8 +108,12 @@ class BusinessHarnessCase(FrozenAblationModel):
 
     @model_validator(mode="after")
     def validate_case(self) -> "BusinessHarnessCase":
-        if self.expected_role_order[0] != self.primary_role:
-            raise ValueError("primary_role must be the first expected role")
+        # ``primary_role`` is the requested business outcome, while
+        # ``expected_role_order`` is the dependency-respecting execution order.
+        # An upstream ReportAgent/TriageAgent may therefore run before the
+        # MedicationAgent that owns the final refill outcome.
+        if self.primary_role not in self.expected_role_order:
+            raise ValueError("primary_role must be present in expected_role_order")
         if self.complexity == "simple" and len(self.expected_role_order) != 1:
             raise ValueError("simple cases must have exactly one expected role")
         if self.complexity == "complex" and len(self.expected_role_order) < 2:

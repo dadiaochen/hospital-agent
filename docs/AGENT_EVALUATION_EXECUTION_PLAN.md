@@ -52,8 +52,8 @@
 | DAG 并行 | Supervisor 已对依赖已满足、只读且无写工具的步骤执行受控 fan-out/fan-in |
 | 全历史评测基线 | `EvalRuntimeOptions` 和 ContextManager 已提供仅评测可用的结构化 `all_history` 模式 |
 | FinalClaim | 4D-B2.3 已实现 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`；v2 Gold Claim 已随 WorldState 生成并增加成员来源范围校验 |
-| v2 WorldState | 4D-B2.4 已生成 300 个可重复 WorldState；当前仍是 `pending_review`，尚未物化到 PostgreSQL/Provider/RAG |
-| 1200 条 Query | 4D-B2.4 已生成每个 WorldState 的 4 种表达；B2.5 已支持 pending-review preview，不得作为正式质量指标 |
+| v2 WorldState | 4D-B2.4 已生成 300 个可重复 WorldState；用户已完成审核并全部标记 `pass`，B2.6 已生成 300-case 本机 identity/source map |
+| 1200 条 Query | 4D-B2.4 已生成每个 WorldState 的 4 种表达；用户已完成 1200 条审核，B2.6 deterministic Docker smoke 已通过 2 条，三 split integration 仍未完成 |
 | 分层 Grader v2 | B2.5 已实现 Route/Plan/Tool/Claim/RAG/Safety/Context/Reliability/Database State 九类确定性 grader；真实图产物仍未接入 |
 | 本地 preview Runner | B2.5 已支持 split、max_cases、repeat、pending-review gate、稳定 report id 和 JSON/Markdown；仅使用内存 projection |
 | 真实统一 Runner | Docker pgvector、HTTP、Checkpoint、Provider 和模型未进入同一报告；属于 B2.6/B3 集成 |
@@ -387,7 +387,7 @@ expected_database_changes
 - AI 不负责定义正确医疗事实。
 - AI 只生成四种表达变体。
 - 所有安全、来源和 holdout 标签经过人工审核。
-- manifest 保存数量、版本、固定 seed 和 SHA-256；当前 manifest 与数据状态为 `pending_review`，不属于最终 gold。
+- manifest 保存数量、版本、固定 seed 和 SHA-256；生成数据已由用户完成运行前 Gold 审核并全部标记 `pass`，但真实运行报告仍需通过 C-E 才能成为最终指标。
 
 生成命令：
 
@@ -660,7 +660,7 @@ pass@3-any，仅用于分析
 
 ### E4：World Generator
 
-状态：`DONE（pending_review）`
+状态：`DONE（human_reviewed）`
 
 - `V2WorldStateDataset` 已生成 300 个 WorldState。
 - 固定 seed `20260801` 和 `2026-08-01T00:00:00Z`。
@@ -668,7 +668,7 @@ pass@3-any，仅用于分析
 
 ### E5：Variant Generator
 
-状态：`DONE（pending_review）`
+状态：`DONE（human_reviewed）`
 
 - `V2QueryDataset` 已为每个 WorldState 生成 4 条中文表达，共 1200 条。
 - 覆盖口语、错别字、省略、对抗表达。
@@ -790,8 +790,8 @@ E0 评测协议 DOCS DONE
   -> E1 UnifiedHealthGraph DONE
   -> E2 DAG 并行 DONE
   -> E3 FinalClaim / Trace v2 DONE
-  -> E4 300 WorldState DONE（pending_review）
-  -> E5 1200 Query DONE（pending_review）
+  -> E4 300 WorldState DONE（human_reviewed）
+  -> E5 1200 Query DONE（human_reviewed）
   -> E6 Materializer DONE（in-memory preview）
   -> E7 Graders DONE（deterministic preview）
   -> E8 Runner DONE（pending-review preview）
@@ -804,3 +804,72 @@ E0 评测协议 DOCS DONE
 ```
 
 先统一运行图和冻结 Trace，再生成大规模数据；B2.6 已完成真实单样例 adapter 和 Docker 19/19 回归。B3 已完成真实模型 runner、usage/cost/p95 聚合、审核队列和 finalizer，8 条 `deepseek-v4-flash` development 产物经人工复核 8/8 通过，并冻结 report/queue hash。该局部 final report 可以按 8 条样本范围进入简历；300/1200 全量指标仍需完整 identity/source map、三 split 真实物化和 A/B/C/D 正式报告。
+## 4D-B5.5 最终评测口径：分别评测业务 DAG 与治理图
+
+4D-B5.1 采用方案 A 后，评测数据和 grader 必须把两类结构分开读取，不能把固定治理调用混入 Supervisor 的业务计划准确率。
+
+### 业务编排层
+
+`TaskPlan` 的评测对象只有三个 canonical domain Agent：
+
+- `domain_steps`：`TriageAgent`、`MedicationAgent`、`ReportAgent` 的业务步骤；
+- `domain_dependency_edges`：领域步骤之间的业务依赖边，例如 `ReportAgent -> MedicationAgent`；
+- Supervisor 的 ready set、执行顺序、工具调用和结果，必须只从上述业务步骤与边计算。
+
+对应的确定性指标包括：
+
+- domain step precision / recall / F1；
+- domain dependency edge precision / recall / F1；
+- domain tool set exact match；
+- domain step order / ready-set correctness；
+- 未计划业务步骤调用率；
+- Supervisor 重试、终止和跨成员隔离是否符合计划。
+
+### 固定治理层
+
+`governance_steps` 与 `governance_edges` 单独评测：
+
+- 治理步骤包括 `SafetyAgent`、Confirmation、FinalAnswer 和 `EvaluatorAgent`；
+- 治理边由 `UnifiedHealthGraph` 固定定义并强制执行；
+- `safety-review` 只属于治理语义，不是 Supervisor 的候选业务步骤；
+- Supervisor 不得新增、删除、重排或绕过治理步骤。
+
+对应的确定性指标包括：
+
+- Safety 检查是否在高风险输出或动作前执行；
+- Confirmation 状态是否按要求出现，是否阻止未确认副作用；
+- FinalAnswer 是否在安全检查后冻结；
+- Evaluator 是否只读冻结产物、未修改答案和业务状态；
+- 治理边完整率、绕过率和错误顺序率。
+
+### v2 Gold 字段约定
+
+后续 v2 gold 应同时提供两组期望值：
+
+```text
+expected_domain_steps
+expected_domain_dependency_edges
+expected_governance_steps
+expected_governance_edges
+```
+
+旧字段若同时包含业务步骤和 `safety-review`，迁移时必须先按节点类型拆分，再进入 grader；不能直接把混合列表当作 Supervisor 计划的 gold。任何只包含治理边而没有业务步骤的 case，仍然可以作为安全治理 case，但不能用来计算 Supervisor 的 domain step recall。
+
+### 当前状态与剩余门槛
+
+4D-B5.5 已将上述字段映射、混合边拆分、治理绕过和错误排序校验落地到
+`v2_benchmark_schemas.py`、`v2_integration.py`、`v2_graders.py` 和
+`test_v2_b5_governance_split.py`。当前 `4d-b5.5` 数据集包含 300 个
+WorldState/1200 条 Query；其中原有的依赖边均是指向 `safety-review` 的固定治理边，
+因此重分类后 domain dependency edge 的生成分布为 0。真实的
+`ReportAgent -> MedicationAgent` / `TriageAgent -> MedicationAgent` 依赖由
+Planner 单元测试和 4B harness fixture 覆盖，不从 v2 数据中伪造正例。
+
+仍需独立完成：
+
+1. 人工审核后冻结 300 个 WorldState、1200 条 Query 及 manifest；
+2. 完成真实 PostgreSQL integration、Provider/RAG sandbox 和 Docker 全量回归；
+3. 生成同时展示 domain metrics 与 governance metrics 的正式三 split 报告。
+
+在 C-E 工作完成前，文档只能把 v2 真实运行结果写成 `preview`，不能把运行前 Gold 审核直接宣称为回答质量、
+全量 PostgreSQL integration 或最终业务质量指标已经完成。

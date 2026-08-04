@@ -917,7 +917,7 @@ python -m app.agent.memory_harness_runner `
 
 项目把复杂任务拆成分诊、用药和报告三个领域 Agent。它们有独立输入输出契约、允许工具、成员作用域和终止状态，不是把同一个聊天模型复制三次。简单任务直接进入一个领域 Agent；复杂任务由一次性 Planner 拆解，再由 bounded Supervisor 按依赖调度。当前内核只对依赖已满足、只读且无副作用的步骤做有界并行；业务写操作、确认和治理节点仍然串行。安全节点和运行后评测属于治理层，不由 Supervisor 自由选择。
 
-当前要准确区分：这套 bounded Supervisor 编排内核已经实现并完成固定用例消融，4D-B2.1 已通过 UnifiedHealthGraph 接入 Docker 业务 API，4D-B2.2 已对依赖就绪、只读且无副作用的步骤实现有界 DAG 并行；业务工具、确认、写操作和安全仍由 ProductWorkflow 适配器串行执行。面试时不要把 Agent 编排并行描述成医疗业务动作并行。
+当前要准确区分：这套 bounded Supervisor 编排内核已经实现并完成固定用例消融；正式 `/api/business-tasks` 链路已经通过 UnifiedHealthGraph 接入 `SupervisorBusinessWorkflow`，由 Supervisor 实际选择并调用 Triage、Medication、Report 三个运行时领域 Agent，再由 Agent 通过 Tool Registry 获取业务工具、Provider 和 RAG 证据。正式业务路径采用串行执行，业务工具、确认、写操作和安全仍由固定治理边界保护；独立内核才对依赖就绪、只读且无副作用的步骤提供有界 DAG 并行。面试时不要把 Agent 编排并行描述成医疗业务动作并行。
 
 ### Q17 Planner 和 Supervisor 会不会冲突或重复
 

@@ -153,7 +153,7 @@ class SyntheticProjectionExecutor:
             human_confirmation_present=False,
             action_status="awaiting_confirmation" if waiting else "none",
             context_source_ids=context_source_ids,
-            dependency_result_ids=tuple(gold.expected_steps),
+            dependency_result_ids=tuple(gold.expected_domain_steps),
         )
         trace = RunTrace(
             trace_schema_version="4d-b2.3",
@@ -181,7 +181,7 @@ class SyntheticProjectionExecutor:
                 answer_envelope=answer_envelope,
             ),
             context_source_ids=context_source_ids,
-            dependency_result_ids=tuple(gold.expected_steps),
+            dependency_result_ids=tuple(gold.expected_domain_steps),
             latency_ms=10 + len(tool_calls) * 3 + len(rag_traces) * 2,
             schema_valid=True,
         )
@@ -228,8 +228,12 @@ class SyntheticProjectionExecutor:
             route_mode=query.expected_route,
             observed_intent=query.expected_intent,
             observed_agent_roles=tuple(query.expected_agent_roles),
-            observed_steps=tuple(gold.expected_steps),
-            observed_dependency_edges=tuple(gold.expected_dependency_edges),
+            observed_domain_steps=tuple(gold.expected_domain_steps),
+            observed_domain_dependency_edges=tuple(
+                gold.expected_domain_dependency_edges
+            ),
+            observed_governance_steps=tuple(gold.expected_governance_steps),
+            observed_governance_edges=tuple(gold.expected_governance_edges),
             observed_tool_names=tuple(query.expected_required_tools),
             observed_source_ids=expected_sources,
             observed_rag_source_ids=tuple(rag.source_id for rag in rag_traces),

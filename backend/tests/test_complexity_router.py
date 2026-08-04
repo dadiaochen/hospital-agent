@@ -42,6 +42,20 @@ def test_simple_report_question_goes_directly_to_report_agent(
     assert route.intent == "health_record"
 
 
+def test_user_signal_overrides_conflicting_business_domain_hint(
+    router: DeterministicComplexityRouter,
+) -> None:
+    route = router.route(
+        request(
+            "请帮我解读这份检查报告。",
+            intent="chronic_care",
+        )
+    )
+
+    assert route.target_role == "ReportAgent"
+    assert route.intent == "health_record"
+
+
 def test_complex_report_and_refill_request_requires_one_shot_planner(
     router: DeterministicComplexityRouter,
 ) -> None:
@@ -52,6 +66,15 @@ def test_complex_report_and_refill_request_requires_one_shot_planner(
     assert route.target_roles == ("MedicationAgent", "ReportAgent")
     assert route.requires_planner is True
     assert route.reason_code == "multiple_domain_signals"
+    assert route.dependency_hints[0].upstream_role == "ReportAgent"
+    assert route.dependency_hints[0].downstream_role == "MedicationAgent"
+
+
+def test_parallel_domain_request_does_not_invent_dependency(router: DeterministicComplexityRouter) -> None:
+    route = router.route(request("请同时整理报告指标和药箱库存。"))
+
+    assert route.route_mode == "complex_cross_domain"
+    assert route.dependency_hints == ()
 
 
 def test_urgent_symptom_is_direct_triage_route_for_fixed_safety_guard(

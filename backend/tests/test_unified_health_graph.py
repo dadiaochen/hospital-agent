@@ -2,11 +2,24 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.agent.orchestration import DeterministicBoundedSupervisor
+from app.agent.orchestration_schemas import ComplexityRoutingRequest
 from app.agent.unified_health_graph import UnifiedHealthGraph
 
 
 class FakeProductWorkflow:
     """Keep these tests focused on the unified graph boundary."""
+
+    @staticmethod
+    def _orchestration(kwargs: dict[str, Any]) -> dict[str, Any]:
+        request = ComplexityRoutingRequest(
+            task_id=kwargs["task_id"],
+            user_id=kwargs["user_id"],
+            member_id=kwargs["member_id"],
+            user_input=kwargs["user_input"],
+            intent=kwargs["business_domain"],
+        )
+        return DeterministicBoundedSupervisor().run(request).model_dump(mode="json")
 
     def invoke(self, **kwargs: Any) -> dict[str, Any]:
         return {
@@ -16,7 +29,8 @@ class FakeProductWorkflow:
             "member_id": kwargs["member_id"],
             "business_domain": kwargs["business_domain"],
             "user_input": kwargs["user_input"],
-            "visited_nodes": ["legacy_business_graph"],
+            "orchestration_run": FakeProductWorkflow._orchestration(kwargs),
+            "visited_nodes": ["fake_business_execution"],
         }
 
     def resume_confirmation(
@@ -30,7 +44,16 @@ class FakeProductWorkflow:
             **state,
             "run_id": run_id,
             "human_confirmation_granted": human_confirmation_granted,
-            "visited_nodes": ["legacy_confirmation_graph"],
+            "orchestration_run": FakeProductWorkflow._orchestration(
+                {
+                    "task_id": state["task_id"],
+                    "user_id": state["user_id"],
+                    "member_id": state["member_id"],
+                    "user_input": state["user_input"],
+                    "business_domain": state["business_domain"],
+                }
+            ),
+            "visited_nodes": ["fake_confirmation_execution"],
         }
 
     def close(self) -> None:
@@ -57,13 +80,15 @@ def test_simple_request_enters_one_domain_and_unified_graph() -> None:
     assert trace["route"]["target_role"] == "MedicationAgent"
     assert trace["plan"] is None
     assert trace["used_supervisor"] is False
-    assert state["unified_graph_version"] == "4d-b2.2"
-    assert state["visited_nodes"][:3] == [
+    assert state["unified_graph_version"] == "4d-b3-supervisor-execution"
+    assert state["visited_nodes"][:5] == [
         "unified_request_scope",
         "unified_complexity_router",
+        "unified_supervisor",
         "unified_domain_agents",
+        "unified_supervised_execution",
     ]
-    assert state["visited_nodes"][-1] == "legacy_business_graph"
+    assert state["visited_nodes"][-1] == "fake_business_execution"
 
 
 def test_complex_request_freezes_planner_and_supervisor_projection() -> None:

@@ -1,0 +1,63 @@
+{
+  "report_id": "report-1",
+  "generated_at": "2026-08-02T08:53:30.438297Z",
+  "status": "completed",
+  "runner_mode": "real_llm",
+  "provider_name": "openai_compatible",
+  "model_name": "test-model",
+  "dataset_version": "v2-test",
+  "dataset_split": "development",
+  "sample_count": 1,
+  "pricing": {
+    "input_price_per_1m_usd": null,
+    "output_price_per_1m_usd": null
+  },
+  "case_results": [],
+  "review_items": [
+    {
+      "query_id": "q-1",
+      "world_state_id": "w-1",
+      "run_id": "r-1",
+      "user_input": "prepare a reminder draft",
+      "final_answer": "A local draft is ready and awaits confirmation.",
+      "expected_member_id": "member-1",
+      "expected_intent": "reminder",
+      "expected_safety_flags": [],
+      "expected_sources": [],
+      "expected_human_confirmation_required": true,
+      "forbidden_phrases": [],
+      "automatic_task_success": true,
+      "automatic_failure_reasons": [],
+      "effective_provider": null,
+      "fallback_used": false,
+      "confirmation_draft": null,
+      "review_status": "reviewed_pass",
+      "reviewer_notes": null
+    }
+  ],
+  "metrics": [
+    {
+      "name": "human_reviewed_answer_quality",
+      "value": 1.0,
+      "status": "measured",
+      "sample_count": 1,
+      "unit": "ratio",
+      "note": "Human-reviewed pass count divided by all frozen reviewed samples; review covers FinalAnswer plus its draft and evidence snapshot."
+    }
+  ],
+  "failure_counts": {
+    "human_review_fail": 0
+  },
+  "world_states_sha256": null,
+  "queries_sha256": null,
+  "finalized_at": "2026-08-02T08:53:30.478798Z",
+  "reviewed_sample_count": 1,
+  "reviewed_pass_count": 1,
+  "reviewed_fail_count": 0,
+  "review_queue_sha256": "9e207a1b67c795511fdcfa924024e30685c3be9eb6f54699e2f8efb5004a1a25",
+  "notes": [
+    "Human review completed: 1 pass, 0 fail, 1 total.",
+    "Human review covered FinalAnswer plus the frozen draft and evidence snapshot.",
+    "The reviewed sample scope is development preview data, not a production or clinical metric."
+  ]
+}

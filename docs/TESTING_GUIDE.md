@@ -23,6 +23,7 @@
 | API | `test_health.py`、`test_read_api.py`、`test_confirmation_draft_api.py` | 健康检查、只读资源和本地草稿状态机。 |
 | 3A 前端 | `frontend/lib/api/client.test.ts`、`app/medicine-box/page.test.tsx`、Next production build | URL 编码、成员响应隔离、切换时清理旧数据、loading/empty/error、TypeScript 契约和全部页面编译。 |
 | 3B Agent UI | `app/agent/page.test.tsx`、`components/RunTraceDetails.test.tsx`、API client 测试 | 首次未确认、显式续跑、高风险无按钮、成员切换清理、冻结产物隔离、错误/fallback 与评估字段。 |
+| UX-06 报告详情 | `app/reports/page.test.tsx`、`app/reports/[reportId]/page.test.tsx`、`frontend/lib/api/client.test.ts`、`backend/tests/test_read_api.py` | 报告列表/详情 DTO、指标来源引用、状态和安全提示、跨成员隔离、详情路由构建。 |
 | 4C-3 浏览器 E2E | `frontend/e2e/*.spec.ts`、Playwright + Docker Compose | 真实浏览器 HTTP 链路、续方/提醒/复诊材料、高风险拦截、成员切换、API 失败和确认门禁。 |
 
 ## 运行命令
@@ -74,6 +75,8 @@ npm run build
 ```
 
 组件测试使用 jsdom 和 mock HTTP，只证明 React 状态与渲染规则。自动测试之外还要做真实联调：启动 migration、seed、后端和前端，依次切换本人、父亲、母亲，核对 Network 请求和响应中的 `member_id`。知识 API 未合入时不能用 mock 页面冒充真实联调通过。
+
+UX-06 增量验证：前端 `npm run test` 为 9 个测试文件、34 个测试通过，`npm run typecheck` 和 `npm run build` 通过；后端 `test_read_api.py` 为 6 个测试通过，后端全量回归为 361 个测试通过。报告详情测试还验证指标/章节引用的来源必须存在，成员切换时旧详情不会继续展示。
 
 4C-3 浏览器 E2E：
 
@@ -318,3 +321,21 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 ```
 
 本地 runner 实际执行 32 次 bounded Supervisor、12 次 `KeywordRetriever`、40 次 ContextManager compact/reset 和 30 次 ProviderRegistry 故障注入，并生成 [本地观测报告](local_benchmark_report.4d.md)。这些测试使用合成数据和内存 SQLite；Docker PostgreSQL/pgvector、Checkpoint/Redis 回源、真实回答质量、token 和 cost 仍必须单独接入，不能混入同一指标。
+
+## 用户端 UX-08 回归
+
+UX-08 新增 `frontend/lib/navigation.test.ts` 和 `frontend/e2e/portal-entry-cleanup.spec.ts`：单元测试锁定四个公共导航项，E2E 检查首页不出现内部文案，并验证知识、库存、续方、药箱、提醒和单条历史详情地址跳转到公共业务入口。组件定向验证为首页/导航 3 个测试通过；完整 Vitest 为 35 个测试通过，TypeScript 和 Next.js build 通过，公共入口 E2E 为 2 个通过。完整跨页面视觉和可访问性仍属于 UX-09。
+
+## UX-09 前后端联调与交付收口
+
+在真实 Docker 环境验证：
+
+```powershell
+Set-Location E:\project_code\hospital\frontend
+npm run test -- --run
+npm run typecheck
+npm run build
+npm run test:e2e -- e2e/agent-golden-flows.spec.ts e2e/portal-boundaries.spec.ts e2e/portal-entry-cleanup.spec.ts
+```
+
+本阶段结果：前端 10 个测试文件/36 个测试通过，类型检查和生产构建通过；真实浏览器 9 个用例通过；后端新增 Tool 输入契约单测 1 个通过。桌面 1440×900、移动 390×844 通过无横向溢出和交互控件可访问名称检查。自动化联调使用 deterministic provider，不能替代真实模型、真实医院/药店或生产环境验收。

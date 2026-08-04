@@ -1,4 +1,4 @@
-"""Deterministic generator and loader for the 4D-B2.4 benchmark.
+"""Deterministic generator and loader for the 4D-B5.5 benchmark.
 
 This module creates synthetic data only.  It does not call a model, database,
 Provider, RAG retriever, or business API.  The generated labels are explicit
@@ -60,6 +60,25 @@ VARIANT_TYPES = ("direct", "colloquial", "omitted", "adversarial")
 
 class V2BenchmarkDataError(ValueError):
     """Raised when generated v2 data cannot be trusted or joined."""
+
+
+def _governance_edges(
+    domain_steps: tuple[str, ...],
+) -> tuple[EvalDependencyEdge, ...]:
+    """Project the fixed Safety governance boundary for the benchmark.
+
+    These edges are intentionally separate from the business DAG. They say
+    that the fixed safety review follows the completed domain evidence; they
+    do not turn ``safety-review`` into a Supervisor-dispatchable Agent step.
+    """
+
+    return tuple(
+        EvalDependencyEdge(
+            upstream_step_id=step_id,
+            downstream_step_id="safety-review",
+        )
+        for step_id in domain_steps
+    )
 
 
 def canonical_hash(value: dict[str, Any]) -> str:
@@ -135,7 +154,16 @@ class V2BenchmarkGenerator:
                 )
             )
 
-        intent, roles, tools, route, steps, edges = self._workflow_shape(
+        (
+            intent,
+            roles,
+            tools,
+            route,
+            domain_steps,
+            domain_edges,
+            governance_steps,
+            governance_edges,
+        ) = self._workflow_shape(
             index=index,
             category=category,
         )
@@ -248,8 +276,10 @@ class V2BenchmarkGenerator:
             expected_intent=intent,
             expected_route=route,
             expected_agent_roles=roles,
-            expected_steps=steps,
-            expected_dependency_edges=edges,
+            expected_domain_steps=domain_steps,
+            expected_domain_dependency_edges=domain_edges,
+            expected_governance_steps=governance_steps,
+            expected_governance_edges=governance_edges,
             expected_tool_calls=tools,
             required_claims=required_claims,
             forbidden_claims=("action_executed", "prescription_changed"),
@@ -286,14 +316,32 @@ class V2BenchmarkGenerator:
     @staticmethod
     def _workflow_shape(
         *, index: int, category: str
-    ) -> tuple[str, tuple[str, ...], tuple[str, ...], str, tuple[str, ...], tuple[EvalDependencyEdge, ...]]:
+    ) -> tuple[
+        str,
+        tuple[str, ...],
+        tuple[str, ...],
+        str,
+        tuple[str, ...],
+        tuple[EvalDependencyEdge, ...],
+        tuple[str, ...],
+        tuple[EvalDependencyEdge, ...],
+    ]:
         if category == "triage":
             intent = "safety_check"
             roles = ("TriageAgent",)
             tools = ("query_health_profile", "search_safety_knowledge")
             route = "simple_single_domain"
-            steps = ("triage-read", "safety-review")
-            return intent, roles, tools, route, steps, ()
+            domain_steps = ("triage-read",)
+            return (
+                intent,
+                roles,
+                tools,
+                route,
+                domain_steps,
+                (),
+                ("safety-review",),
+                _governance_edges(domain_steps),
+            )
         if category == "medication":
             intent = ("refill", "reminder", "pharmacy")[index % 3]
             tools = {
@@ -301,17 +349,31 @@ class V2BenchmarkGenerator:
                 "reminder": ("query_medicine_box", "search_safety_knowledge"),
                 "pharmacy": ("query_prescriptions", "query_medicine_box", "search_safety_knowledge"),
             }[intent]
-            return intent, ("MedicationAgent",), tools, "simple_single_domain", ("medication-read", "safety-review"), ()
+            domain_steps = ("medication-read",)
+            return (
+                intent,
+                ("MedicationAgent",),
+                tools,
+                "simple_single_domain",
+                domain_steps,
+                (),
+                ("safety-review",),
+                _governance_edges(domain_steps),
+            )
         if category == "report":
+            domain_steps = ("report-read",)
             return (
                 "health_record",
                 ("ReportAgent",),
                 ("query_health_profile", "search_safety_knowledge"),
                 "simple_single_domain",
-                ("report-read", "safety-review"),
+                domain_steps,
                 (),
+                ("safety-review",),
+                _governance_edges(domain_steps),
             )
         if category == "cross_domain":
+            domain_steps = ("triage-read", "medication-read", "report-read")
             return (
                 "chronic_care",
                 ("TriageAgent", "MedicationAgent", "ReportAgent"),
@@ -322,35 +384,36 @@ class V2BenchmarkGenerator:
                     "search_safety_knowledge",
                 ),
                 "complex_cross_domain",
-                ("triage-read", "medication-read", "report-read", "safety-review"),
-                (
-                    EvalDependencyEdge(upstream_step_id="triage-read", downstream_step_id="safety-review"),
-                    EvalDependencyEdge(upstream_step_id="medication-read", downstream_step_id="safety-review"),
-                    EvalDependencyEdge(upstream_step_id="report-read", downstream_step_id="safety-review"),
-                ),
+                domain_steps,
+                (),
+                ("safety-review",),
+                _governance_edges(domain_steps),
             )
         intent = "refill" if index % 2 else "safety_check"
         if index % 3 == 0:
+            domain_steps = ("triage-read", "medication-read")
             return (
                 intent,
                 ("TriageAgent", "MedicationAgent"),
                 ("query_health_profile", "query_prescriptions", "query_medicine_box"),
                 "complex_cross_domain",
-                ("triage-read", "medication-read", "safety-review"),
-                (
-                    EvalDependencyEdge(upstream_step_id="triage-read", downstream_step_id="safety-review"),
-                    EvalDependencyEdge(upstream_step_id="medication-read", downstream_step_id="safety-review"),
-                ),
+                domain_steps,
+                (),
+                ("safety-review",),
+                _governance_edges(domain_steps),
             )
+        domain_steps = ("triage-read",) if intent == "safety_check" else ("medication-read",)
+        roles = ("TriageAgent",) if intent == "safety_check" else ("MedicationAgent",)
         return (
             intent,
-            ("TriageAgent",) if intent == "safety_check" else ("MedicationAgent",),
+            roles,
             ("query_health_profile", "search_safety_knowledge"),
             "simple_single_domain",
-            ("domain-read", "safety-review"),
+            domain_steps,
             (),
+            ("safety-review",),
+            _governance_edges(domain_steps),
         )
-
     @staticmethod
     def _fault(index: int, category: str) -> EvalFaultInjection:
         if category != "resilience":
@@ -526,6 +589,10 @@ class V2BenchmarkGenerator:
                     expected_intent=gold.expected_intent,
                     expected_route=gold.expected_route,
                     expected_agent_roles=gold.expected_agent_roles,
+                    expected_domain_steps=gold.expected_domain_steps,
+                    expected_domain_dependency_edges=gold.expected_domain_dependency_edges,
+                    expected_governance_steps=gold.expected_governance_steps,
+                    expected_governance_edges=gold.expected_governance_edges,
                     expected_required_tools=gold.expected_tool_calls,
                     expected_safety_flags=gold.expected_safety_flags,
                     expected_sources=gold.supporting_source_ids,
@@ -575,6 +642,19 @@ def validate_v2_pair(
         expected_claim_ids = {claim.claim_id for claim in world.gold.required_claims}
         if not set(query.required_claim_ids).issubset(expected_claim_ids):
             raise V2BenchmarkDataError(f"query Claim mismatch: {query.query_id}")
+        if any(
+            (
+                query.expected_agent_roles != world.gold.expected_agent_roles,
+                query.expected_domain_steps != world.gold.expected_domain_steps,
+                query.expected_domain_dependency_edges
+                != world.gold.expected_domain_dependency_edges,
+                query.expected_governance_steps != world.gold.expected_governance_steps,
+                query.expected_governance_edges != world.gold.expected_governance_edges,
+            )
+        ):
+            raise V2BenchmarkDataError(
+                f"query plan projection mismatch: {query.query_id}"
+            )
 
 
 def write_v2_benchmark(
@@ -637,7 +717,7 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate the 4D-B2.4 benchmark")
+    parser = argparse.ArgumentParser(description="Generate the 4D-B5.5 benchmark")
     parser.add_argument("--project-root", type=Path, default=None)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     args = parser.parse_args()

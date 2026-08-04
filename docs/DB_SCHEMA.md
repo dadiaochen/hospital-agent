@@ -88,7 +88,9 @@ Alembic 默认将内部 `alembic_version.version_num` 建为 `VARCHAR(32)`，但
 
 3A 前端数据页面同样没有修改 ORM、Alembic migration 或 seed。TypeScript response 类型只是后端 Pydantic DTO 的浏览器侧镜像，不是新的数据库 schema；字段真相仍以 ORM、migration 和 API DTO 为准。
 
-3B Agent/Trace UI 也没有新增表或字段。页面读取现有 `agent_runs`、`agent_tool_calls` 和 `raw_state` 中的版本化冻结产物；确认续跑仍通过 AgentRuntimeService 使用现有本地草稿表，外部动作状态固定为 `not_submitted`。
+3B Agent/Trace UI 也没有新增表或字段。页面读取现有 `agent_runs`、`agent_tool_calls` 和 `raw_state` 中的版本化冻结产物；确认续跑仍通过 AgentRuntimeService 使用现有本地草稿表，外部动作状态固定为 `not_submitted`。UX-04 的“历史咨询”只按 `agent_runs.member_id` 读取当前成员的用户可读字段，不改变数据库事实或成员隔离约束。
+
+UX-06 报告详情同样没有新增 ORM 字段、Alembic migration 或上传表；报告列表和详情接口复用现有 `medical_documents`，由 service 将 `extracted_content` 投影为冻结的报告 DTO。`object_uri`、parser provider 和原始 JSON 不直接暴露给浏览器，成员与用户作用域仍由数据库查询负责。
 
 3C Runtime E2E 同样没有修改 ORM、Alembic migration 或 seed。Runner 只通过现有 HTTP API 触发 run 并读取冻结 artifacts；脱敏 JSON/Markdown 报告属于测试产物，不写入业务表。PostgreSQL 集成报告复用现有 seed 数据，pytest 则继续使用隔离 SQLite。
 
@@ -108,6 +110,16 @@ Alembic 默认将内部 `alembic_version.version_num` 建为 `VARCHAR(32)`，但
   -> 0006_vector_search_index
   -> 0007_task_checkpoint_state
 ```
+
+## 11. 4D-B4 Supervisor 实际执行说明
+
+4D-B4 没有修改 ORM、Alembic migration 或 seed。`SupervisorBusinessWorkflow`
+复用现有 `agent_runs`、`agent_tool_calls`、`raw_state` 和业务任务冻结产物记录
+运行时的 Supervisor、领域 Agent、Tool Evidence、来源指针和治理结果；运行时
+领域 Agent 不直接持有数据库 Session，而是通过 Tool Registry 访问这些已有数据。
+
+因此，本阶段新增的是执行接线和测试，不是新的数据库表。需要数据库迁移时，仍
+必须先同步 ORM、Alembic、seed、测试和本文件，不能把工作流内存状态当成新表字段。
 
 每个 revision 的职责边界如下：
 
@@ -154,4 +166,12 @@ RRF rank、原始两路分数、版本、fallback 和脱敏 Observation 继续�
 
 ## 4D-B2.6 评测物化边界
 
-`backend/app/agent/v2_materializer.py` 的 `InMemoryProjectionBackend` 仍然不是 ORM、不是业务数据库，也不新增 Alembic revision。B2.6 通过 `PostgresV2Materializer` 在单个 case 的 shadow transaction 中创建临时表并回滚，真实执行业务图后只保留 JSON/Markdown 评测产物，不污染业务表。身份和 source alias 必须由本地 identity map 显式提供；未映射的 benchmark 身份直接失败，不能猜测或跨成员回源。Docker 已完成 19/19 后端验收，但 300/1200 全量正式报告仍待人工审核和完整运行。
+`backend/app/agent/v2_materializer.py` 的 `InMemoryProjectionBackend` 仍然不是 ORM、不是业务数据库，也不新增 Alembic revision。B2.6 通过 `PostgresV2Materializer` 在单个 case 的 shadow transaction 中创建临时表并回滚，真实执行业务图后只保留 JSON/Markdown 评测产物，不污染业务表。身份和 source alias 必须由本地 identity map 显式提供；未映射的 benchmark 身份直接失败，不能猜测或跨成员回源。Docker 已完成 19/19 后端验收，300/1200 Gold 已完成人工审核；全量正式报告仍待真实三 split integration、消融和 badcase 复核。
+
+## 用户端 UX-08 数据边界
+
+UX-08 不新增表、字段、迁移或持久化状态。首页和导航只是既有成员、Agent run、报告和家庭记录的用户端入口；旧内部地址的跳转也不改变 PostgreSQL 权威业务数据、Task Checkpoint 或确认记录。成员隔离仍由既有 API/service 契约负责。
+
+## 用户端 UX-09 数据边界
+
+UX-09 没有新增 ORM、Alembic migration、seed 或 Redis key。前后端联调只读取既有成员、AgentRun、草稿、报告和确认记录；历史结果与家庭管理页面的用户语言转换发生在响应投影层，不回写原始运行状态。低库存工具输入所需的药品名来自同一成员既有 Tool 结果，不形成新的医疗事实或长期记忆。

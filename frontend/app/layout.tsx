@@ -5,8 +5,8 @@ import { MemberProvider } from "@/components/providers/MemberProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FamilyHealthAgent",
-  description: "Internet hospital chronic refill and family medication management Agent system.",
+  title: "家庭健康助手",
+  description: "帮助你整理家庭健康事务、报告和用药记录。",
 };
 
 export default function RootLayout({

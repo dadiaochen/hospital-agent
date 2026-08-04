@@ -6,6 +6,7 @@ from app.agent.context_schemas import Intent
 from app.agent.orchestration_schemas import (
     ComplexityRoute,
     ComplexityRoutingRequest,
+    DependencyHint,
     DomainAgentRole,
 )
 
@@ -111,6 +112,37 @@ _MEDICATION_SAFETY_SIGNALS = (
     "switch medication",
 )
 
+_REPORT_BEFORE_MEDICATION_SIGNALS = (
+    "根据报告",
+    "依据报告",
+    "看完报告",
+    "报告后",
+    "根据检查",
+    "依据检查",
+    "检查结果后",
+    "根据化验",
+    "先看报告",
+    "先解读",
+    "报告，再",
+    "based on report",
+    "after report",
+    "review report and prepare",
+    "review the report and prepare",
+    "review report then",
+)
+
+_TRIAGE_BEFORE_MEDICATION_SIGNALS = (
+    "先整理症状",
+    "先说症状",
+    "根据症状",
+    "症状后",
+    "先问诊",
+    "根据预问诊",
+    "based on symptoms",
+    "after triage",
+    "symptoms before refill",
+)
+
 
 class DeterministicComplexityRouter:
     """Route a request without an LLM, database, or business tool call."""
@@ -149,6 +181,7 @@ class DeterministicComplexityRouter:
                 reason_code="multiple_domain_signals",
                 matched_signals=_matching_signals_for_roles(text, roles),
                 required_capabilities=_capabilities_for_roles(roles),
+                dependency_hints=_dependency_hints(text, roles),
                 requires_planner=True,
             )
 
@@ -159,7 +192,12 @@ class DeterministicComplexityRouter:
             role,
             reason,
             matched_signals=_matching_signals(text, role),
-            intent=request.intent or _ROLE_INTENTS[role],
+            # A concrete signal in the user's text outranks the caller's
+            # broad business-domain hint.  This prevents an API value such as
+            # ``chronic_care`` from forcing a report request into the
+            # medication branch.  When the text is ambiguous, the explicit
+            # intent remains the fallback used for clarification.
+            intent=_ROLE_INTENTS[role] if matched else request.intent or _ROLE_INTENTS[role],
         )
 
     @staticmethod
@@ -213,6 +251,45 @@ def _capabilities_for_roles(
         for role in roles
         for capability in _CAPABILITIES[role]
     )
+
+
+def _dependency_hints(
+    text: str,
+    roles: Iterable[DomainAgentRole],
+) -> tuple[DependencyHint, ...]:
+    """Extract only explicit, deterministic business ordering signals.
+
+    Two roles appearing in one request does not imply a dependency.  A hint is
+    emitted only when the user language makes the order meaningful, keeping
+    unrelated read-only work eligible for parallel scheduling.
+    """
+
+    role_set = set(roles)
+    hints: list[DependencyHint] = []
+    if (
+        {"ReportAgent", "MedicationAgent"}.issubset(role_set)
+        and any(signal in text for signal in _REPORT_BEFORE_MEDICATION_SIGNALS)
+    ):
+        hints.append(
+            DependencyHint(
+                upstream_role="ReportAgent",
+                downstream_role="MedicationAgent",
+                reason="report facts are required before medication preparation",
+            )
+        )
+
+    if (
+        {"TriageAgent", "MedicationAgent"}.issubset(role_set)
+        and any(signal in text for signal in _TRIAGE_BEFORE_MEDICATION_SIGNALS)
+    ):
+        hints.append(
+            DependencyHint(
+                upstream_role="TriageAgent",
+                downstream_role="MedicationAgent",
+                reason="triage facts are required before medication preparation",
+            )
+        )
+    return tuple(hints)
 
 
 def _role_from_intent(intent: Intent | None) -> DomainAgentRole:

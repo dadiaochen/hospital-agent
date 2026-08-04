@@ -66,18 +66,7 @@ def main() -> int:
     else:
         if args.identity_map is None:
             parser.error("--identity-map is required when --mode=integration")
-        raw = json.loads(args.identity_map.read_text(encoding="utf-8"))
-        identity = IntegrationIdentityMap(
-            benchmark_user_id=str(raw["benchmark_user_id"]),
-            actual_user_id=str(raw["actual_user_id"]),
-            member_ids={
-                str(key): str(value) for key, value in raw["member_ids"].items()
-            },
-            source_ids={
-                str(key): str(value)
-                for key, value in raw.get("source_ids", {}).items()
-            },
-        )
+        identity = IntegrationIdentityMap.from_json(args.identity_map)
 
         def run_real_condition(condition, base_options):
             materializer = PostgresV2Materializer(SessionLocal)

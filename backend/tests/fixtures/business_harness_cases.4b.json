@@ -138,7 +138,7 @@
       "user_id": "user-demo",
       "member_id": "member-father",
       "primary_role": "MedicationAgent",
-      "expected_role_order": ["MedicationAgent", "ReportAgent"],
+      "expected_role_order": ["ReportAgent", "MedicationAgent"],
       "expected_tool_calls": [
         {"tool_name": "query_prescriptions", "owner_role": "MedicationAgent", "parameters": {"member_id": "member-father"}, "evidence_present": true, "source_id": "rx-father-v1", "source_name": "prescriptions"},
         {"tool_name": "query_health_profile", "owner_role": "MedicationAgent", "parameters": {"member_id": "member-father"}, "evidence_present": true, "source_id": "profile-father-v1", "source_name": "health_profiles"},
@@ -212,7 +212,7 @@
       "user_id": "user-demo",
       "member_id": "member-mother",
       "primary_role": "MedicationAgent",
-      "expected_role_order": ["MedicationAgent", "ReportAgent"],
+      "expected_role_order": ["ReportAgent", "MedicationAgent"],
       "expected_tool_calls": [
         {"tool_name": "query_medicine_box", "owner_role": "MedicationAgent", "parameters": {"member_id": "member-mother"}, "evidence_present": true, "source_id": "box-mother-v1", "source_name": "medicine_box_items"},
         {"tool_name": "parse_medical_document", "owner_role": "ReportAgent", "parameters": {"member_id": "member-mother", "document_id": "report-mother-03"}, "evidence_present": true, "source_id": "report-mother-03-v1", "source_name": "medical_document"},

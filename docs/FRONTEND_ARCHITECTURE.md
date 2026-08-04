@@ -115,15 +115,15 @@ npm run build
 
 ## 10. 4C-1 患者端入口设计
 
-首页参考药品/健康服务产品常见的“搜索 -> 分类 -> 快捷服务 -> 状态反馈”路径：
+首页当前使用“选择成员 -> 说出问题 -> 查看结果”的简洁路径：
 
-1. 顶部搜索将用户带到已有 `/knowledge` 页面，并通过 `q` 参数回填检索问题；真正的结果仍由 2E-1 API 返回。
-2. “慢病续方、用药提醒、复诊材料、家庭药箱”是四个核心事务入口；它们使用现有 API 页面，不在首页复制处方或库存字段。
-3. 当前成员卡片明确显示任务作用域；成员切换仍由 `MemberProvider` 和 `MemberSwitcher` 控制。
-4. 首页持续展示“只生成本地草稿、不执行外部提交”的边界，避免视觉上把项目误解为药品商城。
-5. “附近药店库存”只链接到候选库存页面；不存在加入购物车、支付、骑手配送成功或医院已受理等状态。
+1. 顶部导航只保留 AI 健康助手、历史咨询、家庭管理和报告解读四个用户入口。
+2. 首页主行动是进入自然语言咨询，辅助入口用于家庭记录和报告查看；不再把知识检索、库存、续方计划或提醒草稿当作快捷服务。
+3. 当前成员卡片明确显示家庭成员；成员切换仍由 `MemberProvider` 和 `MemberSwitcher` 控制。
+4. 草稿、外部提交、工具来源、Trace 和安全边界继续保留在代码、接口和必要的动作确认中，不作为首页操作说明。
+5. 旧的知识、库存、续方、药箱、提醒和单条 Trace 地址由兼容跳转收回到对应的公共业务入口。
 
-首页的 warm amber 色块只用于信息分组，不是对任何品牌视觉的复制。医疗安全说明、来源、确认和成员隔离仍优先于营销式转化设计。
+首页的 warm amber 色块只用于信息分组，不是对任何品牌视觉的复制。成员隔离、来源、确认和医疗安全规则仍由既有运行契约负责。
 
 4C 迁移完成前，前端不得提前假设新的 `confirmation_state` 已上线；迁移完成后应删除旧布尔字段交互，避免用户被要求确认两次。
 
@@ -136,11 +136,11 @@ npm run build
 ```
 
 - 首次请求固定发送 `human_confirmation_granted=false`。
-- `needs_confirmation + waiting_for_user_confirmation` 显示 `DRAFT` 和确认区域。
-- 确认按钮只有在勾选“仅创建本地草稿”后可用，并使用新的幂等键发起 continuation run。
-- continuation run 通过 `resumed_from_run_id` 与原任务关联；页面同时展示 `task_id`、当前 `run_id` 和来源 run。
+- `needs_confirmation + waiting_for_user_confirmation` 显示用户可理解的“请确认是否继续”确认区域。
+- 确认按钮只有在用户明确勾选“我已阅读上面的整理内容，确认继续”后可用，并使用新的幂等键发起 continuation run。
+- continuation run 仍通过 `resumed_from_run_id` 与原任务关联；这些运行标识只留在代码和接口层，页面不展示给用户。
 - `SafetyAgent` blocked 时显示 `BLOCKED`，不渲染业务确认按钮。
-- 页面展示 Tool/RAG 来源、安全标记、外部提交状态和只读 Trace 链接，但不修改冻结答案或评估结果。
+- `/agent-runs` 作为“历史咨询”入口，只读取当前成员记录，并展示用户目标、状态、时间和整理结果，不展示 Trace、工具链、评测指标或内部运行标识。
 
 这条页面链路使用当前 deterministic backend 也能重复演示；真实 Provider、RAG 或 degraded 状态由后端响应决定，前端不伪造成功状态。
 
@@ -154,3 +154,141 @@ E2E 不在浏览器中重算业务结果，也不直接访问数据库。它只�
 - `portal-boundaries.spec.ts` 覆盖 member 切换清理旧结果和 API 503 错误呈现。
 
 组件测试回答“React 状态逻辑是否正确”，浏览器 E2E 回答“真实 Docker 前后端和浏览器之间的契约是否能走通”；两者不能互相替代。
+
+## 13. 2026-08-02 用户端公共壳层迭代
+
+本次只完成用户端改版的第一步，不提前实现 AI 对话内容、报告解读或家庭管理详情：
+
+- 顶部壳层改为 Logo、AI 健康助手、家庭管理和报告解读规划入口，以及当前家庭成员选择器。
+- 移除顶部“仅生成本地草稿……”提示、侧栏安全约束说明和研发式侧栏布局。
+- 报告解读入口先以“即将上线”状态保护空路由；UX-05 完成后已切换为可访问的上传与最近报告页面，详情解读仍等待 UX-06。
+- `DRAFT`、continuation run、SafetyAgent、EvaluatorAgent、Trace 和外部动作状态仍属于代码/接口契约；用户端只在必要的业务动作处显示自然语言结果。
+- 成员切换器保留加载、错误、空成员、无障碍标签和成员隔离行为；内部 `member_id` 只作为选择值参与请求。
+
+本次修改文件：
+
+- `frontend/components/AppShell.tsx`
+- `frontend/components/MemberSwitcher.tsx`
+- `frontend/components/Navigation.tsx`
+- `frontend/lib/navigation.ts`
+- `frontend/app/globals.css`
+- `frontend/app/layout.tsx`
+
+验证方式：在 `frontend` 目录执行 `npm run typecheck`、`npm run test` 和 `npm run build`。当前结果为类型检查通过、25 个前端测试通过、Next.js 生产构建通过。下一步按线性顺序实现 AI 健康助手的空状态和输入区，再进入报告解读与家庭管理页面。
+
+简历项目亮点：将复杂的成员隔离、确认状态和多 Agent 运行治理收敛在前端不可见的运行契约中，用轻量患者端壳层提供清晰的健康事务入口，降低工程实现与用户体验之间的认知负担。
+
+## 14. 2026-08-02 UX-02 AI 健康助手（已完成）
+
+本步只实现 `/agent` 的首屏空状态和输入区，作为用户端改版的第二步：
+
+- 页面首屏使用自然语言标题和欢迎说明，明确当前家庭成员，但不展示 Golden Flow、deterministic、Agent、Trace、工具权限、确认布尔值或外部执行边界等内部实现术语。
+- 保留一个自然语言输入框和“开始咨询”入口；没有输入时不能提交，输入后由现有 `api.createAgentRun` 发起首轮请求。
+- 继续在请求契约中固定发送 `human_confirmation_granted=false`，该字段只存在于代码和接口层，不作为用户可见文案。
+- 本步不改确认区和历史咨询；消息结果、报告上传和家庭管理分别由 UX-03、UX-05、UX-07 按路线图推进。
+
+验收结果：首屏没有固定开发者场景和可选内部参数；空输入时入口不可用；填写自然语言后可以提交；成员切换仍清理旧的运行结果并保留成员隔离。
+
+本步修改文件：
+
+- `frontend/app/agent/page.tsx`
+- `frontend/app/agent/page.test.tsx`
+- `frontend/e2e/agent-golden-flows.spec.ts`
+- `frontend/e2e/portal-boundaries.spec.ts`
+
+验证方式：在 `frontend` 目录执行 `npm run typecheck`、`npm run test` 和 `npm run build`；本步类型检查通过，完整回归由 UX-03 及并行支线合并后统一记录。下一步按路线图进入 UX-04，改造确认交互与历史咨询。
+
+## 15. 2026-08-02 UX-03 AI 健康助手结果卡片（已完成）
+
+- `/agent` 提交后的结果由“咨询结果、整理结果、参考信息、安全提示”组成，隐藏 `DRAFT`、run/task 标识、Trace、工具名、原始 source_id 和安全规则代码。
+- 空状态中的四个健康话题已变为可直接填入输入框的快捷问题；提交后保留本轮用户消息气泡，再展示助手整理结果，形成最小可用的对话消息区。
+- 参考信息只展示用户可理解的资料类型与数量；高风险请求使用“需要专业人员确认”等自然语言，不展示内部 Agent 或 flag 名称。
+- 保留现有后端安全、成员隔离和确认代码契约；确认区仍由 UX-04 接续改造。
+
+本步修改文件：
+
+- `frontend/components/AgentRunResult.tsx`
+- `frontend/app/agent/page.test.tsx`
+- `frontend/e2e/agent-golden-flows.spec.ts`
+- `frontend/e2e/portal-boundaries.spec.ts`
+
+## 16. 2026-08-02 并行完成 UX-05 与 UX-07
+
+UX-05 和 UX-07 只依赖已完成的公共壳层，写入范围互不重叠，因此并行实现：
+
+- UX-05 新增报告解读上传区和最近报告列表；当前文件只保留在页面状态中，未伪造报告上传或解析成功；详情指标解释等待 UX-06。
+- UX-07 将家庭管理改为当前成员健康总览，聚合健康档案、用药、药箱、处方、购药和本地准备记录，并在成员切换时隔离数据。
+- 报告页和家庭页均不展示 `member_id`、API 路径、Agent、Trace 或工具权限等内部术语。
+
+本步修改文件：
+
+- `frontend/app/reports/page.tsx`
+- `frontend/app/reports/page.test.tsx`
+- `frontend/app/family/page.tsx`
+- `frontend/app/family/page.test.tsx`
+- `frontend/lib/navigation.ts`
+
+统一验证：在 `frontend` 目录执行 `npm run typecheck`、`npm run test` 和 `npm run build`；类型检查通过，7 个测试文件、27 个测试通过，Next.js 生产构建通过。浏览器 E2E 仍需完整后端环境后执行。
+
+## 17. 2026-08-02 UX-04 自然语言确认与历史咨询（已完成）
+
+- `/agent` 的确认区改为“请确认是否继续”，用“我已阅读上面的整理内容，确认继续”表达用户动作；页面不再展示 `DRAFT`、外部提交、continuation run 或确认说明输入框。
+- 代码仍固定提交 `human_confirmation_granted=true` 和确认消息，保留后端 continuation、幂等键、安全拦截与成员作用域契约；内部约束没有迁移到用户文案中。
+- `/agent-runs` 改为“历史咨询”页面，按当前成员加载历史记录，使用“已完成、待确认、已暂停、未完成”等状态和“续方准备、用药提醒、购药准备、用药安全”等用户表达；记录只展示咨询内容、时间和整理结果。
+- 成员切换时历史请求使用成员维度缓存键并清理旧内容，页面和测试均验证不会混入其他成员记录。
+
+本步修改文件：
+
+- `frontend/app/agent/page.tsx`
+- `frontend/app/agent/page.test.tsx`
+- `frontend/app/agent-runs/page.tsx`
+- `frontend/app/agent-runs/page.test.tsx`
+- `frontend/e2e/agent-golden-flows.spec.ts`
+- `frontend/lib/navigation.ts`
+- `docs/DEVELOPMENT_ROADMAP.md`
+- `docs/FRONTEND_ARCHITECTURE.md`
+
+验证结果：在 `frontend` 目录执行 `npm run typecheck`、`npm run test` 和 `npm run build` 均通过；完整回归为 8 个测试文件、29 个测试通过，生产构建生成 13 个路由。UX-04 定向组件测试覆盖确认前置勾选、确认请求和历史成员隔离，浏览器 E2E 仍需完整后端环境后执行。
+
+简历项目亮点：将有边界的确认状态和成员隔离保留在代码契约中，同时把患者端动作收敛为自然语言确认与可回看的家庭咨询记录，降低医疗 Agent 内部编排对用户造成的认知负担。
+
+## 18. 2026-08-03 UX-06 报告详情数据契约（前置冻结）
+
+- 已冻结 `report-detail.v1`，包含报告摘要、处理状态、指标值、单位、参考范围、趋势、通俗解释、原文来源和安全提示。
+- 契约使用明确的 `ready`、`processing`、`needs_review`、`failed` 等状态；没有可解释指标或来源未核实时，页面必须展示对应状态，不得补造医疗事实。
+- 契约接口为 `GET /api/family-members/{member_id}/reports` 和 `GET /api/family-members/{member_id}/reports/{report_id}`；服务端和客户端都必须校验成员归属。
+- 已按契约接入只读报告列表和详情页面：报告列表消费 `api.listReports`，详情页消费 `api.getReportDetail`，页面只展示用户可理解的摘要、指标、参考范围、趋势、来源和阅读提示。
+- 服务端接口复用既有 `medical_documents` 事实，并在 `ReportReadService` 中归一化状态和结构化内容；没有新增上传、解析、诊断、治疗或外部提交动作。前后端都会拒绝跨成员报告，客户端还会校验指标/章节的来源引用完整性。
+- 详情页路由为 `/reports/[reportId]`；页面不展示 `report_id`、来源内部 ID、解析 provider、对象地址或执行边界文案。
+
+契约文档：[REPORT_DETAIL_CONTRACT.md](REPORT_DETAIL_CONTRACT.md)。
+
+验证方式：在 `frontend` 目录执行 `npm run test`、`npm run typecheck` 和 `npm run build`；本次 UX-06 验证为 9 个测试文件、34 个测试通过、生产构建生成 13 个路由。后端执行 `PYTHONPATH=backend .venv/Scripts/python.exe -m pytest backend/tests/test_read_api.py -q -p no:cacheprovider --basetemp=var/pytest/ux06-read-api`，6 个测试通过。下一步进入 UX-08，处理内部入口清理与兼容路由。
+
+简历项目亮点：把既有医疗文档事实通过版本化 DTO 投影成用户可读的报告解读页面，并同时保留成员隔离、来源指针、状态降级和安全提示；报告页面不把模型或解析内部实现伪装成医疗结论。
+
+## 19. 2026-08-03 用户端 UX-08 内部入口清理（已完成）
+
+UX-08 将用户端首页和顶部导航收敛为四个业务入口：AI 健康助手、历史咨询、家庭管理和报告解读。首页采用“选择成员—说出问题—查看结果”的用户语言，不再把知识检索、药店库存、续方计划、提醒草稿、固定演示、安全约束、草稿状态或 Trace 作为用户功能展示。
+
+旧地址不直接删除，以兼容历史书签和已有调用：`/knowledge`、`/reminders` 跳转到 `/agent`；`/purchase-plans`、`/refill-plans`、`/medicine-box` 跳转到 `/family`；`/agent-runs/:id` 跳转到 `/agent-runs`。这些跳转由 Next.js 路由配置统一处理，旧页面实现不再作为公共入口。
+
+本步修改文件：
+
+- `frontend/app/page.tsx`
+- `frontend/app/page.test.tsx`
+- `frontend/components/Navigation.tsx`
+- `frontend/lib/navigation.ts`
+- `frontend/lib/navigation.test.ts`
+- `frontend/next.config.mjs`
+- `frontend/e2e/portal-entry-cleanup.spec.ts`
+
+验证方式：在 `frontend` 目录执行 `npm run typecheck`、`npm run test` 和 `npm run build`；本次结果为类型检查通过、10 个测试文件/35 个测试通过、Next.js 生产构建生成 13 个页面。使用临时构建服务并明确设置 `E2E_BASE_URL=http://127.0.0.1:3000` 执行 `npm run test:e2e -- e2e/portal-entry-cleanup.spec.ts`，2 个浏览器用例通过。本步不改后端接口、数据库、Agent 工作流或安全规则。下一步唯一进入 UX-09，完成跨页面视觉、响应式、可访问性和交付收口。
+
+简历项目亮点：将面向开发者的知识检索、内部草稿和执行追踪从患者端入口收回到代码与兼容层，保留历史地址可用性，同时用四个清晰业务入口降低医疗 Agent 的使用认知负担。
+
+## 20. 2026-08-03 用户端 UX-09 跨页面联调与交付收口
+
+UX-09 在真实 Docker 前后端环境中验收既有用户链路：成员加载与切换、AI 健康助手首轮咨询与确认、历史咨询成员隔离、报告列表/详情权限边界、家庭管理聚合数据以及旧入口兼容跳转。历史记录、家庭草稿和咨询结果统一经过前端用户语言投影，不把 `run_id`、`source_id`、工具名、内部英文状态或实现边界作为页面内容。
+
+本阶段复用既有 API 和状态机，没有新增前端业务动作。桌面端 1440×900 与移动端 390×844 均通过无横向溢出检查；公开五页的交互控件均有可访问名称。真实联调使用 deterministic provider 保障可重复性，不代表真实模型质量或生产环境验收。
