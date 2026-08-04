@@ -209,7 +209,7 @@ Deterministic Evaluator 是正式核心。任务十一已经使用 32 条冻结�
 
 任务十一的 P50/P95 使用冻结 fixture latency，不能当作真实服务 wall-clock。deterministic provider 未返回 usage，因此 `token_usage_available=false`，token 和 billed cost 为 `N/A`，运行器禁止合成这些指标。任务十二已在本机 Docker PostgreSQL/Redis/FastAPI/Next.js 栈补充真实运行验收；baseline 19/19、Redis 故障回源 18/18，详见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。
 
-4D-B2.5 已增加 v2 本地 preview runner：`WorldStateMaterializer` 为每条 Query 创建隔离的内存 DB/Provider/RAG projection，`V2DeterministicGraders` 分别评分 Route、Plan、Tool、Claim、RAG、Safety、Context、Reliability 和 Database State，`V2EvalRunner` 输出稳定 report id、JSON/Markdown 和 failure taxonomy。该层不替代 Docker PostgreSQL/pgvector、Checkpoint/Redis 恢复、真实 HTTP 或真实 LLM 评测；v2 数据仍是 `pending_review`，preview 指标继续不能写入简历。
+4D-B2.5 已增加 v2 本地 preview runner：`WorldStateMaterializer` 为每条 Query 创建隔离的内存 DB/Provider/RAG projection，`V2DeterministicGraders` 分别评分 Route、Plan、Tool、Claim、RAG、Safety、Context、Reliability 和 Database State，`V2EvalRunner` 输出稳定 report id、JSON/Markdown 和 failure taxonomy。该层不替代 Docker PostgreSQL/pgvector、Checkpoint/Redis 恢复、真实 HTTP 或真实 LLM 评测；v2 Gold 已完成人工审核，但三 split 真实运行仍是 `preview`，preview 指标继续不能写入简历。
 
 ### 13.1 4D-B 最终评测数据流
 
@@ -266,7 +266,7 @@ source_ids
 | 三个重点 Provider 已具备强 schema、有限重试、attempt/source/degraded 测试；其他 mock 兼容保留 | 任务十已补 RAG、隔离和 Observation；外部 Provider 仍待真实联调 | 9–12 |
 | RRF、过期向量拒绝、攻击式隔离、白名单 Observation 和 32 条 A/B/C Harness 已实现 | 本机 Docker PostgreSQL/Redis 与 wall-clock 已验收，结果不等于生产 SLO | 12 |
 | 16 条历史契约 + 9 条 runtime 场景 + 32 条任务十一业务 fixture | 三条业务 API、RAG 索引、Redis 回源和并发状态机已完成真实 smoke | 12 |
-| 4D-B 已观测本地 Supervisor、关键词 RAG、ContextManager 和 Provider fault；B2.1/B2.2 已接入 UnifiedHealthGraph、bounded DAG 和评测 `all_history`；B2.3 已接入 Claim/Trace v2；B2.4 已生成可重复 v2 数据；B2.5 已完成内存物化、九层 grader 和 preview runner | 人工审核并接入 300 个 WorldState/1200 条 Query 的 PostgreSQL/Provider/RAG 物化，再运行真实 UnifiedHealthGraph、Docker 报告和可选真实 LLM 报告 | 4D-B2.6 至 B3 |
+| 4D-B 已观测本地 Supervisor、关键词 RAG、ContextManager 和 Provider fault；B2.1/B2.2 已接入 UnifiedHealthGraph、bounded DAG 和评测 `all_history`；B2.3 已接入 Claim/Trace v2；B2.4 已生成并完成人工审核的 v2 数据；B2.5 已完成内存物化、九层 grader 和 preview runner | 修正 C 预检发现的 Gold/runtime 证据契约不一致，再运行真实 UnifiedHealthGraph、Docker 报告和可选真实 LLM 报告 | 4D-B2.6 至 B3 |
 
 ## 14.1 4D-B2.6 真实集成评测
 
@@ -278,7 +278,7 @@ source_ids
 - `UnifiedHealthGraphIntegrationExecutor` 要求显式 benchmark user/member/source identity map，缺少映射时 fail closed，不把不相关 demo 数据当成评测结果。
 - `V2AblationRunner` 固定 A/B/C/D 只改变 routing、execution、context 开关；数据、Provider、RAG、安全、确认和 token limit 必须保持不变。
 
-Docker 验收实际通过了 `19/19` 个本地检查；第一条真实 v2 integration sample 通过九类 deterministic grader，但 v2 数据仍是 `pending_review`，所以报告状态保持 `preview`。完整命令和剩余门槛见 [4D-B2.6 集成状态](4D_B2.6_INTEGRATION_STATUS.md)。
+Docker 验收实际通过了 `19/19` 个本地检查；用户已审核 300/1200 条 v2 Gold，且本机 300-case identity/source map 已生成。deterministic Docker integration smoke 的 2 条样例通过九类 grader，但三 split 全量报告仍保持 `preview`，不能写成最终质量指标。完整命令和剩余门槛见 [4D-B2.6 集成状态](4D_B2.6_INTEGRATION_STATUS.md)。
 
 ## 15. 数据库迁移链
 

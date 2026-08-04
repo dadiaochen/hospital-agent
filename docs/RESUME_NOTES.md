@@ -12,7 +12,7 @@
 | 前端自动化 | `25/25` 组件测试、`7/7` Edge E2E | 固定患者端黄金链和错误展示可重复 | 浏览器兼容全覆盖、线上可用率 |
 | 编排消融 | 32 case × 3 策略 = 96 Trace | bounded Supervisor 在固定复杂任务中完成 `6/6`，固定单域路由为 `0/6` | 当前业务 API 已接 Supervisor、真实用户成功率 |
 | Docker 后端验收 | baseline `19/19`、Redis 故障 `18/18` | migration/seed/API/pgvector/cache fallback 的本地集成链可运行 | 生产 SLA、高可用或容量 |
-| v2 评测体系 | 300 个 WorldState、1200 条 Query；development/validation/holdout 为 `720/240/240` 条 Query | 已建立版本化数据、九维规则评分、固定 seed、关联校验和报告 Runner | 数据仍待全量人工审核；preview 通过率不是模型质量 |
+| v2 评测体系 | 300 个 WorldState、1200 条 Query；development/validation/holdout 为 `720/240/240` 条 Query | 已建立版本化数据、九维规则评分、固定 seed、关联校验和报告 Runner；300/1200 Gold 已人工审核并全部 `pass` | C 预检尚未完成；preview 通过率不是模型质量 |
 | 4D 本地观测 | Supervisor 32、关键词 RAG 12、上下文 40、Provider 故障 30 | 核心本地实现已接入版本化指标 runner | 客户数据和生产性能 |
 | 真实 LLM 小样本 | 8 条 development 冻结产物人工复核 `8/8`；平均总 token `1032.5`；本机 workflow p95 `5239 ms` | 真实 provider、usage、成本、延迟和人工审核链路已跑通 | 开放问答准确率、临床安全率、生产 SLA |
 
@@ -156,7 +156,7 @@ B3 已实现可选真实 LLM runner、真实 usage 读取、价格换算、fallb
 
 ### 4D-B 最终目标不是当前成果
 
-4D-B 已完成 UnifiedHealthGraph、有界 DAG、评测专用 `all_history` 基线、结构化 FinalClaim/AnswerEnvelope/Trace v2、固定 seed 的 300 个 WorldState/1200 条 v2 Query 生成器，以及内存 projection、九层 deterministic grader 和 preview Runner；生产仍使用 `dependency_only` 上下文。v2 数据尚待人工审核和真实 PostgreSQL/Provider/RAG 物化，因此简历可以写已实现“带来源 Claim 的结构化答案、可重复评测数据与确定性评测扩展”，但不能把 preview 的 100% 通过率或模拟延迟写成结果。
+4D-B 已完成 UnifiedHealthGraph、有界 DAG、评测专用 `all_history` 基线、结构化 FinalClaim/AnswerEnvelope/Trace v2、固定 seed 的 300 个 WorldState/1200 条 v2 Query 生成器，以及内存 projection、九层 deterministic grader 和 preview Runner；用户已审核 300/1200 条 Gold，本机 Docker map 与 2 条 deterministic integration smoke 也已通过。C 预检中 development/validation 各 4 条通过，holdout 4 条因 Gold/runtime 证据契约不一致失败；生产仍使用 `dependency_only` 上下文。三 split 全量真实报告尚未完成，因此简历可以写已实现“带来源 Claim 的结构化答案、可重复评测数据、case-scoped 成员隔离和确定性评测扩展”，但不能把 preview 或局部 smoke 的通过率写成全量质量结果。
 
 最终报告完成后，简历优先保留三类高价值结果：复杂任务完成与 Tool 正确性、RAG 召回与引用正确性、Agent 安全/成员隔离与 p95/token。具体数字由报告回填，不在文档中预设。
 

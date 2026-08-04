@@ -653,7 +653,7 @@ Set-Location E:\project_code\hospital
 
 真实 v2 integration 需要一个只存在于本机的 identity map，把 benchmark user/member/source 映射到 Docker PostgreSQL 的 demo rows；不能把这个文件提交到 GitHub。运行方式、PostgreSQL shadow transaction、RAG source allow-list、Provider sandbox 和 A/B/C/D preview 见 [4D-B2.6 集成状态](4D_B2.6_INTEGRATION_STATUS.md)。
 
-Docker 回归报告中的 `19/19` 是本机部署和接口证据，不是生产 SLO；v2 `pending_review` 数据生成的 report 仍标记为 `preview`。
+Docker 回归报告中的 `19/19` 是本机部署和接口证据，不是生产 SLO；v2 Gold 已完成人工审核，但三 split 真实 integration 报告仍标记为 `preview`，直到 C-E 验收完成。
 
 ## 8. 停止、重启和清空
 

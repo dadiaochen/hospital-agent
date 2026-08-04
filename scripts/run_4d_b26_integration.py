@@ -8,7 +8,6 @@ the local Docker database; it is machine-local and must not be committed.
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 import sys
 
@@ -35,13 +34,7 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("output/benchmarks/v2"))
     args = parser.parse_args()
 
-    raw = json.loads(args.identity_map.read_text(encoding="utf-8"))
-    identity = IntegrationIdentityMap(
-        benchmark_user_id=str(raw["benchmark_user_id"]),
-        actual_user_id=str(raw["actual_user_id"]),
-        member_ids={str(key): str(value) for key, value in raw["member_ids"].items()},
-        source_ids={str(key): str(value) for key, value in raw.get("source_ids", {}).items()},
-    )
+    identity = IntegrationIdentityMap.from_json(args.identity_map)
     materializer = PostgresV2Materializer(SessionLocal)
     executor = UnifiedHealthGraphIntegrationExecutor(identity)
     runner = V2EvalRunner(

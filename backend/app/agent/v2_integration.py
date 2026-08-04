@@ -18,6 +18,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 import hashlib
 import json
+from pathlib import Path
 from time import perf_counter
 from typing import Any, Protocol
 from uuid import uuid4
@@ -445,33 +446,175 @@ class PostgresV2Materializer:
 
 
 class IntegrationIdentityMap:
-    """Explicit mapping between frozen benchmark IDs and real DB IDs."""
+    """Explicit mapping between frozen benchmark IDs and real DB IDs.
+
+    The original B2.6 sample used one global user/member/source map.  The
+    final 300-WorldState gate uses ``cases`` so two synthetic worlds can never
+    accidentally share a member or source mapping.  The global constructor
+    remains supported for the existing one-case and two-case demos.
+    """
 
     def __init__(
         self,
         *,
-        benchmark_user_id: str,
-        actual_user_id: str,
-        member_ids: Mapping[str, str],
-        source_ids: Mapping[str, str],
+        benchmark_user_id: str | None = None,
+        actual_user_id: str | None = None,
+        member_ids: Mapping[str, str] | None = None,
+        source_ids: Mapping[str, str] | None = None,
+        case_maps: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> None:
-        if not benchmark_user_id or not actual_user_id:
+        if (benchmark_user_id and not actual_user_id) or (
+            actual_user_id and not benchmark_user_id
+        ):
             raise ValueError("benchmark and actual user IDs are required")
-        self.benchmark_user_id = benchmark_user_id
-        self.actual_user_id = actual_user_id
-        self.member_ids = dict(member_ids)
-        self.source_ids = dict(source_ids)
+        if not (case_maps or (benchmark_user_id and actual_user_id)):
+            raise ValueError("a global map or at least one case map is required")
+        self.benchmark_user_id = benchmark_user_id or ""
+        self.actual_user_id = actual_user_id or ""
+        self.member_ids = dict(member_ids or {})
+        self.source_ids = dict(source_ids or {})
+        self.case_maps = {
+            str(case_id): {
+                "benchmark_user_id": str(values["benchmark_user_id"]),
+                "actual_user_id": str(values["actual_user_id"]),
+                "member_ids": {
+                    str(key): str(value)
+                    for key, value in dict(values.get("member_ids", {})).items()
+                },
+                "source_ids": {
+                    str(key): str(value)
+                    for key, value in dict(values.get("source_ids", {})).items()
+                },
+            }
+            for case_id, values in (case_maps or {}).items()
+        }
 
-    def resolve_member(self, benchmark_member_id: str) -> str:
-        actual = self.member_ids.get(benchmark_member_id)
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> "IntegrationIdentityMap":
+        """Load either the legacy global map or the final case-scoped map.
+
+        Empty values in the generated template are rejected here.  A template
+        is documentation for the user to fill, not a runnable identity map.
+        """
+
+        cases = payload.get("cases")
+        if cases is not None:
+            if not isinstance(cases, Mapping) or not cases:
+                raise ValueError("case-scoped identity map must contain cases")
+            parsed_cases: dict[str, dict[str, Any]] = {}
+            for case_id, raw_case in cases.items():
+                if not isinstance(raw_case, Mapping):
+                    raise ValueError(f"invalid identity map case: {case_id}")
+                benchmark_user_id = str(raw_case.get("benchmark_user_id", ""))
+                actual_user_id = str(raw_case.get("actual_user_id", ""))
+                if not benchmark_user_id or not actual_user_id:
+                    raise ValueError(
+                        f"missing actual user mapping for case: {case_id}"
+                    )
+                raw_members = raw_case.get("member_ids", {})
+                if not isinstance(raw_members, Mapping) or not raw_members:
+                    raise ValueError(f"missing member mappings for case: {case_id}")
+                member_ids = {str(key): str(value) for key, value in raw_members.items()}
+                if any(not value for value in member_ids.values()):
+                    raise ValueError(f"missing actual member mapping for case: {case_id}")
+
+                source_ids: dict[str, str] = {}
+                raw_sources = raw_case.get("source_ids")
+                if raw_sources is not None:
+                    if not isinstance(raw_sources, Mapping):
+                        raise ValueError(f"source_ids must be an object: {case_id}")
+                    source_ids.update(
+                        {str(actual): str(benchmark) for actual, benchmark in raw_sources.items()}
+                    )
+                for item in raw_case.get("source_mappings", ()):  # template format
+                    if not isinstance(item, Mapping):
+                        raise ValueError(f"invalid source mapping for case: {case_id}")
+                    actual_source_id = str(item.get("actual_source_id", ""))
+                    benchmark_source_id = str(item.get("benchmark_source_id", ""))
+                    source_kind = str(item.get("source_kind", "database"))
+                    requires_actual_mapping = bool(
+                        item.get(
+                            "requires_actual_mapping",
+                            source_kind == "database",
+                        )
+                    )
+                    if not actual_source_id and not requires_actual_mapping:
+                        # Provider and RAG aliases are produced by the
+                        # case-scoped runtime and must not be filled with a
+                        # made-up local database ID.
+                        continue
+                    if not actual_source_id or not benchmark_source_id:
+                        raise ValueError(
+                            f"missing actual source mapping for case: {case_id}"
+                        )
+                    source_ids[actual_source_id] = benchmark_source_id
+                parsed_cases[str(case_id)] = {
+                    "benchmark_user_id": benchmark_user_id,
+                    "actual_user_id": actual_user_id,
+                    "member_ids": member_ids,
+                    "source_ids": source_ids,
+                }
+            return cls(case_maps=parsed_cases)
+
+        try:
+            return cls(
+                benchmark_user_id=str(payload["benchmark_user_id"]),
+                actual_user_id=str(payload["actual_user_id"]),
+                member_ids={
+                    str(key): str(value)
+                    for key, value in dict(payload["member_ids"]).items()
+                },
+                source_ids={
+                    str(key): str(value)
+                    for key, value in dict(payload.get("source_ids", {})).items()
+                },
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("invalid global identity map payload") from exc
+
+    @classmethod
+    def from_json(cls, path: str | Path) -> "IntegrationIdentityMap":
+        return cls.from_payload(json.loads(Path(path).read_text(encoding="utf-8")))
+
+    def _case(self, world_state_id: str) -> Mapping[str, Any]:
+        case = self.case_maps.get(world_state_id)
+        if case is None:
+            raise IntegrationExecutionError(
+                f"missing identity map case: {world_state_id}"
+            )
+        return case
+
+    def resolve_user_id(self, world_state_id: str | None = None) -> str:
+        if self.case_maps and world_state_id is not None:
+            actual = str(self._case(world_state_id)["actual_user_id"])
+        else:
+            actual = self.actual_user_id
+        if not actual:
+            raise IntegrationExecutionError("missing real user mapping")
+        return actual
+
+    def resolve_member(
+        self, benchmark_member_id: str, *, world_state_id: str | None = None
+    ) -> str:
+        if self.case_maps and world_state_id is not None:
+            mapping = self._case(world_state_id)["member_ids"]
+        else:
+            mapping = self.member_ids
+        actual = mapping.get(benchmark_member_id)
         if not actual:
             raise IntegrationExecutionError(
                 f"missing real member mapping: {benchmark_member_id}"
             )
         return actual
 
-    def map_source(self, actual_source_id: str) -> str:
-        mapped = self.source_ids.get(actual_source_id)
+    def map_source(
+        self, actual_source_id: str, *, world_state_id: str | None = None
+    ) -> str:
+        if self.case_maps and world_state_id is not None:
+            mapping = self._case(world_state_id)["source_ids"]
+        else:
+            mapping = self.source_ids
+        mapped = mapping.get(actual_source_id)
         if not mapped:
             raise IntegrationExecutionError(
                 f"missing benchmark source mapping: {actual_source_id}"
@@ -510,7 +653,12 @@ class UnifiedHealthGraphIntegrationExecutor:
     ) -> V2RunArtifacts:
         _ = repeat_index
         query = materialized.query
-        actual_member_id = self.identity.resolve_member(query.expected_member_id)
+        world_state_id = query.world_state_id
+        actual_user_id = self.identity.resolve_user_id(world_state_id)
+        actual_member_id = self.identity.resolve_member(
+            query.expected_member_id,
+            world_state_id=world_state_id,
+        )
         business_domain = _business_domain(query.expected_intent)
         input_payload = _integration_input_payload(materialized.world, query)
         actual_task_id = str(uuid4())
@@ -518,7 +666,7 @@ class UnifiedHealthGraphIntegrationExecutor:
         now = utc_now()
         task = BusinessTask(
             id=actual_task_id,
-            user_id=self.identity.actual_user_id,
+            user_id=actual_user_id,
             member_id=actual_member_id,
             business_domain=business_domain,
             intent=query.expected_intent,
@@ -536,7 +684,7 @@ class UnifiedHealthGraphIntegrationExecutor:
         )
         run = AgentRun(
             id=actual_run_id,
-            user_id=self.identity.actual_user_id,
+            user_id=actual_user_id,
             member_id=actual_member_id,
             user_goal=query.user_input,
             intent=query.expected_intent,
@@ -569,7 +717,7 @@ class UnifiedHealthGraphIntegrationExecutor:
             state = graph.invoke(
                 run_id=actual_run_id,
                 task_id=actual_task_id,
-                user_id=self.identity.actual_user_id,
+                user_id=actual_user_id,
                 member_id=actual_member_id,
                 business_domain=business_domain,
                 user_input=query.user_input,
@@ -604,9 +752,10 @@ class UnifiedHealthGraphIntegrationExecutor:
     def _map_trace(self, trace, materialized: PostgresMaterializedCase):
         payload = trace.model_dump(mode="json")
         actual_member_id = self.identity.resolve_member(
-            materialized.query.expected_member_id
+            materialized.query.expected_member_id,
+            world_state_id=materialized.query.world_state_id,
         )
-        actual_user_id = self.identity.actual_user_id
+        actual_user_id = self.identity.resolve_user_id(materialized.query.world_state_id)
         actual_task_id = trace.task_id
 
         def transform(value: Any, key: str | None = None) -> Any:
@@ -655,11 +804,43 @@ class UnifiedHealthGraphIntegrationExecutor:
             if mapped_ids:
                 return ",".join(dict.fromkeys(mapped_ids))
         if (
+            actual_source_id.startswith("knowledge:")
+            and materialized.world.knowledge_state.current_source_ids
+        ):
+            # Some business-tool paths expose the underlying document/chunk
+            # key instead of the scoped retriever alias.  It is still a RAG
+            # observation, so bind it to this case's reviewed current-source
+            # namespace rather than leaking a seed database ID into Gold.
+            return materialized.world.knowledge_state.current_source_ids[0]
+        if (
             actual_source_id.startswith("provider:")
             and materialized.world.provider_state.source_ids
         ):
             return materialized.world.provider_state.source_ids[0]
-        return self.identity.map_source(actual_source_id)
+        if (
+            actual_source_id.startswith("pharmacy_inventory:")
+            and materialized.world.provider_state.source_ids
+        ):
+            # Pharmacy inventory is a business/provider observation.  The
+            # provider sandbox owns its benchmark source alias; no real
+            # inventory ID should be invented in the identity map.
+            return materialized.world.provider_state.source_ids[0]
+        if actual_source_id.startswith(("health_record_event:", "medical-document:")):
+            record_source_ids = tuple(
+                item.source_id
+                for item in materialized.world.health_records
+                if item.member_id == materialized.query.expected_member_id
+            )
+            if record_source_ids:
+                # Report/health-record tools create a transaction-local
+                # event or document ID.  Map it to the reviewed record source
+                # for this member instead of putting that generated ID in a
+                # reusable local file.
+                return record_source_ids[0]
+        return self.identity.map_source(
+            actual_source_id,
+            world_state_id=materialized.query.world_state_id,
+        )
 
     @staticmethod
     def _normalize_benchmark_claims(trace, materialized: PostgresMaterializedCase):
@@ -924,6 +1105,10 @@ def _integration_input_payload(
 
     payload: dict[str, Any] = {
         "evaluation_query_id": query.query_id,
+        # Keep the persisted business domain separate from the reviewed
+        # benchmark intent.  The runtime workflow consumes this only for the
+        # case-scoped integration route; normal API requests do not provide it.
+        "evaluation_intent": query.expected_intent,
         "knowledge_query": query.expected_intent,
     }
     if query.expected_intent in {"refill", "reminder", "pharmacy"}:

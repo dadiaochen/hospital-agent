@@ -158,7 +158,7 @@ Harness 额外冻结 `AblationToolCallTrace`，仅保存工具名、角色、结
 
 ## 4D-B2.6 评测边界
 
-`V2DeterministicGraders` 仍然只读取冻结 `RunTrace` 中的 `ToolCallTrace`、source pointer 和成员作用域，不在评测阶段重新调用 Tool Registry。B2.6 的 `ScopedProviderSandbox` 复用确定性 Provider 契约，只在真实图执行阶段注入 timeout/no-source 故障并记录 attempt trace；`PostgresV2Materializer` 和 `ScopedPostgresRetriever` 负责 case-scoped 数据与 RAG 来源隔离。这样可以测试真实连接边界，同时不会把评测变成不可重复的外部服务联调。完整 300/1200 正式可靠性指标仍待人工审核后运行。
+`V2DeterministicGraders` 仍然只读取冻结 `RunTrace` 中的 `ToolCallTrace`、source pointer 和成员作用域，不在评测阶段重新调用 Tool Registry。B2.6 的 `ScopedProviderSandbox` 复用确定性 Provider 契约，只在真实图执行阶段注入 timeout/no-source 故障并记录 attempt trace；`PostgresV2Materializer` 和 `ScopedPostgresRetriever` 负责 case-scoped 数据与 RAG 来源隔离。这样可以测试真实连接边界，同时不会把评测变成不可重复的外部服务联调。300/1200 Gold 已完成人工审核，但完整正式可靠性指标仍待三 split 真实运行、消融和 badcase 复核。
 
 UX-04 不修改 Tool Contract。用户端历史咨询与确认区域不展示 `tool_name`、原始工具输入输出或 SourceRef 标识；这些证据仍由既有运行链路记录并供内部审计使用。
 

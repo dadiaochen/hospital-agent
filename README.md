@@ -60,9 +60,9 @@ flowchart TB
 - `4B` 后端工程能力：完成。
 - `4C` 患者端、黄金链路、浏览器 E2E 和固定演示：完成。
 - `4D-A` 五组 gold benchmark 数据：已审核并冻结。
-- `4D-B` 自动化评测与最终可复现指标：B5.1-B5.6 代码与回归已完成；B3 的 8 条真实模型 development 报告已完成，v2 的 300 个 WorldState/1200 条 Query 已按 `4d-b5.5` 分离 domain DAG 与治理图。全量人工审核、真实 PostgreSQL 映射和三 split 正式报告仍是独立验收门槛。
+- `4D-B` 自动化评测与最终可复现指标：B5.1-B5.6 代码与回归已完成；B3 的 8 条真实模型 development 报告已完成；v2 的 300 个 WorldState/1200 条 Query 已由用户审核并全部标记 `pass`，本机 300-case identity/source map 也已生成。三 split 正式 integration、A/B/C/D 和 badcase 冻结仍是独立验收门槛。
 
-当前已构建 300 个 WorldState、1200 条 Query 的版本化评测集，并完成九维 deterministic preview 回放；数据按 development/validation/holdout 拆分，但仍待全量人工审核和真实映射，因此 preview 通过率不作为质量指标。B5 已完成 Planner 依赖、计划级工具权限、角色兼容层和 v2 domain/governance 评测口径收口。B3 已用 `deepseek-v4-flash` 完成 8 条 development 固定样本，并由人工对“FinalAnswer + 草稿/来源快照”逐条复核，结果为 `8/8` 通过；平均总 token `1032.5`、按本机价格配置计算的平均单次成本 `$0.00146525`、本机 workflow/model p95 为 `5239/4452 ms`。这些数字只属于两个已映射成员和提醒/购药场景，不是生产 SLO、临床安全率或开放问答准确率。详见 [4D-B2.6 集成状态](docs/4D_B2.6_INTEGRATION_STATUS.md)、[4D-B3 真实模型评测](docs/4D_B3_REAL_LLM.md) 和路线图的 `4D-B`。
+当前已构建 300 个 WorldState、1200 条 Query 的版本化评测集，并完成九维 deterministic preview 回放；数据按 development/validation/holdout 拆分。用户审核已完成，但 preview 和本机 smoke 仍不等于全量回答质量指标。B5 已完成 Planner 依赖、计划级工具权限、角色兼容层和 v2 domain/governance 评测口径收口。B3 已用 `deepseek-v4-flash` 完成 8 条 development 固定样本，并由人工对“FinalAnswer + 草稿/来源快照”逐条复核，结果为 `8/8` 通过；平均总 token `1032.5`、按本机价格配置计算的平均单次成本 `$0.00146525`、本机 workflow/model p95 为 `5239/4452 ms`。这些数字只属于两个已映射成员和提醒/购药场景，不是生产 SLO、临床安全率或开放问答准确率。详见 [4D-B2.6 集成状态](docs/4D_B2.6_INTEGRATION_STATUS.md)、[4D-B3 真实模型评测](docs/4D_B3_REAL_LLM.md) 和路线图的 `4D-B`。
 
 ### 当前用户端改版
 

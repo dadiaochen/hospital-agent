@@ -610,11 +610,11 @@ docs/4D_B_BENCHMARK_GUIDE.md
 - `B2.1 DONE`：新增 `UnifiedHealthGraph`，将 `/api/business-tasks` 接入统一 Router/Planner/Supervisor 边界；当前默认执行器为 `SupervisorBusinessWorkflow`，由 Supervisor 实际调用运行时 `TriageAgent`、`MedicationAgent` 和 `ReportAgent`，业务 Tool、Provider、确认和冻结仍复用既有安全边界。
 - `B2.2 DONE`：独立编排内核仍支持依赖 ready-set、有界只读 fan-out/fan-in 和确定性 reducer；患者端正式业务执行默认强制串行 bounded Supervisor，避免多个 Agent 竞争同一个确认/写入作用域。`all_history` 仍仅限评测，生产默认 `dependency_only`。
 - `B2.3 DONE`：已增加结构化 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`，产品业务冻结产物会保存成员、来源指针、依赖结果和 token usage（若 provider 提供），deterministic Evaluator 已增加 Claim 覆盖率、来源精度和正文/Claim 一致性校验。
-- `B2.4 DONE（待人工审核/物化）`：已用固定 seed 生成独立的 300 个 WorldState 和 1200 条 v2 Query，完成 development/validation/holdout 切分、四种表达变体、关联校验和 SHA-256 manifest；数据明确标记为 `pending_review`，不能当作临床 gold 或最终评测结果。
+- `B2.4 DONE`：已用固定 seed 生成独立的 300 个 WorldState 和 1200 条 v2 Query，完成 development/validation/holdout 切分、四种表达变体、关联校验和 SHA-256 manifest；用户已审核 300/300 WorldState 与 1200/1200 Query，全部标记为 `pass`。这仍是合成 Gold，不是临床数据或最终回答质量结果。
 - `B2.5 DONE（本地 preview）`：已实现隔离的内存 WorldState Materializer、九类确定性 Grader、失败原因分类和统一 v2 Eval Runner；可生成 1200 条 preview 报告。当前 runner 不访问 PostgreSQL、Provider、RAG、LLM，preview 数字不进入简历。
 - `B3 OPTIONAL`：配置真实 OpenAI-compatible provider 后，执行回答质量、真实 token/cost 和模型延迟评测；没有 Key 时继续保持 `N/A`，不影响 deterministic 项目运行。
 
-4D-B 的最终数据规模、架构升级、指标公式、执行任务和简历口径统一见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。DAG/`all_history` 评测基线、UnifiedHealthGraph、FinalClaim/Trace v2、v2 数据生成、Materializer、分层 grader、本地 preview Runner 和患者端 Supervisor 实际执行接线已完成；人工审核后的 PostgreSQL/Provider/RAG 全量物化、消融和正式报告仍属于后续目标；LLM Judge 仍只作为离线辅助。
+4D-B 的最终数据规模、架构升级、指标公式、执行任务和简历口径统一见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。DAG/`all_history` 评测基线、UnifiedHealthGraph、FinalClaim/Trace v2、v2 数据生成、Materializer、分层 grader、本地 preview Runner 和患者端 Supervisor 实际执行接线已完成；300/1200 Gold 已完成人工审核，当前正在进行审核后的 PostgreSQL/Provider/RAG 三 split integration。LLM Judge 仍只作为离线辅助。
 
 #### B.1 自动化实现
 
@@ -623,7 +623,7 @@ docs/4D_B_BENCHMARK_GUIDE.md
 3. 把复杂任务建模为有界 DAG；只并行依赖已满足、无副作用的只读领域步骤，确认、写操作、Checkpoint 和治理节点保持串行。
 4. 新增仅供评测使用的 `all_history` 上下文模式，与生产默认 `dependency_only` 比较；即使在基线中也必须保持 user/member 隔离。
 5. `[DONE]` 为 FinalAnswer 增加 FinalClaim，保留成员作用域、事实键、值、类型和 `source_ids`，避免评测时再用 LLM 从正文猜事实。
-6. `[DONE]` 生成 300 个结构化 WorldState，并为每个 WorldState 生成 4 条表达，共 1200 条 v2 Query；按 base case 拆分 development、validation 和 holdout，数据状态为 `pending_review`。
+6. `[DONE]` 生成 300 个结构化 WorldState，并为每个 WorldState 生成 4 条表达，共 1200 条 v2 Query；按 base case 拆分 development、validation 和 holdout，运行前 Gold 已由用户审核并全部标记 `pass`。
 7. `[DONE]` 先用隔离内存 backend 物化 WorldState、Provider 投影、RAG namespace 和 Gold，验证 case namespace、成员来源范围、清理和失败阻断；生产 PostgreSQL/Provider/RAG adapter 已在 B2.6 增加 shadow transaction 边界。
 8. `[DONE]` 为 Route、Plan、Dependency、Tool、Claim、RAG、Agent 安全、上下文、可靠性和最终数据库状态建立确定性 grader，并统一 failure taxonomy。
 9. `[DONE]` 实现统一 v2 Eval Runner、split/max_cases/repeat、幂等 report id、JSON/Markdown 输出和 pending-review gate；B2.6 已增加 A/B/C/D preview、真实图执行器和 Docker 集成报告入口。
@@ -770,7 +770,11 @@ B5.2、B5.3、B5.4 在契约冻结后写入集合互不重叠的代码和测试�
   -> 4D-B5.2 / B5.3 / B5.4 并行实现 DONE
   -> 4D-B5.5 v2 Gold / grader 对齐 DONE
   -> 4D-B5.6 全链路回归与文档收口 DONE
-  -> 补齐 v2 全量 identity/source map 与三 split integration/A-B-C-D 正式报告
+  -> 4D-B 最终评测收口 A：生成 300/1200 Gold 审核队列与 identity/source map 模板 NEXT
+  -> 4D-B 最终评测收口 B：补齐逐 WorldState 实际 identity/source map
+  -> 4D-B 最终评测收口 C：运行 development/validation/holdout 三 split integration
+  -> 4D-B 最终评测收口 D：在同一 manifest 下运行真实 A/B/C/D
+  -> 4D-B 最终评测收口 E：人工 badcase 复核、冻结 manifest 与正式报告
 ```
 
 ## 11. 明确非目标
@@ -791,9 +795,23 @@ B5.2、B5.3、B5.4 在契约冻结后写入集合互不重叠的代码和测试�
 
 4D-B4 已收口：Supervisor 实际执行接线、运行时三个领域 Agent、Tool Evidence、成员隔离测试、README 和核心代码走读均已同步，全量 `backend/tests` 通过。4D-B5.1 冻结的 A+A+A 已全部落地：B5.2 用确定性规则生成业务依赖，B5.3 在 runtime 强制步骤工具上限，B5.4 用兼容适配层收敛角色，B5.5 将 v2 Gold 的 domain DAG 与治理图分开，B5.6 完成回归与文档收口。B3 的 8 条结果只能按固定样本范围写入简历，不能扩展为生产 SLO、临床安全率或开放医疗问答准确率。
 
+当前不是“代码功能开发的最后一步”，而是 4D-B 正式指标的最后一道证据门。MVP 业务和前端主线已经完成；只有下面的 A-E 全部完成后，才能把 v2 的真实回答质量、RAG Recall、安全召回、上下文保留率、Provider 恢复率、三 split p95 或 A/B/C/D 差异写成最终实测结果。未完成前，报告必须保持 `pending_review`、`preview` 或 `N/A`。
+
+| 子步骤 | 状态 | 内容 | 是否需要用户/本机外部条件 |
+|---|---|---|---|
+| A | `DONE` | 生成 `v2_review_queue.local.json` 和 `v2_identity_map.template.local.json`；300 个 WorldState、1200 条 Query 已由用户审核并全部标记 `pass` | 审核队列和模板位于 `var/demo/`，不进 Git |
+| B | `DONE` | 生成逐 WorldState 的 case-scoped 本机 identity/source map；Docker deterministic smoke `2/2` 通过，缺失来源保持 fail-closed | 本机 1 个 demo user、3 个 demo member；90 个 case 没有对应本机健康记录，不能伪造 |
+| C | `IN_PROGRESS` | 使用真实 `UnifiedHealthGraph` 跑 development、validation、holdout，保留 PostgreSQL shadow transaction、Provider/RAG trace 和清理结果 | Docker 和当前本机 map 已就绪；holdout 预检发现 1 个 Gold/runtime 契约不一致，正式报告暂缓 |
+| D | `PENDING` | 在同一数据 manifest、模型/Provider、seed 和环境下运行 A/B/C/D 消融；只改变约定的路由、并发或上下文开关 | 需要 C 通过 |
+| E | `PENDING` | 人工审核 FinalAnswer、FinalClaim、来源和 badcase，生成三 split 正式报告并冻结最终 manifest | 需要人工审核 |
+
+本轮已完成 A/B：`prepare_4d_final_gate.py` 生成审核队列和空模板；用户确认 300/1200 全部 `pass`。`prepare_4d_local_identity_map.py` 从本机 Docker PostgreSQL 读取 demo user/member/profile/record 元数据，生成 300 个 case map；provider/RAG 和报告运行时来源不写入假 ID。B 的 deterministic Docker smoke 只覆盖 2 条样例，报告仍为 `preview`。C 预检已启动：development `4/4`、validation `4/4` 通过；holdout `4/4` 命中同一个已审核安全检查 WorldState 的 Gold/runtime 契约不一致，失败原因包括多余的 Provider 来源要求、缺少 Provider attempt、Safety flag 与 Claim 来源不一致。该问题不会通过伪造 Provider 调用或修改运行结果掩盖；C-E 不能由 smoke、空值或合成实际 ID 代替。
+
 2026-07-30 完成一次 4C 后文档与证据维护：补充面向初学者的逐行核心代码走读、简洁版 Agent 简历、可复现指标与后续 gold set/延迟/Token/重试测量方案、测试充分性边界、本地演示数据库说明和十步 Docker 启动路径。本次维护不改变阶段状态，不把尚未接入业务 API 的 bounded Supervisor 编排内核描述为当前运行链能力。
 
 2026-07-31 完成文档信息架构收口：学习区只保留“从 0 到 1 的任务拆分与技术选型、核心代码逐行走读、完整 API 实战”三条工程主线，简历和项目面经独立分类；删除被当前设计覆盖的阶段教程、旧 3C/3D/4A 与局部 4B 报告和无关通用八股。当前有效证据只保留 32 条编排消融、Docker 后端验收、浏览器 E2E、MVP 收口和 4D 报告。本次整理不改变 4D-B 状态，也不改写简历或面经正文。
+
+2026-08-03 完成 4D-B 最终评测收口 A/B：用户确认 300 个 WorldState 和 1200 条 Query 全部 `pass`；新增本机 Docker identity/source map 生成器，覆盖 300 个 case，deterministic integration smoke `2/2` 通过。发现本机 seed 只有 1 个 demo user、3 个 demo member，90 个 case 缺少本机健康记录；这些 case 后续必须按 fail-closed 处理，不能写成全量真实质量指标。随后进入 C 预检：development `4/4`、validation `4/4` 通过，holdout `4/4` 暴露一个已审核 Gold 与运行时证据契约不一致的问题，当前 C 保持 `IN_PROGRESS`。
 
 2026-07-31 根据最终评测实施方案升级 4D-B：保留 260 条 v1 专项 gold，同时将 UnifiedHealthGraph、有界 DAG 并行、评测用 `all_history` 基线、FinalClaim、300 个 WorldState/1200 条 v2 Query、分层 grader 和统一 Eval Runner 纳入最终目标。生产默认仍使用角色最小上下文，确认、写操作和治理节点保持串行。简历继续使用简洁中文口径，所有新增百分比必须由最终报告生成。
 

@@ -166,7 +166,7 @@ RRF rank、原始两路分数、版本、fallback 和脱敏 Observation 继续�
 
 ## 4D-B2.6 评测物化边界
 
-`backend/app/agent/v2_materializer.py` 的 `InMemoryProjectionBackend` 仍然不是 ORM、不是业务数据库，也不新增 Alembic revision。B2.6 通过 `PostgresV2Materializer` 在单个 case 的 shadow transaction 中创建临时表并回滚，真实执行业务图后只保留 JSON/Markdown 评测产物，不污染业务表。身份和 source alias 必须由本地 identity map 显式提供；未映射的 benchmark 身份直接失败，不能猜测或跨成员回源。Docker 已完成 19/19 后端验收，但 300/1200 全量正式报告仍待人工审核和完整运行。
+`backend/app/agent/v2_materializer.py` 的 `InMemoryProjectionBackend` 仍然不是 ORM、不是业务数据库，也不新增 Alembic revision。B2.6 通过 `PostgresV2Materializer` 在单个 case 的 shadow transaction 中创建临时表并回滚，真实执行业务图后只保留 JSON/Markdown 评测产物，不污染业务表。身份和 source alias 必须由本地 identity map 显式提供；未映射的 benchmark 身份直接失败，不能猜测或跨成员回源。Docker 已完成 19/19 后端验收，300/1200 Gold 已完成人工审核；全量正式报告仍待真实三 split integration、消融和 badcase 复核。
 
 ## 用户端 UX-08 数据边界
 

@@ -339,12 +339,28 @@ class SupervisorBusinessWorkflow(FamilyHealthProductWorkflow):
         *,
         is_confirmation_run: bool,
     ) -> OrchestrationRunResult:
+        # The public business domain is intentionally broader than the
+        # evaluation intent (for example, ``preconsultation`` can contain a
+        # safety-only request).  Integration fixtures may provide a reviewed
+        # intent hint; ordinary API calls do not, so they keep the existing
+        # business-domain fallback.
+        evaluation_intent = state.get("input_payload", {}).get("evaluation_intent")
+        if evaluation_intent not in {
+            "preconsultation",
+            "safety_check",
+            "health_record",
+            "refill",
+            "reminder",
+            "pharmacy",
+            "chronic_care",
+        }:
+            evaluation_intent = state["business_domain"]
         request = ComplexityRoutingRequest(
             task_id=state["task_id"],
             user_id=state["user_id"],
             member_id=state["member_id"],
             user_input=state["user_input"],
-            intent=state["business_domain"],
+            intent=evaluation_intent,
         )
         preview_route = self.supervisor_template.router.route(request)
         runtime = SupervisorAgentRuntime(

@@ -132,7 +132,7 @@ Evaluator 可以读取冻结的 SafetyTrace、`confirmation_state`、最终答�
 
 4D-B2.6 增加了 `PostgresV2Materializer`、`ScopedPostgresRetriever`、`ScopedProviderSandbox` 和 `UnifiedHealthGraphIntegrationExecutor`。它们把一条 v2 case 放入 PostgreSQL shadow transaction，调用真实 UnifiedHealthGraph，并把工具、RAG、Provider attempt、Safety、Claim 和数据库草稿投影成同一个冻结 `RunTrace`。评测仍由 deterministic grader 只读执行，不能修改 FinalAnswer 或业务状态。
 
-Docker 全链路本机证据为 `19/19` 通过；第一条真实 integration sample 的九层 grader 全部通过。由于 v2 数据仍是 `pending_review`，这两个结果只能写成 local evidence/preview，不能写成最终回答质量、RAG Recall 或 Safety recall。A/B/C/D 的默认脚本也是 synthetic preview；真实对比必须为每个 condition 使用同一 manifest 和不同 `EvalRuntimeOptions` 创建真实 graph executor。
+Docker 全链路本机证据为 `19/19` 通过；第一条真实 integration sample 的九层 grader 全部通过。v2 的 300/1200 Gold 已由用户审核并全部标记 `pass`，但这只解决运行前 Gold 审核，不等于真实运行结果全部通过。当前 C 预检 development/validation 各 `4/4` 通过，holdout 的 `4/4` 因一个已审核 Gold 与当前运行时证据契约不一致而失败；因此仍不能写成最终回答质量、RAG Recall 或 Safety recall。A/B/C/D 的默认脚本也是 synthetic preview；真实对比必须为每个 condition 使用同一 manifest 和不同 `EvalRuntimeOptions` 创建真实 graph executor。
 
 完整运行命令和身份映射规则见 [4D-B2.6 集成状态](4D_B2.6_INTEGRATION_STATUS.md)。
 
@@ -146,7 +146,7 @@ Docker 全链路本机证据为 `19/19` 通过；第一条真实 integration sam
 
 `LocalObservedBenchmarkRunner` 把 4D-A gold 数据投影为四组本地观测：bounded Supervisor `RunTrace`、关键词 RAG 排名、ContextManager compact/reset 结果和 Provider attempt trace。4D-B2.1 之后，患者端业务的冻结 `RunTrace` 也包含 `orchestration` 投影，可以检查 Router、Plan、Supervisor decision 和领域 Agent result。它仍然只把冻结产物交给 deterministic 规则计算，不使用 LLM Judge，也不能修改 FinalAnswer 或业务状态。
 
-当前 260 条 4D-A gold 是五组专项数据，不是 260 个端到端 WorldState。4D-B2.1/B4 已建立 UnifiedHealthGraph 到运行时 Supervisor/领域 Agent/Tool Registry 的接入边界，4D-B2.2 已实现 bounded DAG 并行和仅评测可用的 `all_history` 模式，4D-B2.3 已把 FinalClaim/AnswerEnvelope/Trace v2 接入业务冻结产物，4D-B2.4 已生成 300 个 WorldState/1200 条 v2 Query，4D-B2.5 已完成隔离内存物化、九类确定性 grader 和 preview runner。数据仍待全量人工审核，preview 不代表业务质量；下一步是对全部 v2 case 使用同一真实图接口接入 PostgreSQL/Provider/RAG 并生成正式报告。完整执行顺序和指标门槛见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。
+当前 260 条 4D-A gold 是五组专项数据，不是 260 个端到端 WorldState。4D-B2.1/B4 已建立 UnifiedHealthGraph 到运行时 Supervisor/领域 Agent/Tool Registry 的接入边界，4D-B2.2 已实现 bounded DAG 并行和仅评测可用的 `all_history` 模式，4D-B2.3 已把 FinalClaim/AnswerEnvelope/Trace v2 接入业务冻结产物，4D-B2.4 已生成 300 个 WorldState/1200 条 v2 Query，4D-B2.5 已完成隔离内存物化、九类确定性 grader 和 preview runner。用户已审核 300/1200 条 Gold，4D-B2.6 还新增了 300-case 本机 identity/source map 和 deterministic Docker smoke；当前 C 预检 development/validation 各 `4/4` 通过，holdout `4/4` 暴露一项 Gold/runtime 证据契约不一致。preview 不代表全量业务质量；完成契约修正后仍需重跑三 split 并生成正式报告。完整执行顺序和指标门槛见 [Agent 统一架构、评测数据与简历指标最终执行方案](AGENT_EVALUATION_EXECUTION_PLAN.md)。
 
 [4D-B 本地观测报告](local_benchmark_report.4d.md) 使用合成 fixture 和内存 SQLite，因此该报告中的 Safety、RAG、上下文和 Provider 数字只属于固定本地样本，真实 LLM 与 Docker 指标保持 `N/A`。后续 B2.6/B3 已分别补充 Docker 集成和 8 条真实模型固定样本证据，但不能把不同报告的样本与指标混算。
 

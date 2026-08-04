@@ -1315,7 +1315,7 @@ docker compose up -d --build --wait --wait-timeout 300
 5. `backend/app/agent/product_artifacts.py` 把真实编排结果投影为 `RunTrace.orchestration`，其中包含 route、plan、Supervisor decisions、domain-agent results 和 Tool/Source 产物，但不嵌入原始请求文本。
 5. `backend/app/agent/run_trace_schemas.py` 对 route、plan、domain-agent result 的 `task_id/user_id/member_id` 做冻结校验，防止编排产物跨任务或跨成员混入。
 
-这一步的边界很重要：B2.1 现在不仅证明“统一入口和统一审计产物”，还证明 Supervisor 的角色选择会改变真实 Tool 调用；B2.2 的依赖边、ready set 和 fan-out/fan-in 仍只对独立只读步骤开放，正式业务路径强制串行。B2.3 已由 `final_claim_schemas.py`、`product_artifacts.py` 和 `run_trace_schemas.py` 把正文、Claim、成员和来源指针冻结到同一份 AnswerEnvelope/Trace v2；B2.4 已生成待审核的 300 个 WorldState/1200 条 v2 Query，B2.5 已完成内存 projection、九层 grader 和 preview Runner，后续仍需完成 v2 全量 PostgreSQL/Provider/RAG 物化。
+这一步的边界很重要：B2.1 现在不仅证明“统一入口和统一审计产物”，还证明 Supervisor 的角色选择会改变真实 Tool 调用；B2.2 的依赖边、ready set 和 fan-out/fan-in 仍只对独立只读步骤开放，正式业务路径强制串行。B2.3 已由 `final_claim_schemas.py`、`product_artifacts.py` 和 `run_trace_schemas.py` 把正文、Claim、成员和来源指针冻结到同一份 AnswerEnvelope/Trace v2；B2.4 已生成并完成人工审核的 300 个 WorldState/1200 条 v2 Query，B2.5 已完成内存 projection、九层 grader 和 preview Runner，后续仍需完成 v2 全量 PostgreSQL/Provider/RAG 物化。
 
 ### 4D-B2.3 FinalClaim 代码走读入口
 
@@ -1324,7 +1324,7 @@ docker compose up -d --build --wait --wait-timeout 300
 3. `product_artifacts.build_run_trace()` 在业务答案冻结时创建 AnswerEnvelope；`RunTrace` 额外校验 run/task/member、正文、来源集合和依赖结果集合必须一致。
 4. `DeterministicEvaluator._claim_metrics()` 只读取冻结 Claim 和 Tool/RAG source pointer，计算 evidence coverage、source precision 和 consistency，不使用 LLM 反向猜测答案事实。
 
-这套设计现在已经配合 `v2_benchmark_schemas.py` 和 `v2_benchmark_generator.py` 生成 300 个 WorldState/1200 条 Query，B2.5 的 Materializer 和 grader 已能在内存 projection 上验证管线；数据仍是 `pending_review`，不能直接当作最终 gold。下一步是把同一接口接到 PostgreSQL、Provider 和 RAG，再由真实 UnifiedHealthGraph 生成冻结 Trace。
+这套设计现在已经配合 `v2_benchmark_schemas.py` 和 `v2_benchmark_generator.py` 生成 300 个 WorldState/1200 条 Query，B2.5 的 Materializer 和 grader 已能在内存 projection 上验证管线；用户已完成运行前 Gold 审核并全部标记 `pass`，但这些审核结果不能直接当作回答质量结果。下一步是把同一接口接到 PostgreSQL、Provider 和 RAG，再由真实 UnifiedHealthGraph 生成冻结 Trace。
 
 ### 4D-B2.4 数据生成代码走读入口
 
