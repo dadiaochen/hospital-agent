@@ -80,7 +80,7 @@ class DeterministicHashEmbeddingProvider:
 
 
 class FastEmbedEmbeddingProvider:
-    """CPU-only FastEmbed adapter that does not load a model until first use."""
+    """FastEmbed adapter with lazy CPU/CUDA device selection."""
 
     def __init__(
         self,
@@ -88,10 +88,14 @@ class FastEmbedEmbeddingProvider:
         model_name: str = DEFAULT_EMBEDDING_MODEL,
         cache_dir: str | Path | None = "var/models/fastembed",
         dimension: int | None = EMBEDDING_DIMENSION,
+        device: str = "cpu",
     ) -> None:
+        if device not in {"cpu", "cuda", "auto"}:
+            raise ValueError("device must be one of: cpu, cuda, auto")
         self.model_name = model_name
         self.cache_dir = Path(cache_dir) if cache_dir else None
         self.dimension = dimension
+        self.device = device
         self._model: Any | None = None
 
     def embed_query(self, text: str) -> list[float]:
@@ -130,13 +134,30 @@ class FastEmbedEmbeddingProvider:
         if self.cache_dir is not None:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
         try:
-            kwargs: dict[str, str] = {"model_name": self.model_name}
+            kwargs: dict[str, Any] = {"model_name": self.model_name}
             if self.cache_dir is not None:
                 kwargs["cache_dir"] = str(self.cache_dir)
-            self._model = TextEmbedding(**kwargs)
+            # FastEmbed's default is automatic device selection. Keep an
+            # explicit CPU default for reproducible local runs, while allowing
+            # benchmark jobs to opt into CUDA through configuration.
+            if self.device != "auto":
+                kwargs["cuda"] = self.device == "cuda"
+            model = TextEmbedding(**kwargs)
+            if self.device == "cuda":
+                session = getattr(getattr(model, "model", None), "model", None)
+                get_providers = getattr(session, "get_providers", None)
+                providers = list(get_providers()) if callable(get_providers) else []
+                if "CUDAExecutionProvider" not in providers:
+                    raise EmbeddingProviderUnavailableError(
+                        "CUDA was requested but FastEmbed did not create a CUDAExecutionProvider"
+                    )
+            self._model = model
+        except EmbeddingProviderUnavailableError:
+            self._model = None
+            raise
         except Exception as exc:
             raise EmbeddingProviderUnavailableError(
-                f"unable to load embedding model {self.model_name}"
+                f"unable to load embedding model {self.model_name} on {self.device}"
             ) from exc
         return self._model
 

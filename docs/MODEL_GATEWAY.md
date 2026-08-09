@@ -130,7 +130,7 @@ LLM Judge 不复用运行时 Gateway 做在线决策。若进行实验，只离�
 
 任务九深化的 Medical Document/Pharmacy/Hospital Provider 负责外部业务数据适配，Model Gateway 负责模型推理。两者共享“固定 timeout、有限重试、schema、attempt、fallback”原则，但不能混用：业务 Provider 失败时不得由 LLM fallback 编造库存、科室、报告字段或 SourceRef；Model Gateway 的 deterministic fallback 也不代表业务 Provider 调用成功。
 
-## 11. 任务十模型与 token 可观测字段
+## 11. 模型与 token 可观测字段
 
 `ProviderRawResponse`、`ModelProviderAttemptTrace` 和 `ModelCallTrace` 支持完整的 `input_tokens/output_tokens/total_tokens`。OpenAI-compatible Provider 只在响应 `usage` 同时提供三项且总数一致时记录；缺失或不完整时全部保留为 `null`，`token_usage_available=false`。deterministic provider 不估算 token。
 
@@ -138,7 +138,7 @@ LLM Judge 不复用运行时 Gateway 做在线决策。若进行实验，只离�
 
 任务十一三组共享 `deterministic/deterministic-product-answer-v1` 和相同 token 上限。由于 deterministic provider 不返回 usage，所有消融结果保持 `token_usage_available=false`、token/cost 为 `N/A`；Harness 明确拒绝在 usage 缺失时填入合成计数。
 
-## 12. 4D-B3 真实模型评测
+## 12. 真实模型评测
 
 `scripts/run_4d_b3_real_llm.py` 是离线安全的评测入口：没有 `--live` 时不访问模型；有 `--live` 时仍要求 `MODEL_PROVIDER=openai_compatible`、真实 `MODEL_API_BASE`、`MODEL_API_KEY`、`MODEL_NAME` 和本地 identity/source map。它复用 PostgreSQL shadow transaction、UnifiedHealthGraph、九层 deterministic grader 和当前 Model Gateway。
 

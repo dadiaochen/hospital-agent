@@ -817,7 +817,7 @@ class MemoryRef(ContractModel):
 | `test_preference_service.py` | 无确认、跨成员或来源版本过期 | 拒绝写入长期偏好 |
 | `test_deterministic_evaluator.py` | RunTrace 的成员不一致 | `context_isolation_passed=false` |
 
-这些测试证明规则边界，但不能直接换算成“记忆准确率”。要得到可写进简历的独立指标，需要建立固定多轮评测集，比较 compact、reset、checkpoint 恢复前后的关键信息保留率、来源保留率、未确认写入率、跨成员泄漏率和 token 降幅。完整动手流程见 [项目面经问题库 Q14](PROJECT_INTERVIEW_QUESTION_BANK.md#q14-怎么评测上下文和记忆机制)。
+这些测试证明规则边界，但不能直接换算成“记忆准确率”。独立指标需要固定多轮评测集，比较压缩、重置和 Checkpoint 恢复前后的关键信息保留率、来源保留率、未确认写入率、跨成员泄漏率和 token 降幅；当前规则见 [上下文管理](../CONTEXT_MANAGEMENT.md)。
 
 ## 8. Tool Registry、数据库工具和 Provider
 
@@ -1304,7 +1304,7 @@ docker compose up -d --build --wait --wait-timeout 300
 
 这份文档是学习用代码地图，不替代 [开发总路线图](../DEVELOPMENT_ROADMAP.md)、[技术设计](../TECH_DESIGN.md) 或 [API 文档](../API_SPEC.md)。
 
-## 4D-B2.1 UnifiedHealthGraph 代码地图
+## UnifiedHealthGraph 代码地图
 
 这一阶段先解决“患者端入口和独立编排内核分离”的问题；当前 Supervisor 收口还补上了“编排结果必须控制真实执行”的因果关系；4D-B2.2 的有界只读 DAG 仍作为独立评测能力保留：
 
@@ -1317,7 +1317,7 @@ docker compose up -d --build --wait --wait-timeout 300
 
 这一步的边界很重要：B2.1 现在不仅证明“统一入口和统一审计产物”，还证明 Supervisor 的角色选择会改变真实 Tool 调用；B2.2 的依赖边、ready set 和 fan-out/fan-in 仍只对独立只读步骤开放，正式业务路径强制串行。B2.3 已由 `final_claim_schemas.py`、`product_artifacts.py` 和 `run_trace_schemas.py` 把正文、Claim、成员和来源指针冻结到同一份 AnswerEnvelope/Trace v2；B2.4 已生成并完成人工审核的 300 个 WorldState/1200 条 v2 Query，B2.5 已完成内存 projection、九层 grader 和 preview Runner，后续仍需完成 v2 全量 PostgreSQL/Provider/RAG 物化。
 
-### 4D-B2.3 FinalClaim 代码走读入口
+### FinalClaim 代码走读入口
 
 1. `FinalClaim` 是一条原子事实：`fact_key` 表示事实类型，`value` 是结构化值，`subject_id` 绑定当前成员，`source_ids` 指向本次 RunTrace 已采集的证据。
 2. `AnswerEnvelope` 把可读的 `display_text` 与 claims、确认状态、上下文来源和依赖结果放在同一个契约中，避免正文和评测产物来自两次不同生成。
@@ -1326,7 +1326,7 @@ docker compose up -d --build --wait --wait-timeout 300
 
 这套设计现在已经配合 `v2_benchmark_schemas.py` 和 `v2_benchmark_generator.py` 生成 300 个 WorldState/1200 条 Query，B2.5 的 Materializer 和 grader 已能在内存 projection 上验证管线；用户已完成运行前 Gold 审核并全部标记 `pass`，但这些审核结果不能直接当作回答质量结果。下一步是把同一接口接到 PostgreSQL、Provider 和 RAG，再由真实 UnifiedHealthGraph 生成冻结 Trace。
 
-### 4D-B2.4 数据生成代码走读入口
+### 数据生成代码走读入口
 
 1. `V2WorldStateDataset` 保存 300 个独立世界，每个世界有自己的成员、来源指针、Provider 状态、知识版本、故障注入和 Gold 预期。
 2. `V2QueryDataset` 保存 1200 条表达；`world_state_id`、`base_case_id` 和 `dataset_split` 让四种表达不能跨世界或跨 split 混用。
@@ -1334,7 +1334,7 @@ docker compose up -d --build --wait --wait-timeout 300
 4. `load_v2_benchmark()` 先校验 SHA-256，再校验 Pydantic 契约、split 数量、类别数量和 Query/WorldState 关联。
 5. `human_reviewed=false` 是刻意保留的边界：生成器可以保证结构和可重复性，但不能替代人工审核医疗安全标签。
 
-## 4D-B Benchmark Runner 代码地图
+## Benchmark Runner 代码地图
 
 学习入口是 `backend/app/agent/benchmark_runner.py`：
 
@@ -1347,7 +1347,7 @@ docker compose up -d --build --wait --wait-timeout 300
 
 运行入口是 `scripts/run_4d_benchmark.py` 和 `scripts/run_4d_local_benchmark.py`。先看 `benchmark_schemas.py` 中的 `BenchmarkManifest`、`BenchmarkMetric` 和 `BenchmarkReport`，再回到两个 runner 追踪“原始 JSON -> Pydantic -> 校验/执行 -> 指标 -> 报告”的数据流。
 
-## 4D-B2.5 Materializer / Grader / Runner 代码走读
+## Materializer、Grader 与 Runner 代码走读
 
 这一阶段最适合学习“如何把一个评测计划落成可重复的工程管线”。它没有把所有逻辑塞进一个大函数，而是拆成四个角色：
 
@@ -1358,7 +1358,7 @@ docker compose up -d --build --wait --wait-timeout 300
 | `v2_graders.py` | 对冻结的 `RunTrace` 和 Gold 做九类确定性比较 | 不改答案，不调用 LLM |
 | `v2_eval_runner.py` | 加载、物化、执行、评分、清理、聚合和写报告 | 不把 preview 当作正式质量指标 |
 
-### 4D-B2.5.1 为什么先做内存 Materializer
+### 为什么先做内存 Materializer
 
 评测一个业务系统时，标准答案和运行事实必须来自同一个 WorldState。否则测试可能拿 A 数据生成期望答案，却让系统读取 B 数据，最后失败原因无法解释。
 
@@ -1390,7 +1390,7 @@ receipt = materializer.cleanup(materialized)
 
 这就是“评测数据隔离”在代码中的体现，不是靠 Agent 自己记住不要串成员。
 
-### 4D-B2.5.2 看懂 MaterializationReceipt
+### 看懂 MaterializationReceipt
 
 `MaterializationReceipt` 是一次物化的收据，不是业务表：
 
@@ -1410,7 +1410,7 @@ receipt = MaterializationReceipt(
 
 `cleanup()` 设计成幂等：第一次删除 namespace，第二次删除已经不存在的 namespace 仍返回成功。这样 runner 在异常处理和 finally 中重复清理不会把“已经清理完成”误报为新错误。
 
-### 4D-B2.5.3 为什么要把九类 grader 分开
+### 为什么要把九类 grader 分开
 
 一个 `task_success=True/False` 不足以解释系统为什么失败。例如“任务失败”可能是路由错、工具少调、来源过期、成员串扰或确认绕过。于是 `V2DeterministicGraders.LAYER_ORDER` 固定九个独立维度：
 
@@ -1444,7 +1444,7 @@ LayerGrade(
 
 稳定错误码的价值是：报告可以按原因聚合，测试可以精确断言，简历面试时也能解释“失败不是一个黑盒布尔值”。
 
-### 4D-B2.5.4 以 Tool Grader 为例读懂集合比较
+### 以 Tool Grader 为例读懂集合比较
 
 `tool_grader` 的核心是集合差集：
 
@@ -1465,7 +1465,7 @@ score = len(expected & observed) / len(expected) if expected else 1.0
 
 `&` 是集合交集，表示正确覆盖了多少个必要工具；`if expected else 1.0` 是为了处理“该 case 本来不需要工具”的边界。注意：部分分数只是诊断信息，`task_success` 仍要求该层完全通过。
 
-### 4D-B2.5.5 Claim 和 RAG 为什么要分开
+### Claim 和 RAG 为什么要分开
 
 RAG grader 只回答“引用的 source 是否存在、是否过期、是否被 Trace 记录”；Claim grader 还要回答“事实值、事实类型、成员和 source_ids 是否一致”。
 
@@ -1476,7 +1476,7 @@ Claim:  fact_key/value/subject_id/source_ids 是否与 Gold 一致
 
 这样可以区分两种错误：检索到了正确文档但回答事实写错，或者回答看似正确但根本没有来源。没有 source 且 `contains_factual_claims=True` 时，RAG grader 会生成 `rag.unsourced_factual_answer`。
 
-### 4D-B2.5.6 Runner 的 finally 为什么重要
+### Runner 的 finally 为什么重要
 
 `V2EvalRunner._run_one()` 的生命周期是：
 
@@ -1499,7 +1499,7 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 
 当前全量 preview 能跑完 1200 条 Query，并输出 `task_success_rate`、九层 pass rate、平均延迟和 p95 preview latency。这里的 100% 只说明 `SyntheticProjectionExecutor` 与 Gold 一致，不能说明真实业务图 100% 正确；下一阶段必须用真实 UnifiedHealthGraph、PostgreSQL、Provider sandbox 和 RAG namespace 替换 executor/backend。
 
-### 4D-B2.5.7 学习时故意制造三个失败
+### 学习时故意制造三个失败
 
 1. 删除一个 `ToolCallTrace`：观察 `tool.missing` 和 RAG 未引用来源错误。
 2. 把 `RunTrace.member_id` 改成另一个成员：观察 `context.member_mismatch`。
@@ -1507,7 +1507,7 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 
 修改测试前先复制对象，再用 `model_copy(update=...)` 构造坏产物；不要直接改 fixture 原文件。读懂这三个失败后，你就能从“输入 fixture -> 物化 -> 冻结 Trace -> 单层 grader -> 聚合报告”完整讲出一条评测链路。
 
-## 4D-B5 编排收口代码地图
+## 编排收口代码地图
 
 这一轮修复解决的是“计划写了什么，运行时是否真的遵守”三个问题。学习顺序建议固定为：
 
@@ -1518,7 +1518,7 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 5. `supervised_workflow.py` 在真正进入旧 Workflow/Tool handler 前拒绝计划外工具；
 6. `legacy_role_adapter.py` 只在兼容入口把旧角色映射为 canonical 领域角色，不让旧命名进入新业务计划。
 
-### 4D-B5.2 依赖如何从用户表达变成 DAG
+### 依赖如何从用户表达变成 DAG
 
 `DependencyHint` 是“角色之间的业务关系”，例如：
 
@@ -1555,7 +1555,7 @@ dependencies_by_role = {
 
 没有“先看报告再续方”这类明确表达时，依赖为空是正确结果；它代表并列关系，不代表 Planner 失效。`safety-review`、Confirmation 和 Evaluator 不在这里，因为它们属于固定治理图。
 
-### 4D-B5.3 计划级工具权限如何真正生效
+### 计划级工具权限如何真正生效
 
 运行时 Agent 的 `_call()` 不只传工具名，还必须传当前计划步骤：
 
@@ -1589,7 +1589,7 @@ return self.workflow._call(...)
 
 因此权限是交集，而不是并集：角色允许工具、PlanStep 允许工具、成员作用域和安全状态必须同时通过。测试文件 `test_plan_tool_permissions.py` 专门验证“计划拒绝时 handler 没有被调用”。
 
-### 4D-B5.4 canonical Agent 与旧角色如何隔离
+### canonical Agent 与旧角色如何隔离
 
 正式 Supervisor registry 只接受三个业务 Agent：`TriageAgent`、`MedicationAgent`、`ReportAgent`。旧入口仍可能传入 `RefillAgent` 等名称，所以通过显式适配层处理：
 
@@ -1605,7 +1605,7 @@ map_role("RefillAgent")
 
 这意味着 `RefillAgent` 不是第四个正式 Agent，而是 `MedicationAgent` 的兼容 skill。`SafetyAgent` 是治理层，`Planner` 是规划组件；它们都不能被映射成业务执行 Agent。未知角色必须 fail closed，避免拼写错误变成越权路由。
 
-### 4D-B5.5 评测为什么分两张图
+### 评测为什么分两张图
 
 v2 Gold 使用四组字段：`expected_domain_steps`、`expected_domain_dependency_edges`、`expected_governance_steps`、`expected_governance_edges`。前两组回答“Supervisor 业务 DAG 是否正确”，后两组回答“Safety/Confirmation/FinalAnswer/Evaluator 固定边是否执行”。
 

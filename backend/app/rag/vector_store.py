@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -134,10 +134,16 @@ class PgVectorSearchBackend:
         provider: EmbeddingProvider,
         *,
         min_score: float = 0.35,
+        allowed_document_ids: Collection[str] | None = None,
     ) -> None:
         self._db = db
         self._provider = provider
         self._min_score = min_score
+        self._allowed_document_ids = (
+            frozenset(allowed_document_ids)
+            if allowed_document_ids is not None
+            else None
+        )
 
     @property
     def provider_name(self) -> str:
@@ -163,16 +169,17 @@ class PgVectorSearchBackend:
                 "embedding dimension does not match pgvector schema"
             )
 
-        indexed_chunk_id = self._db.scalar(
-            select(KnowledgeChunk.id)
-            .where(
-                KnowledgeChunk.embedding.is_not(None),
-                KnowledgeChunk.embedding_model == self._provider.model_name,
-                KnowledgeChunk.embedding_content_hash.is_not(None),
-                KnowledgeChunk.embedded_at.is_not(None),
-            )
-            .limit(1)
+        indexed_statement = select(KnowledgeChunk.id).where(
+            KnowledgeChunk.embedding.is_not(None),
+            KnowledgeChunk.embedding_model == self._provider.model_name,
+            KnowledgeChunk.embedding_content_hash.is_not(None),
+            KnowledgeChunk.embedded_at.is_not(None),
         )
+        if self._allowed_document_ids is not None:
+            indexed_statement = indexed_statement.where(
+                KnowledgeChunk.document_id.in_(self._allowed_document_ids)
+            )
+        indexed_chunk_id = self._db.scalar(indexed_statement.limit(1))
         if indexed_chunk_id is None:
             raise VectorIndexUnavailableError("no compatible knowledge embeddings")
 
@@ -184,7 +191,7 @@ class PgVectorSearchBackend:
 
         distance = KnowledgeChunk.embedding.cosine_distance(query_vector)
         score = (1.0 - distance).label("score")
-        rows = self._db.execute(
+        search_statement = (
             select(
                 KnowledgeChunk,
                 KnowledgeDocument,
@@ -202,8 +209,12 @@ class PgVectorSearchBackend:
                 distance <= 1.0 - self._min_score,
             )
             .order_by(distance, KnowledgeChunk.id)
-            .limit(request.limit)
         )
+        if self._allowed_document_ids is not None:
+            search_statement = search_statement.where(
+                KnowledgeChunk.document_id.in_(self._allowed_document_ids)
+            )
+        rows = self._db.execute(search_statement.limit(request.limit))
         matches: list[VectorMatch] = []
         for chunk, document, raw_score in rows:
             expected_hash = embedding_content_hash(
@@ -240,6 +251,7 @@ def create_configured_embedding_provider() -> EmbeddingProvider:
             model_name=settings.rag_embedding_model,
             cache_dir=settings.rag_embedding_cache_dir,
             dimension=settings.rag_embedding_dimensions,
+            device=settings.rag_embedding_device,
         )
     if settings.rag_embedding_provider == "deterministic":
         return DeterministicHashEmbeddingProvider(
@@ -251,11 +263,16 @@ def create_configured_embedding_provider() -> EmbeddingProvider:
     )
 
 
-def create_configured_vector_backend(db: Session) -> PgVectorSearchBackend:
+def create_configured_vector_backend(
+    db: Session,
+    *,
+    allowed_document_ids: Collection[str] | None = None,
+) -> PgVectorSearchBackend:
     return PgVectorSearchBackend(
         db,
         create_configured_embedding_provider(),
         min_score=settings.rag_vector_min_score,
+        allowed_document_ids=allowed_document_ids,
     )
 
 

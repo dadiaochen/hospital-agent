@@ -111,7 +111,7 @@ UX-06 报告详情同样没有新增 ORM 字段、Alembic migration 或上传表
   -> 0007_task_checkpoint_state
 ```
 
-## 11. 4D-B4 Supervisor 实际执行说明
+## 11. Supervisor 运行数据说明
 
 4D-B4 没有修改 ORM、Alembic migration 或 seed。`SupervisorBusinessWorkflow`
 复用现有 `agent_runs`、`agent_tool_calls`、`raw_state` 和业务任务冻结产物记录
@@ -133,13 +133,13 @@ UX-06 报告详情同样没有新增 ORM 字段、Alembic migration 或上传表
 
 禁止再次创建平行的 `0003` revision；新增 schema 变更必须从 `0007_task_checkpoint_state` 继续串联，并同步 ORM、seed、测试和本节说明。验收命令是 `python -m alembic heads`，预期只输出 `0007_task_checkpoint_state`。
 
-## 11. 4B 模型接入说明
+## 12. 模型接入说明
 
 4B 的模型 provider 配置只来自 backend 环境变量，不新增 provider-specific ORM 字段；当前仓库完整 schema 以本节的 `0001` 到 `0007` 迁移链为准。Key、完整 prompt 和 provider 原始文本不写入数据库。既有 `agent_runs.raw_state` 只保存版本化、脱敏的 `ModelCallTrace`。
 
 4B 任务五和任务六只新增内存中的 Pydantic 编排契约、deterministic Router、三个领域 Agent 和 bounded Supervisor，没有修改 ORM、Alembic、seed 或数据库连接；任务六的 `OrchestrationRunResult` 不是独立持久化表。4D-B2.1 由 `UnifiedHealthGraph` 把该结果投影到同一次 `RunTrace`，随业务任务的冻结运行产物进入既有状态保存边界，仍不新增 migration。任务八已把状态恢复边界接入业务任务 service，但没有把 Tool/Provider 可靠性或复杂 RAG 编排提前带入本阶段。
 
-## 12. 4B 最终状态存储目标
+## 13. 状态存储边界
 
 任务八已落地以下 schema 边界：
 
@@ -151,20 +151,20 @@ UX-06 报告详情同样没有新增 ORM 字段、Alembic migration 或上传表
 
 `backend/app/services/checkpoint_service.py` 负责权威 checkpoint 的事务写入和 allow-list 投影，`backend/app/services/task_checkpoint_cache.py` 负责 Redis TTL/失效回源，`backend/app/services/preference_service.py` 负责确认后偏好写入。Redis miss、过期、作用域/版本不匹配或异常不会改变 PostgreSQL 业务结果。
 
-## 13. 任务九数据库边界
+## 14. 工具与 Provider 数据库边界
 
 任务九没有新增 ORM、Alembic migration 或 seed。Tool attempts 随 `AgentToolCall.tool_output` 保存；Provider attempts、统一 error category 和降级详情保存在现有 `provider_calls.response_payload` JSON 中，现有 `latency_ms/retryable/degraded/fallback_reason` 列继续保存可查询摘要。失败 Provider 不创建 `source_references` 记录。
-## 4B 任务十：数据作用域与 Trace 存储
+## 15. 数据作用域与 Trace 存储
 
 任务十没有修改 ORM 或迁移链。处方、购药记录和药箱读取改为在同一 SQL statement 中联结 `family_members`，同时约束 `FamilyMember.user_id`、`FamilyMember.id` 与业务表 `member_id`；即使调用方拿到另一用户的旧成员/资源 ID，数据库查询也不会返回记录。
 
 RRF rank、原始两路分数、版本、fallback 和脱敏 Observation 继续存入现有 JSON 审计边界（`source_references.source_metadata`、`agent_runs.raw_state` 和 checkpoint frozen artifacts），没有为可观测性新增业务表。Redis 仍不是权威存储；缓存 payload 的 user/member/task/thread/version 任一不匹配都按 miss 处理并回源 PostgreSQL。
 
-## 4B 任务十一：无数据库变更
+## 16. 离线评测的数据库边界
 
-任务十一没有新增 ORM、Alembic migration、seed 或 Redis key。32 条 case 位于测试 fixture，96 份 `RunTrace` 和聚合结果由离线运行器生成；默认 JSON/Markdown 输出到被 Git 忽略的 `output/`。任务十二没有新增 schema；已在真实 Docker PostgreSQL 中验证唯一迁移 head `0007_task_checkpoint_state`、seed 数据、pgvector 向量数据和 Redis 故障时的 PostgreSQL checkpoint 回源。结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。
+编排与评测没有新增 ORM、Alembic migration、seed 或 Redis key。固定用例的 `RunTrace` 和聚合结果由离线运行器生成，默认输出到被 Git 忽略的 `output/`。真实 Docker PostgreSQL 已验证迁移、seed、pgvector 数据和 Redis 故障时的 PostgreSQL Checkpoint 回源，历史结果见 [项目执行历史](EXECUTION_HISTORY.md)。
 
-## 4D-B2.6 评测物化边界
+## 17. 评测物化边界
 
 `backend/app/agent/v2_materializer.py` 的 `InMemoryProjectionBackend` 仍然不是 ORM、不是业务数据库，也不新增 Alembic revision。B2.6 通过 `PostgresV2Materializer` 在单个 case 的 shadow transaction 中创建临时表并回滚，真实执行业务图后只保留 JSON/Markdown 评测产物，不污染业务表。身份和 source alias 必须由本地 identity map 显式提供；未映射的 benchmark 身份直接失败，不能猜测或跨成员回源。Docker 已完成 19/19 后端验收，300/1200 Gold 已完成人工审核；全量正式报告仍待真实三 split integration、消融和 badcase 复核。
 

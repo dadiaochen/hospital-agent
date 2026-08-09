@@ -221,7 +221,7 @@ npm run test:e2e
 
 场景包括：续方未确认停留在 `DRAFT`、续方确认续跑、提醒确认、复诊材料回归、高风险 `BLOCKED`、成员切换清理旧结果和 API 失败提示。测试不会调用真实 LLM、医院、药店或通知 Provider。
 
-### 0.8 4C-4 最终 MVP 收口
+### 0.8 MVP 收口
 
 当 Docker、`.venv`、`frontend/node_modules` 和 Edge 都已准备好时，可以从仓库根目录执行完整验收：
 
@@ -442,11 +442,11 @@ npm.cmd run dev
 npm.cmd install --package-lock=false --registry=https://registry.npmjs.org
 ```
 
-## 4B. 完整学习主路线：PostgreSQL/Redis 进 Docker
+## 4. 完整学习主路线：PostgreSQL/Redis 进 Docker
 
 这是项目学习、开发、Swagger/Postman 和前后端联调的正式方式。
 
-### 4B.0 第一次拉取镜像前把数据放到 E 盘
+### 4.0 第一次拉取镜像前把数据放到 E 盘
 
 1. 打开 Docker Desktop。
 2. 进入 `Settings -> Resources -> Advanced`。
@@ -456,7 +456,7 @@ npm.cmd install --package-lock=false --registry=https://registry.npmjs.org
 
 不要用资源管理器剪切 Docker 或 WSL 内部文件。PostgreSQL 的 `postgres_data` 和 Redis 的 `redis_data` 是 named volume，实际保存在 Docker 的 Linux 磁盘镜像中；只要该磁盘位置是 `E:\DockerData`，后续大数据就不会主要占用 C 盘。
 
-### 4B.1 启动 PostgreSQL 和 Redis
+### 4.1 启动 PostgreSQL 和 Redis
 
 ```powershell
 docker compose up -d postgres redis
@@ -470,7 +470,7 @@ docker compose logs postgres
 docker compose logs redis
 ```
 
-### 4B.2 激活 Python 并设置导入路径
+### 4.2 激活 Python 并设置导入路径
 
 每个新 PowerShell 都要重新执行：
 
@@ -481,7 +481,7 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 
 `PYTHONPATH` 告诉 Python：`app` 包在 `backend` 下；它只对当前窗口有效。
 
-### 4B.3 执行 migration
+### 4.3 执行 migration
 
 ```powershell
 python -m alembic upgrade head
@@ -498,7 +498,7 @@ python -m alembic heads
 
 当前唯一 head 是 `0007_task_checkpoint_state`。如果 `python -m alembic heads` 输出两个或更多 revision，说明迁移链发生分叉，应先停止 seed 和服务启动，修复 migration graph 后再继续。
 
-### 4B.4 写入 demo seed
+### 4.4 写入 demo seed
 
 ```powershell
 python scripts\seed.py
@@ -506,7 +506,7 @@ python scripts\seed.py
 
 seed 可重复执行，会准备 demo user、家庭成员、档案、药箱、处方、库存、知识文档和审计示例。
 
-### 4B.5 启动 FastAPI
+### 4.5 启动 FastAPI
 
 ```powershell
 python -m uvicorn app.main:app --reload --app-dir backend
@@ -525,7 +525,7 @@ python -m uvicorn app.main:app --reload --app-dir backend
 - `http://localhost:8000/docs`
 - `http://localhost:8000/openapi.json`
 
-### 4B.6 启动前端（可选）
+### 4.6 启动前端（可选）
 
 Postman 测后端不需要前端。需要页面时新开 PowerShell：
 
@@ -625,7 +625,7 @@ Compose 为四个服务都配置了 healthcheck：PostgreSQL 使用 `pg_isready`
 
 Redis 健康只表示缓存/协调服务可访问。任务八已在业务 task runtime 中实现 Redis miss、连接失败、TTL 到期、作用域/版本错配时回源 PostgreSQL Task Checkpoint；不得因为 Redis 不可用而丢失确认记录、用户偏好或任务权威状态。Compose 只验证 Redis health，不等同于真实并发、wall-clock 或生产高可用验收。
 
-### 7.1 4B 任务十二真实后端验收
+### 7.1 本地真实后端验收
 
 任务十二使用本机 Docker 栈验证 migration、幂等 seed、三条业务任务 API、pgvector 数据、Redis 故障回源和并发确认。下面的变量只对当前 PowerShell 会话生效，不会改写仓库 `.env`；`--require-vector` 会在没有兼容向量数据时明确失败。
 
@@ -638,11 +638,11 @@ docker compose up -d --build --wait --wait-timeout 300
 .\.venv\Scripts\python.exe scripts\task12_acceptance.py --require-vector
 ```
 
-Redis 故障回归：在一个终端临时执行 `docker compose stop redis`，在另一个终端执行 `.\.venv\Scripts\python.exe scripts\task12_acceptance.py --mode redis-failure --require-vector --skip-index`，完成后必须执行 `docker compose start redis`。该过程只验证 PostgreSQL 权威 checkpoint 的回源，不是生产高可用或容量压测。完整结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。
+Redis 故障回归：在一个终端临时执行 `docker compose stop redis`，在另一个终端执行 `.\.venv\Scripts\python.exe scripts\task12_acceptance.py --mode redis-failure --require-vector --skip-index`，完成后必须执行 `docker compose start redis`。该过程只验证 PostgreSQL 权威 Checkpoint 的回源，不是生产高可用或容量压测；历史结果见 [项目执行历史](EXECUTION_HISTORY.md)。
 
 完整演示顺序、RAG/模型模式和故障处理见 [MVP 演示手册](DEMO_RUNBOOK.md)。
 
-## 7.2 4D-B2.6 评测集成
+## 7.2 评测集成
 
 Docker 全链路启动后，可以运行本机回归入口：
 
@@ -651,7 +651,7 @@ Set-Location E:\project_code\hospital
 .\.venv\Scripts\python.exe scripts\run_4d_b26_docker_regression.py --start
 ```
 
-真实 v2 integration 需要一个只存在于本机的 identity map，把 benchmark user/member/source 映射到 Docker PostgreSQL 的 demo rows；不能把这个文件提交到 GitHub。运行方式、PostgreSQL shadow transaction、RAG source allow-list、Provider sandbox 和 A/B/C/D preview 见 [4D-B2.6 集成状态](4D_B2.6_INTEGRATION_STATUS.md)。
+真实集成评测需要一个只存在于本机的 identity map，把 benchmark user/member/source 映射到 Docker PostgreSQL 的 demo rows；不能把这个文件提交到 GitHub。当前运行入口见 [测试指南](TESTING_GUIDE.md)，历史过程见 [项目执行历史](EXECUTION_HISTORY.md)。
 
 Docker 回归报告中的 `19/19` 是本机部署和接口证据，不是生产 SLO；v2 Gold 已完成人工审核，但三 split 真实 integration 报告仍标记为 `preview`，直到 C-E 验收完成。
 
@@ -830,4 +830,4 @@ docker compose exec -T backend python scripts/run_4d_b3_real_llm.py `
   --output-dir output/benchmarks/4d-b3-real-llm-check
 ```
 
-只有确认要产生真实模型费用时，才加入 `--live`、本地 identity map 和 `--max-cases 1`。完整流程见 [4D-B3 真实模型评测](4D_B3_REAL_LLM.md)。
+只有确认要产生真实模型费用时，才加入 `--live`、本地 identity map 和 `--max-cases 1`。当前配置与评测流程见 [大模型配置](LLM_CONFIGURATION.md) 和 [测试指南](TESTING_GUIDE.md)。

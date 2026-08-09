@@ -115,21 +115,21 @@ DRAFT
 ## 9. Provider 降级安全
 
 任务九把 Provider 失败纳入事实门禁：任何 `success=false`、身份/schema 不匹配、重试耗尽或未配置 adapter 的响应都不得携带 data/SourceRef，也不得触发订单、预约、问诊提交或通知成功文案。只有强 schema 校验通过的成功响应可成为工具证据；mock 来源必须明确标记模拟。Safety Guard 不负责重试，但会继续阻止 Agent 用降级摘要补写医疗事实或绕过确认。
-## 4B 任务十：隔离攻击属于确定性安全边界
+## 隔离攻击的确定性安全边界
 
 成员隔离不交给 Prompt 或模型判断。攻击者使用另一用户的旧成员/资源 ID、让 Prompt 要求忽略成员范围、伪造 Tool identity，或把另一成员 checkpoint 残留写到预期 Redis key 时，系统分别在 SQL 资源归属、Pydantic `extra=forbid`、Tool execution context 和 cache payload scope 层拒绝。失败不得产生 ToolEvidence、SourceRef 或事实性答案。
 
 Observation 采用字段白名单而非“先记录全文再做日志过滤”。API Key、Authorization、Cookie、Bearer/refresh/access token、raw conversation、Prompt、Provider 原文和医疗 payload 不进入可观测事件；token usage 仅指非敏感计数。
 
-## 4B 任务十一：安全指标归因
+## 安全指标归因
 
 A/B/C 三组使用完全相同的 request/action/final-output/evaluator 治理阶段、Safety flags 和成员作用域。固定报告中三组高风险召回/精确率、成员隔离和治理覆盖均为 1.0000；这些是同一 deterministic fixture 的共享控制回归，不能归因给 Supervisor，更不能外推为临床安全率。
 
-## 4B 任务十二：运行时安全证据
+## 运行时安全证据
 
 Docker 后端验收额外验证了确认并发的状态条件更新：同一幂等确认请求只允许一次真实执行，其余请求返回冲突；Redis 故障不会绕过 PostgreSQL 的确认、成员和版本校验。该结果是工程状态机证据，不是医疗安全召回率或生产并发容量指标。
 
-## 4D-B2.6 评测安全边界
+## 评测安全边界
 
 `safety_grader` 是 post-run 的确定性质量检查，读取冻结 `SafetyTrace`、确认状态和最终答案；它不能替代运行时 `SafetyAgent`，也不能在答案已经生成后补救危险输出。B2.6 的真实图执行适配器会把运行时 SafetyTrace 和 action-specific confirmation flag 冻结进 RunTrace，Provider timeout/no-source 也只能进入失败或降级结果，不能绕过安全边界。当前真实样例和 Docker 19/19 证明链路可运行，不等于 300/1200 数据集的最终安全召回率；正式指标必须来自审核后的 gold 和完整 runner。
 

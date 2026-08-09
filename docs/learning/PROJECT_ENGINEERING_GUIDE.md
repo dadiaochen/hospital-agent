@@ -1280,7 +1280,7 @@ def aggregate(results: list[EvaluationResult]) -> AggregatedMetrics:
 
 同理，tool_call_accuracy_avg 使用的是 expected_required_tools 与实际工具名集合的覆盖率，当前没有工具参数，所以不能叫参数准确率。
 
-当前正式编排消融使用 32 条固定业务 case，在 Single-Agent、固定路由和 bounded Supervisor 三种策略下生成 96 份 Trace。4D-B 另外执行本地 Supervisor、RAG、ContextManager 和 Provider 故障观测。两层结果分别见 `docs/agent_ablation_report.4b.md` 和 `docs/local_benchmark_report.4d.md`。
+历史编排消融使用 32 条固定业务 Case，在 Single-Agent、固定路由和 bounded Supervisor 三种策略下生成 96 份 Trace，并执行 Supervisor、RAG、上下文和 Provider 故障观测。结果摘要统一见 `docs/EXECUTION_HISTORY.md`。
 
 ## 12. 第十一步：从 API 到运行时持久化
 
@@ -1371,10 +1371,9 @@ assert response.status_code == 200
 
 当前可追溯报告：
 
-- `docs/agent_ablation_report.4b.md`
-- `docs/task12_backend_acceptance_report.4b.md`
-- `docs/browser_e2e_report.4c.md`
-- `docs/local_benchmark_report.4d.md`
+- `docs/EXECUTION_HISTORY.md`：旧阶段、消融、Docker 与浏览器验收摘要
+- `docs/RESUME_NOTES.md`：当前简历与面试口径
+- `docs/RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md`：当前 RAG 实测指标
 
 简历如何选择数字由 [简历文档](RESUME_GUIDE.md) 和 [证据边界](../RESUME_NOTES.md) 负责，本篇不再维护第二份简历口径。
 
