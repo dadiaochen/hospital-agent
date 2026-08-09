@@ -81,7 +81,7 @@
 
 4B 任务六保留的 deterministic 三个领域 Agent 只携带角色工具 allowlist，不执行 Tool；它们用于离线编排契约。当前正式业务路径由 `runtime_domain_agents.py` 提供 Tool-backed `RuntimeTriageAgent`、`RuntimeMedicationAgent` 和 `RuntimeReportAgent`，Supervisor 通过 `SupervisorAgentRuntime` 把它们的请求送入同一个 Registry。`ROLE_ALLOWED_TOOLS` 仍只是候选能力边界；每次真实调用必须继续经过本文件定义的 Tool/Provider 契约、成员权限、超时/重试和审计流程。
 
-### 5.1 4D-B5 步骤级工具权限（已冻结并已实现）
+### 5.1 步骤级工具权限
 
 代码审查确认：角色级 `allowed_tools` 由 Tool Registry 校验，计划级 `PlanStep.allowed_tools` 由 Supervisor runtime 在进入 handler 前强制执行。B5.1 已选择方案 A：`PlanStep.allowed_tools` 是该步骤完整的运行时执行上限。运行时 Agent 必须把当前 `step_id` 和该步骤的 allowlist 一起传给 `SupervisorAgentRuntime.call_tool`；调用链同时检查：
 
@@ -142,21 +142,21 @@ Agent 可以自动创建无外部副作用的本地 `DRAFT`，但以下动作不
 
 三类重点实现位于 `backend/app/providers/reliable.py`。外部 transport 尚未配置，当前验收是 mock/degraded/注入式故障测试，不是实际医院和药店联调。
 
-## 4B 任务十二：事务与真实运行验收
+## 事务与真实运行验收
 
 确认草稿 Tool 使用数据库 savepoint，不拥有业务任务的外层事务；`BusinessTaskService` 负责提交 AgentRun、tool-call、checkpoint 和业务状态。这样，单次 Tool 失败会回滚自己的草稿写入，却不会把已记录的 run 审计一起回滚。任务十二在 Docker PostgreSQL 中验证了该边界、并发确认只执行一次以及 Redis 不可用时回源 PostgreSQL。
-## 4B 任务十：资源作用域和 Observation
+## 资源作用域和 Observation
 
 - 档案、处方和药箱 Tool 不能只相信输入中的 `member_id`。ToolRegistry 先校验 execution context，Repository SQL 再同时约束 `user_id + member_id + resource ownership`。
 - Pydantic Tool input 使用 `extra=forbid`；在 payload 中添加 `prompt`、伪造 `user_id` 或其他身份字段不能覆盖服务端上下文。
 - Tool Observation 只记录 `tool_name/agent_role/success/latency/retry/fallback/source_ids`。`tool_input`、`output` 和错误中的敏感业务内容不进入 Observation。
 - RAG Tool 的 SourceRef metadata 保存 keyword/vector score、rank、RRF score、document/chunk version、embedding schema 和 fallback reason，供评测和排障使用。
 
-## 4B 任务十一：工具消融指标
+## 工具消融指标
 
 Harness 额外冻结 `AblationToolCallTrace`，仅保存工具名、角色、结构化参数、成功/schema 状态和来源指针。工具集合 exact-match 忽略顺序但拒绝多余工具；参数 exact-match 使用规范化 JSON 多重集，因此重复调用和错误成员参数都会失败。该投影只读，不执行 Tool Registry handler，也不能成为业务证据。
 
-## 4D-B2.6 评测边界
+## 评测边界
 
 `V2DeterministicGraders` 仍然只读取冻结 `RunTrace` 中的 `ToolCallTrace`、source pointer 和成员作用域，不在评测阶段重新调用 Tool Registry。B2.6 的 `ScopedProviderSandbox` 复用确定性 Provider 契约，只在真实图执行阶段注入 timeout/no-source 故障并记录 attempt trace；`PostgresV2Materializer` 和 `ScopedPostgresRetriever` 负责 case-scoped 数据与 RAG 来源隔离。这样可以测试真实连接边界，同时不会把评测变成不可重复的外部服务联调。300/1200 Gold 已完成人工审核，但完整正式可靠性指标仍待三 split 真实运行、消融和 badcase 复核。
 

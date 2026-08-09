@@ -51,7 +51,7 @@
 | 文档 | 用途 |
 | --- | --- |
 | [项目面试完整问答](../INTERVIEW_QA.md) | 从项目介绍到 Multi-Agent、RAG、上下文、安全、评测和上线追问 |
-| [项目深挖原题库](PROJECT_INTERVIEW_QUESTION_BANK.md) | 保留面试官原句，并提供短回答、长回答、代码证据和记忆方法 |
+| [当前简历与面试口径](../RESUME_NOTES.md) | 业务背景、多 Agent 链路、最新指标和口述版本 |
 | [Dify 实习项目](DIFY_PROJECT_GUIDE.md) | 原 Dify 业务流程、节点设计、与当前自研项目的关系 |
 | [测试工程追问](../INTERVIEW_QA_TEST_ENGINEERING.md) | pytest、fixture、异常测试、Agent Harness 和评测集问题 |
 

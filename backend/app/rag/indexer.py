@@ -25,6 +25,7 @@ def index_knowledge(
         model_name=settings.rag_embedding_model,
         dimensions=settings.rag_embedding_dimensions,
         cache_dir=settings.rag_embedding_cache_dir,
+        device=settings.rag_embedding_device,
     )
     result = KnowledgeEmbeddingIndexer(
         db,

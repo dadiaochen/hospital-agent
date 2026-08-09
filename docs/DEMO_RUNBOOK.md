@@ -70,7 +70,7 @@ Runner 先通过 `GET /api/family-members` 查找 seed 中的 father/mother，�
 
 每个结果还必须满足：来源覆盖符合 ExpectedCase、Evaluator 通过、`external_action_status="not_submitted"`。Runner 不修改 FinalAnswer，也不直接访问数据库。
 
-当前固定实跑证据统一见 [4C MVP 收口报告](mvp_closeout_report.4c.md)。报告不保存 member ID、run ID、答案正文、prompt 或 Key。
+当前固定实跑证据摘要见 [项目执行历史](EXECUTION_HISTORY.md)。运行产物不保存 member ID、run ID、答案正文、prompt 或 Key。
 
 ## 3.1 浏览器 E2E 回归
 
@@ -82,7 +82,7 @@ $env:E2E_BROWSER_CHANNEL='msedge'
 npm run test:e2e
 ```
 
-当前 4C-3 本机结果为 7/7 通过，详细场景和边界见 [4C 浏览器 E2E 报告](browser_e2e_report.4c.md)。E2E 仍使用 deterministic backend，不代表真实 LLM 或生产环境指标。
+历史浏览器 E2E 本机结果为 7/7，通过范围见 [项目执行历史](EXECUTION_HISTORY.md)。E2E 使用 deterministic backend，不代表真实 LLM 或生产环境指标。
 
 ## 4. 手工 UI 演示顺序
 
@@ -165,7 +165,7 @@ docker compose logs frontend
 
 不要把 `docker compose down -v` 当作日常停止命令；`-v` 会删除本地 PostgreSQL/Redis volume。
 
-## 7. 任务十二后端验收
+## 7. 后端验收
 
 固定演示之外，可以运行任务十二的真实本机后端验收：
 
@@ -178,4 +178,4 @@ docker compose up -d --build --wait --wait-timeout 300
 .\.venv\Scripts\python.exe scripts\task12_acceptance.py --require-vector
 ```
 
-脚本会检查迁移、seed、pgvector、三条业务 API、知识搜索、并发确认和前端 health；Redis 故障模式完成后必须重新启动 Redis。结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)，本机耗时不能写成生产 SLO。
+脚本会检查迁移、seed、pgvector、三条业务 API、知识搜索、并发确认和前端 health；Redis 故障模式完成后必须重新启动 Redis。历史结果见 [项目执行历史](EXECUTION_HISTORY.md)，本机耗时不能写成生产 SLO。

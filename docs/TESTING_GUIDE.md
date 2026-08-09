@@ -45,7 +45,7 @@ python -m pytest backend\tests\test_harness_runner.py backend\tests\test_determi
 python -m app.agent.harness_runner
 ```
 
-第二条命令会按固定 fixtures 重算 `docs/agent_eval_report.example.md`。当前主要编排证据见 [32 条消融报告](agent_ablation_report.4b.md)，4D 本地实现观测见 [本地 Benchmark 报告](local_benchmark_report.4d.md)。不要把 fixture 中的 `latency_ms` 当成真实 wall-clock benchmark，也不要把 confirmation presence 当成人工采纳率。
+第二条命令会按固定 fixtures 重算 `docs/agent_eval_report.example.md`。历史编排消融和本地观测见 [项目执行历史](EXECUTION_HISTORY.md)。不要把 fixture 中的 `latency_ms` 当成真实 wall-clock benchmark，也不要把 confirmation presence 当成人工采纳率。
 
 任务七安全确认回归：
 
@@ -171,7 +171,7 @@ Review Agent UI 时要区分当前兼容契约与最终交互。最终页面展�
 - `agent_eval_report.example.md` 是固定 mock fixture 的计算结果，不是生产质量、临床效果或安全率证明。
 - 本项目的配置示例只用于本地开发。生产环境必须从安全的环境变量或秘密管理系统注入连接信息和模型 Key。
 
-## 4B 任务三/四回归
+## RAG 与 Model Gateway 回归
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
@@ -185,7 +185,7 @@ python -m pytest `
 
 任务三必须验证 canonical provider、hash/schema 变化重建、pgvector migration/HNSW 定义、来源 metadata 和关键词降级。任务四必须验证三条业务域都有成功的 `model_call_trace`，无 Key 默认 deterministic，primary provider 失败时 fallback，SafetyAgent 阻断路径不被模型绕过。
 
-## 4B 任务五回归
+## Router 契约回归
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
@@ -199,7 +199,7 @@ python -m pytest `
 
 任务五必须覆盖：简单请求直达一个领域 Agent、跨领域请求进入 Planner 候选、最多三步的依赖校验、非法角色/动作拒绝、三阶段 SafetyDecision，以及高风险和歧义输入不调用 Supervisor。Router 本身不访问 LLM、数据库、Provider、Tool Registry 或 LangGraph。
 
-## 4B 任务六回归
+## Planner 与 Supervisor 回归
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
@@ -212,7 +212,7 @@ python -m pytest `
 
 任务六必须覆盖：三个领域 Agent 的角色白名单和最小输入、简单请求直达、复杂请求一次性 Planner、串行依赖、最大步数、每角色调用上限、有限重试、降级、澄清、失败终止和成员隔离。测试不应把 deterministic 占位 facts 当作医疗事实，也不应调用数据库、LLM、Provider、Tool Registry 或 LangGraph。
 
-## 4B 任务九回归
+## Tool 与 Provider 可靠性回归
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
@@ -226,7 +226,7 @@ python -m pytest `
 
 必须检查：validation/permission/schema/business-conflict 不重试；只读 timeout/rate-limit/provider-unavailable 不超过固定次数；写工具固定一次；三类重点 Provider 的 mock 输出通过强 schema；失败没有 data/source；文档来源保留 version/parser/source location；药房、医院和问诊不声称外部写入成功。Windows 遇到旧 `var/pytest` ACL 问题时使用 `output` 下全新唯一 basetemp，不删除或复用无权限目录。
 
-## 4B 最终验收矩阵
+## 后端验收矩阵
 
 - 编排：直接路由、复杂路由、最大步数、非法角色、非法工具和无进展终止。
 - 安全：请求 Guard、动作 Policy Guard、最终输出 SafetyAgent，分别覆盖正反例。
@@ -237,7 +237,7 @@ python -m pytest `
 
 其中任务九 Provider 离线可靠性、任务十 RAG/隔离/Observation、任务十一 32 条 deterministic Harness 和任务十二本机 Docker 后端验收已完成。任务十二报告记录 baseline 19/19、Redis 故障回源 18/18，以及本机 wall-clock 样本；这些结果仍不能写成生产 SLO、临床安全指标或真实模型质量。
 
-## 4B 任务十回归
+## 来源、隔离与可观测性回归
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
@@ -247,7 +247,7 @@ python -m pytest backend\tests\test_agent_contract_schemas.py backend\tests\test
 
 必须检查：RRF 只融合 rank；raw score 仅用于审计；文档/分块/embedding schema 过期时降级；用户、成员和资源在 SQL 同条件约束；额外 Prompt/身份字段被拒绝；跨成员缓存值成为 miss；Observation 不包含请求正文、工具/Provider payload、Prompt、答案正文或凭据。2026-07-29 本地执行结果为 84 条定向和 287 条后端全量测试通过；这不是线上性能或临床质量指标。
 
-## 4B 任务十一回归
+## 编排消融回归
 
 ```powershell
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
@@ -258,9 +258,9 @@ python -m pytest backend\tests -q -p no:cacheprovider --basetemp output\pytest-t
 python -m compileall backend\app backend\tests
 ```
 
-任务十一专项测试 6 项、完整后端 293 项通过是任务十二前的基线；任务十二真实环境结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。Review 报告时必须检查：32 条八类计数是否精确；三组 `fairness_config_id` 是否一致；Safety/隔离/RAG 是否没有被策略偷偷改变；简单与复杂是否分开；token usage 缺失时是否保持 `N/A`；fixture latency 和本机 wall-clock 是否没有被写成生产性能。
+早期专项与完整后端测试属于历史基线，摘要见 [项目执行历史](EXECUTION_HISTORY.md)。复核报告时必须检查：固定用例计数是否精确；公平性配置是否一致；Agent 安全、隔离和 RAG 是否保持同一变量；简单与复杂是否分开；缺失 usage 时是否保持 `N/A`；fixture latency 和本机 wall-clock 是否没有被写成生产性能。
 
-## 4B 任务十二真实后端验收
+## 本地真实后端验收
 
 ```powershell
 $env:RAG_VECTOR_ENABLED='true'
@@ -273,13 +273,13 @@ docker compose up -d --build --wait --wait-timeout 300
 
 验收脚本同时检查 Alembic head、seed 数据、pgvector 向量维度、三条业务 API、知识检索 422 映射、并发确认和前端 health。Redis 故障模式会验证 API 从 PostgreSQL 恢复 checkpoint；执行后必须启动 Redis。脚本是操作员验收，不属于业务代码，也不调用 LLM。
 
-## 4B 任务十三收口回归
+## 文档与发布收口回归
 
 任务十三完成时的历史复核结果为后端 `297 passed`、`compileall` 通过，前端 Vitest `23 passed`、TypeScript typecheck 和 Next.js production build 通过。4C 收口后前端用例增长到 `25 passed`，并新增 `7 passed` 的 Playwright 浏览器 E2E；历史报告保留当时快照，当前数字以本节顶部的最新证据表为准。
 
-## 4D-B Benchmark
+## Agent Benchmark
 
-### 4D-B2.6 real integration and Docker evidence
+### 真实集成与 Docker 证据
 
 The B2.6 entry points are deliberately separate from the B2.5 synthetic
 preview:
@@ -294,7 +294,7 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 The real v2 integration command requires a local, ignored identity map and a
 PostgreSQL session. It must use `--allow-pending-review` only for local
 debugging. The map cannot be committed because it binds synthetic benchmark
-IDs to local demo rows. See [4D-B2.6 integration status](4D_B2.6_INTEGRATION_STATUS.md)
+本机 identity map 把评测 ID 映射到 demo rows，文件不得提交；历史细节见 [项目执行历史](EXECUTION_HISTORY.md)。
 for the complete command and source mapping rules.
 
 The Docker report currently records `19/19` checks passed. The first real v2
@@ -311,7 +311,7 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 .\.venv\Scripts\python.exe -B scripts\run_4d_benchmark.py --mode deterministic
 ```
 
-它会校验五组 fixture 的 manifest hash，并生成 `output/benchmarks/benchmark_report.4d.json`、`docs/benchmark_report.4d.md` 和 `docs/benchmark_badcases.4d.md`。报告中的 `dataset_contract` 是评测数据准备情况，不能当成模型准确率；真实回答质量、RAG Recall、Safety recall、延迟、token 和 cost 在没有运行观测时保持 `N/A`。完整说明见 [4D-B Benchmark 使用指南](4D_B_BENCHMARK_GUIDE.md)。
+运行器会校验 fixture manifest hash，并把 JSON、Markdown 和 badcase 输出到 `output/benchmarks/`。`dataset_contract` 只表示数据准备情况，不能当成模型准确率；没有真实运行观测时，回答质量、RAG Recall、Agent 安全召回、延迟、token 和 cost 必须保持 `N/A`。
 
 继续执行本地实现观测：
 
@@ -320,7 +320,7 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 .\.venv\Scripts\python.exe scripts\run_4d_local_benchmark.py
 ```
 
-本地 runner 实际执行 32 次 bounded Supervisor、12 次 `KeywordRetriever`、40 次 ContextManager compact/reset 和 30 次 ProviderRegistry 故障注入，并生成 [本地观测报告](local_benchmark_report.4d.md)。这些测试使用合成数据和内存 SQLite；Docker PostgreSQL/pgvector、Checkpoint/Redis 回源、真实回答质量、token 和 cost 仍必须单独接入，不能混入同一指标。
+早期本地 runner 执行固定 Supervisor、关键词检索、上下文压缩/重置和 Provider 故障注入。这些合成与内存测试不能同 Docker PostgreSQL/pgvector、Checkpoint/Redis 回源或真实模型 token/cost 混算，历史摘要见 [项目执行历史](EXECUTION_HISTORY.md)。
 
 ## 用户端 UX-08 回归
 

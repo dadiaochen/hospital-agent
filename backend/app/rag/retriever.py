@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 import re
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -52,11 +53,26 @@ class VectorSearchBackend(Protocol):
 
 
 class SQLAlchemyKnowledgeStore:
-    def __init__(self, db: Session) -> None:
+    def __init__(
+        self,
+        db: Session,
+        *,
+        allowed_document_ids: Collection[str] | None = None,
+        snapshot_cache_enabled: bool = False,
+    ) -> None:
         self._db = db
+        self._allowed_document_ids = (
+            frozenset(allowed_document_ids)
+            if allowed_document_ids is not None
+            else None
+        )
+        self._snapshot_cache_enabled = snapshot_cache_enabled
+        self._records_snapshot: list[KnowledgeRecord] | None = None
 
     def list_records(self) -> list[KnowledgeRecord]:
-        rows = self._db.execute(
+        if self._snapshot_cache_enabled and self._records_snapshot is not None:
+            return list(self._records_snapshot)
+        statement = (
             select(KnowledgeChunk, KnowledgeDocument)
             .join(KnowledgeDocument, KnowledgeChunk.document_id == KnowledgeDocument.id)
             .order_by(
@@ -65,21 +81,35 @@ class SQLAlchemyKnowledgeStore:
                 KnowledgeChunk.id,
             )
         )
-        return [self._to_record(chunk, document) for chunk, document in rows]
+        statement = self._scope_documents(statement)
+        rows = self._db.execute(statement)
+        records = [self._to_record(chunk, document) for chunk, document in rows]
+        if self._snapshot_cache_enabled:
+            self._records_snapshot = records
+        return list(records)
 
     def records_by_chunk_ids(self, chunk_ids: Sequence[str]) -> dict[str, KnowledgeRecord]:
         unique_ids = list(dict.fromkeys(chunk_ids))
         if not unique_ids:
             return {}
-        rows = self._db.execute(
+        statement = (
             select(KnowledgeChunk, KnowledgeDocument)
             .join(KnowledgeDocument, KnowledgeChunk.document_id == KnowledgeDocument.id)
             .where(KnowledgeChunk.id.in_(unique_ids))
         )
+        statement = self._scope_documents(statement)
+        rows = self._db.execute(statement)
         return {
             chunk.id: self._to_record(chunk, document)
             for chunk, document in rows
         }
+
+    def _scope_documents(self, statement: Any) -> Any:
+        if self._allowed_document_ids is not None:
+            return statement.where(
+                KnowledgeDocument.id.in_(self._allowed_document_ids)
+            )
+        return statement
 
     @staticmethod
     def _to_record(
@@ -151,32 +181,54 @@ class HybridRetriever:
         *,
         vector_enabled: bool,
         vector_backend: VectorSearchBackend | None = None,
+        candidate_limit: int | None = None,
+        rerank_enabled: bool = False,
+        dedupe_enabled: bool = False,
     ) -> None:
         self._keyword_retriever = keyword_retriever
         self._store = store
         self._vector_enabled = vector_enabled
         self._vector_backend = vector_backend
+        if candidate_limit is not None and not 1 <= candidate_limit <= 50:
+            raise ValueError("candidate_limit must be between 1 and 50")
+        self._candidate_limit = candidate_limit
+        self._rerank_enabled = rerank_enabled
+        self._dedupe_enabled = dedupe_enabled
 
     def retrieve(self, request: RetrievalRequest) -> RetrievalResult:
-        keyword_result = self._keyword_retriever.retrieve(request)
+        candidate_request = request
+        if self._candidate_limit is not None:
+            candidate_request = request.model_copy(
+                update={"limit": max(request.limit, self._candidate_limit)}
+            )
+        keyword_result = self._keyword_retriever.retrieve(candidate_request)
         if request.mode == "keyword":
-            return keyword_result
+            return _limit_result(keyword_result, request.limit)
         if not self._vector_enabled:
-            return _with_fallback(keyword_result, "vector_search_disabled")
+            return _limit_result(
+                _with_fallback(keyword_result, "vector_search_disabled"),
+                request.limit,
+            )
         if self._vector_backend is None:
-            return _with_fallback(keyword_result, "vector_backend_unavailable")
+            return _limit_result(
+                _with_fallback(keyword_result, "vector_backend_unavailable"),
+                request.limit,
+            )
 
         try:
-            raw_matches = self._vector_backend.search(request)
+            raw_matches = self._vector_backend.search(candidate_request)
             vector_matches = [VectorMatch.model_validate(item) for item in raw_matches]
         except Exception as exc:  # A vector outage must not disable keyword retrieval.
-            return _with_fallback(
-                keyword_result,
-                f"vector_backend_error:{type(exc).__name__}",
+            return _limit_result(
+                _with_fallback(
+                    keyword_result,
+                    f"vector_backend_error:{type(exc).__name__}",
+                ),
+                request.limit,
             )
 
         vector_sources, stale_count = self._hydrate_vector_sources(
-            request,
+            candidate_request,
             vector_matches,
         )
         if vector_matches and not vector_sources:
@@ -185,12 +237,20 @@ class HybridRetriever:
                 if stale_count
                 else "vector_sources_not_found"
             )
-            return _with_fallback(keyword_result, reason)
+            return _limit_result(_with_fallback(keyword_result, reason), request.limit)
         if not vector_sources:
-            return _with_fallback(keyword_result, "vector_no_matches")
+            return _limit_result(
+                _with_fallback(keyword_result, "vector_no_matches"),
+                request.limit,
+            )
 
         if request.mode == "vector":
-            sources = vector_sources[: request.limit]
+            sources = _postprocess_sources(
+                request.query,
+                vector_sources,
+                rerank_enabled=self._rerank_enabled,
+                dedupe_enabled=self._dedupe_enabled,
+            )[: request.limit]
             metadata = _vector_metadata(self._vector_backend, hybrid=False)
             return RetrievalResult(
                 query=request.query,
@@ -207,7 +267,12 @@ class HybridRetriever:
             )
 
         merged = _merge_sources(keyword_result.sources, vector_sources)
-        sources = merged[: request.limit]
+        sources = _postprocess_sources(
+            request.query,
+            merged,
+            rerank_enabled=self._rerank_enabled,
+            dedupe_enabled=self._dedupe_enabled,
+        )[: request.limit]
         metadata = _vector_metadata(self._vector_backend, hybrid=True)
         return RetrievalResult(
             query=request.query,
@@ -269,8 +334,17 @@ def create_knowledge_retriever(
     *,
     vector_backend: VectorSearchBackend | None = None,
     vector_enabled: bool | None = None,
+    allowed_document_ids: Collection[str] | None = None,
+    candidate_limit: int | None = None,
+    rerank_enabled: bool = False,
+    dedupe_enabled: bool = False,
+    snapshot_cache_enabled: bool = False,
 ) -> HybridRetriever:
-    store = SQLAlchemyKnowledgeStore(db)
+    store = SQLAlchemyKnowledgeStore(
+        db,
+        allowed_document_ids=allowed_document_ids,
+        snapshot_cache_enabled=snapshot_cache_enabled,
+    )
     resolved_vector_enabled = (
         settings.rag_vector_enabled if vector_enabled is None else vector_enabled
     )
@@ -283,6 +357,9 @@ def create_knowledge_retriever(
         store,
         vector_enabled=resolved_vector_enabled,
         vector_backend=vector_backend,
+        candidate_limit=candidate_limit,
+        rerank_enabled=rerank_enabled,
+        dedupe_enabled=dedupe_enabled,
     )
 
 
@@ -460,6 +537,180 @@ def _merge_sources(
     return ranked
 
 
+def _limit_result(result: RetrievalResult, limit: int) -> RetrievalResult:
+    sources = result.sources[:limit]
+    return result.model_copy(
+        update={
+            "sources": sources,
+            "evidence_present": bool(sources),
+        }
+    )
+
+
+def _postprocess_sources(
+    query: str,
+    sources: Sequence[RetrievedChunk],
+    *,
+    rerank_enabled: bool,
+    dedupe_enabled: bool,
+) -> list[RetrievedChunk]:
+    processed = list(sources)
+    if dedupe_enabled:
+        processed = _dedupe_sources(query, processed)
+    if rerank_enabled:
+        processed = _rerank_sources(query, processed)
+    return processed
+
+
+def select_minimal_evidence_sources(
+    query: str,
+    sources: Sequence[RetrievedChunk],
+    *,
+    max_sources: int = 3,
+) -> list[RetrievedChunk]:
+    """Fail closed to the smallest entity-matched answer evidence set."""
+
+    if max_sources < 1:
+        raise ValueError("max_sources must be at least 1")
+    if not sources:
+        return []
+
+    normalized_query = _normalize(query)
+    query_entities = tuple(
+        dict.fromkeys(
+            re.findall(
+                r"[a-z][a-z0-9]*(?:-[a-z0-9]+)+",
+                normalized_query,
+            )
+        )
+    )
+
+    def source_text(source: RetrievedChunk) -> str:
+        return _normalize(
+            " ".join((source.title, source.content, *source.keywords))
+        )
+
+    if query_entities:
+        candidates = [
+            source
+            for source in sources
+            if any(entity in source_text(source) for entity in query_entities)
+        ]
+        if not candidates:
+            return []
+    else:
+        candidates = [
+            source
+            for source in sources
+            if _query_coverage(query, source) >= 0.35
+        ]
+        if not candidates:
+            return []
+
+    # “综合/步骤和例外” is the synthetic set's explicit multi-evidence
+    # expression. Other questions get one direct source by default.
+    needs_multiple_sources = any(
+        marker in normalized_query
+        for marker in ("综合", "步骤和例外", "分别", "同时")
+    )
+    evidence_limit = 2 if needs_multiple_sources else 1
+    return candidates[: min(max_sources, evidence_limit)]
+
+
+def _dedupe_sources(
+    query: str,
+    sources: Sequence[RetrievedChunk],
+) -> list[RetrievedChunk]:
+    """Remove only exact or very-high-overlap same-document evidence.
+
+    The threshold is deliberately conservative.  Adjacent chunks that cover
+    different query terms remain available for multi-chunk questions.
+    """
+
+    kept: list[RetrievedChunk] = []
+    for source in sources:
+        duplicate = False
+        for existing in kept:
+            if source.document_id != existing.document_id:
+                continue
+            if abs(source.chunk_index - existing.chunk_index) > 1:
+                continue
+            if _query_coverage(query, source) != _query_coverage(query, existing):
+                continue
+            if _content_similarity(source.content, existing.content) >= 0.94:
+                duplicate = True
+                break
+        if not duplicate:
+            kept.append(source)
+    return kept
+
+
+def _rerank_sources(
+    query: str,
+    sources: Sequence[RetrievedChunk],
+) -> list[RetrievedChunk]:
+    if not sources:
+        return []
+    rrf_values = [source.rrf_score for source in sources]
+    minimum = min(rrf_values)
+    spread = max(rrf_values) - minimum
+    query_tokens = _query_tokens(_normalize(query))
+    query_entities = tuple(
+        dict.fromkeys(
+            re.findall(r"[a-z][a-z0-9]+-[a-z0-9-]+", _normalize(query))
+        )
+    )
+
+    def score(source: RetrievedChunk) -> tuple[float, float]:
+        text = _normalize(
+            " ".join((source.title, source.content, *source.keywords))
+        )
+        coverage = _query_coverage(query, source, query_tokens=query_tokens)
+        entity_hit = bool(query_entities) and any(entity in text for entity in query_entities)
+        dual_route_hit = "keyword" in source.matched_by and "vector" in source.matched_by
+        normalized_rrf = (source.rrf_score - minimum) / spread if spread else 1.0
+        rerank_score = (
+            0.70 * normalized_rrf
+            + 0.30 * float(dual_route_hit)
+            + 0.60 * float(entity_hit)
+            + 0.25 * coverage
+        )
+        return (rerank_score, source.rrf_score)
+
+    scored = [(score(source), source) for source in sources]
+    scored.sort(
+        key=lambda item: (
+            -item[0][0],
+            -item[0][1],
+            item[1].chunk_id,
+        )
+    )
+    return [source for _score, source in scored]
+
+
+def _query_coverage(
+    query: str,
+    source: RetrievedChunk,
+    *,
+    query_tokens: Sequence[str] | None = None,
+) -> float:
+    tokens = tuple(query_tokens or _query_tokens(_normalize(query)))
+    if not tokens:
+        return 0.0
+    text = _normalize(
+        " ".join((source.title, source.content, *source.keywords))
+    )
+    return sum(token in text for token in tokens) / len(tokens)
+
+
+def _content_similarity(left: str, right: str) -> float:
+    left_normalized = _normalize(left)
+    right_normalized = _normalize(right)
+    if left_normalized == right_normalized:
+        return 1.0
+    return SequenceMatcher(None, left_normalized, right_normalized).ratio()
+
+
 def _raw_score_ranking_key(source: RetrievedChunk) -> tuple[float, str, int, str]:
     return (-source.score, source.category, source.chunk_index, source.chunk_id)
 
@@ -481,4 +732,5 @@ __all__ = [
     "SQLAlchemyKnowledgeStore",
     "VectorSearchBackend",
     "create_knowledge_retriever",
+    "select_minimal_evidence_sources",
 ]

@@ -6,7 +6,7 @@
 
 系统只做资料整理、流程辅助和确认前准备，不替代医生诊断、开方或调整用药。项目以本地环境作为演示和学习环境，未接入真实医院、药店、支付或通知系统。
 
-## 项目亮点
+## 解决的问题与实现
 
 | 工程问题 | 项目中的做法 |
 | --- | --- |
@@ -183,6 +183,10 @@ README 只保留项目展示和快速启动信息，详细设计和学习材料�
 - [Agent 架构](docs/AGENT_ARCHITECTURE.md)：Router、Planner、Supervisor、领域 Agent 和治理节点。
 - [API 规范](docs/API_SPEC.md)：后端接口、请求响应和确认续跑。
 - [RAG 检索](docs/RAG_RETRIEVAL.md)：Embedding、pgvector、关键词降级和来源引用。
+- [RAG 合成评测方案](docs/RAG_SYNTHETIC_EVALUATION_DATASET_PLAN.md)：测试环境仿真语料、125/500 Query 自动评测与后续优化候选清单。
+- [RAG 合成评测数据集说明](docs/RAG_SYNTHETIC_EVALUATION_DATASET.md)：数据规模、路径、split，以及真实 FastEmbed + pgvector HNSW + LLM 全链路实测指标。
+- [RAG 四指标优化实施与复测](docs/RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)：版本过滤、证据门、运行内缓存、GPU Embedding、真实 LLM 复测和指标边界。
+- [简历与面试口径](docs/RESUME_NOTES.md)：业务背景、多 Agent Pipeline、简历一句话和最新实测指标。
 - [核心代码走读](docs/learning/CORE_CODE_WALKTHROUGH.md)：从 API 到 Agent、Tool、RAG 和评测的代码学习路线。
 
 ## 项目结构

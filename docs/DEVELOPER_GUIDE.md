@@ -78,7 +78,7 @@ python -m app.agent.ablation_harness
 python -m pytest backend\tests\test_ablation_harness.py -q -p no:cacheprovider --basetemp=output\pytest-task11
 ```
 
-运行器把完整 JSON/Markdown 写到 `output/`，仓库中的 `docs/agent_ablation_report.4b.md` 是复核后的快照。报告里的 latency 是 fixture 字段，token/cost 为 `N/A`，不能替代任务十二的 Docker wall-clock 验收。任务十二已完成真实本机验收，结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。
+运行器把完整 JSON/Markdown 写到 `output/`。早期消融中的 latency 是 fixture 字段，token/cost 为 `N/A`，不能替代 Docker wall-clock 验收；历史摘要见 [项目执行历史](EXECUTION_HISTORY.md)。
 
 运行任务十二的后端验收：
 
@@ -202,7 +202,7 @@ python -m app.agent.runtime_harness `
 .\scripts\run_demo.ps1
 ```
 
-自动化契约位于 `test_mvp_demo_runner.py`；本地报告位于被忽略的 `var/demo/`。最终可提交的交付证据统一看 `docs/mvp_closeout_report.4c.md`，不再保留旧 3D 快照。四场景通过只属于本地 PostgreSQL seed + deterministic provider。
+自动化契约位于 `test_mvp_demo_runner.py`；本地报告位于被忽略的 `var/demo/`。历史交付证据摘要见 [项目执行历史](EXECUTION_HISTORY.md)。四场景通过只属于本地 PostgreSQL seed 和 deterministic provider。
 
 确认当前 API：访问 `http://localhost:8000/docs`、`/health` 和 `/api/health`。读取 API 与知识检索已集成；固定 demo user 由 `DEMO_USER_PHONE` 配置，默认匹配 seed 的示例手机号。
 

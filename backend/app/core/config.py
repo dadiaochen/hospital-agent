@@ -67,6 +67,9 @@ class Settings(BaseModel):
             os.getenv("RAG_EMBEDDING_CACHE_DIR", "var/models/fastembed"),
         )
     )
+    rag_embedding_device: Literal["cpu", "cuda", "auto"] = Field(
+        default_factory=lambda: os.getenv("RAG_EMBEDDING_DEVICE", "cpu")
+    )
     rag_vector_min_score: float = Field(
         default_factory=lambda: float(os.getenv("RAG_VECTOR_MIN_SCORE", "0.35")),
         ge=0.0,

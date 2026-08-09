@@ -132,23 +132,23 @@ Evaluator 读取冻结产物，不因评测需要延迟 working state 清理。
 - 未确认偏好、撤销偏好和知识 namespace 混用被拒绝。
 - continuation run 重新读取处方、报告和库存，不复用旧值。
 
-这些规则测试不能直接换算成“记忆准确率”。独立记忆评测需要用人工标注的多轮固定用例，比较 compact、reset 和 checkpoint 恢复前后的关键信息、来源、成员和允许写入项，再计算保留率、清理率、未确认写入率、跨成员泄漏率和恢复成功率。完整的 40 条用例拆分、指标公式、异常注入和报告流程见 [项目面经问题库 Q14](learning/PROJECT_INTERVIEW_QUESTION_BANK.md#q14-怎么评测上下文和记忆机制)。在报告生成前，文档中的百分比只能作为验收目标。
+这些规则测试不能直接换算成“记忆准确率”。独立记忆评测应使用人工标注的多轮固定用例，比较压缩、重置和 Checkpoint 恢复前后的关键信息、来源、成员和允许写入项，再计算保留率、清理率、未确认写入率、跨成员泄漏率和恢复成功率。在正式报告生成前，相关百分比只能作为验收目标。
 
 当前 ContextManager 已实现角色裁剪、compaction 和 reset；任务五已实现最终编排契约的成员/任务身份边界和 deterministic 路由输入；任务六的 `DomainAgentInput` 继续只传任务摘要、角色 allowlist 和同成员结构化前序结果。4D-B4 的正式 `/api/business-tasks` 链路由 `SupervisorBusinessWorkflow` 创建本次 run 的运行时领域 Agent，Agent 仍只接收最小视图，并通过 Tool Registry 获取同成员事实；旧 `/api/agent-runs` 则保留为前端兼容链，不能把它当成新业务 Supervisor 链。任务八已由 `TaskCheckpointService` 将最小 `confirmation_state`、draft scope、版本、RunSummary、冻结产物和来源指针写入 PostgreSQL 权威 checkpoint，并由 `TaskCheckpointCache` 提供带作用域/版本校验的 Redis TTL 加速。Redis miss、过期或不可用时回源 PostgreSQL；continuation 不恢复 raw conversation、scratchpad 或未确认推断。偏好写入由 `ConfirmedPreferenceService` 绑定同 task 的已执行确认、成员、source version 和显式人工确认。
 
 任务九后，ContextEnvelope 只能接收成功 Provider 响应产生的 SourceRef。失败 attempt、error category 和 fallback reason 属于审计摘要，不是医疗事实；它们可以进入 RunSummary/Trace，但不能进入 memory refs。Provider source 的 `member_id` 必须与当前 ContextEnvelope 一致。
-## 4B 任务十：缓存残留与审计投影
+## 缓存残留与审计投影
 
 Redis checkpoint key 同时包含 user/member/task/thread/version，读取后还要用 Pydantic payload 再校验五个维度。即使错误数据被写入正确 key，只要 payload 的成员或其他作用域不一致，就按 cache miss 处理并回源 PostgreSQL；缓存内容永远不能覆盖权威任务状态。
 
 Observation 不属于 working context，也不进入长期 memory。它是 run 结束后的最小审计投影，只保存标识、状态、时延、来源和计数。Reset 仍删除 raw conversation、scratchpad、候选推断和完整 Tool/Provider payload；续跑根据 RunSummary、确认状态和 source pointer 建立新 working state。
 
-## 4B 任务十一：评测上下文公平性
+## 评测上下文公平性
 
 `FairnessConfig` 固定三种编排策略的 context token limit 和输出上限；fixture 只保存单条任务输入、成员作用域、结构化工具参数、来源 ID 和预期治理字段，不保存完整聊天或 scratchpad。A/B/C 不能通过扩大上下文、跨成员读取或追加隐藏来源提高指标。
 
 这是 32 条 v1 编排消融的历史规则。4D-B v2 在同一 WorldState 上增加 A/B/C/D 四种模式，其中 A/B/C 使用测试专用 `all_history`，D 使用生产默认 `dependency_only`；两种模式都受成员隔离和敏感字段过滤约束。
 
-## 4B 任务十二：运行时回源验证
+## 运行时回源验证
 
-本机 Docker 验收确认 Redis 只保存带 TTL 的短期 checkpoint 投影；Redis 停止后，Context/Task 续跑从 PostgreSQL 权威 checkpoint 恢复，且不会恢复 raw conversation、scratchpad 或未确认推断。验收结果见 [任务十二后端验收报告](task12_backend_acceptance_report.4b.md)。
+本机 Docker 验收确认 Redis 只保存带 TTL 的短期 Checkpoint 投影；Redis 停止后，任务续跑从 PostgreSQL 权威 Checkpoint 恢复，且不会恢复原始对话、scratchpad 或未确认推断。历史结果见 [项目执行历史](EXECUTION_HISTORY.md)。

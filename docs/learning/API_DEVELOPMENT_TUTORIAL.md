@@ -1777,4 +1777,4 @@ pm.test("missing q returns uniform 422", function () {
 5. 指出 `source_id` 在哪一层创建，以及后续 RAG/Trace 为什么需要它。
 6. 运行 pytest、Swagger 和 Postman，并保存你自己的失败排查记录。
 
-面试表达统一到 [项目面试问答](../INTERVIEW_QA.md) 和 [项目深挖原题库](PROJECT_INTERVIEW_QUESTION_BANK.md)，本教程只负责把代码真正学懂。
+面试表达统一到 [项目面试问答](../INTERVIEW_QA.md) 和 [简历与面试口径](../RESUME_NOTES.md)，本教程只负责把代码真正学懂。

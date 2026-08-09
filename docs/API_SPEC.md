@@ -140,9 +140,9 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 
 每次请求必须携带幂等键。同一首次请求可安全 replay；同一待确认 run 只有一个固定 continuation run，不同确认请求会返回 `409 idempotency_conflict`，不会创建重复草稿。所有运行仍按 demo user / member 作用域隔离，确认后固定返回 `external_action_status="not_submitted"`。
 
-完整字段、状态和持久化说明见 [AGENT_RUNTIME_API.md](AGENT_RUNTIME_API.md)。
+完整字段、状态和持久化说明已合并到本文；旧运行时接口说明见 [项目执行历史](EXECUTION_HISTORY.md)。
 
-## 9. 4B 业务任务 API
+## 9. 业务任务 API
 
 4B 把三条业务线统一为一个任务入口，业务域由请求字段区分；上层 API 不直接调用 LangGraph、Provider 或数据库。任务七已经把新业务任务链路接入 `confirmation_state` 状态机；请求体仍保留 `human_confirmation_granted` 作为兼容确认字段，旧 `/api/agent-runs` 也继续保持原契约。
 
@@ -263,7 +263,7 @@ UX-06 已按冻结的 `report-detail.v1` 契约接入以下只读接口：
 5. 含有医疗敏感内容的写操作在 API 层之外还必须经过 safety 与 confirmation 规则。
 
 2E-1、2E-2、2F、2G、3B 和 4B 任务一至十二已进入当前线性工作区；任务十二已用真实 Docker 栈验收现有业务 API、知识搜索、错误映射、确认并发和 Redis checkpoint 回源。阶段状态只以 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 为准。
-## 4B 任务十：Trace 响应补强
+## 10. Trace 响应
 
 任务十没有新增 HTTP 路径，也没有改变业务任务的确认语义。现有 `/api/business-tasks` 和 artifacts 响应中的 `run_trace` 新增 `observations`；`model_call_trace` 新增可选 `input_tokens/output_tokens/total_tokens` 与 `token_usage_available`。
 
@@ -271,11 +271,11 @@ UX-06 已按冻结的 `report-detail.v1` 契约接入以下只读接口：
 
 这是兼容性扩展：旧客户端可以忽略新增字段。`RunTrace` 和 Observation 均为只读审计产物，不能通过 API 回写业务状态。
 
-## 4B 任务十一：Harness 入口边界
+## 11. Harness 入口边界
 
 任务十一没有新增 HTTP API，也没有让客户端选择 A/B/C 策略。消融只通过 `python -m app.agent.ablation_harness` 离线执行，读取固定 fixture 并把 JSON/Markdown 报告写到 `output/`；提交到仓库的 Markdown 是复核后的确定性快照。生产业务 API 的模型、工具或安全配置仍不能由请求覆盖。
 
-## 4B 任务十二：API 真实运行边界
+## 12. API 本地运行边界
 
 任务十二没有新增 HTTP 路径，而是通过 `scripts/task12_acceptance.py` 对现有 `/health`、`/api/family-members`、三类 `/api/business-tasks` 操作和 `/api/knowledge/search` 做 Docker smoke。验收确认业务接口仍返回结构化 DTO、缺少知识查询参数映射为 422、重复确认只执行一次；Redis 不可用时，业务 API 从 PostgreSQL 恢复权威 checkpoint。该脚本不调用 LLM 或真实外部 Provider。
 

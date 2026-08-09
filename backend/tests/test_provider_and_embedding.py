@@ -16,6 +16,7 @@ from app.rag.embedding import (
     FastEmbedEmbedding,
     create_embedding_provider,
 )
+from app.rag.embedding_provider import EmbeddingProviderUnavailableError
 from app.rag.indexer import index_knowledge
 from app.rag.retrieval_schemas import RetrievalRequest
 from app.rag.vector_backend import SQLAlchemyVectorBackend
@@ -147,6 +148,38 @@ def test_fastembed_provider_is_lazy_and_keeps_embedding_contract(
     assert provider.embed("hello") == [0.25, 0.75]
     assert provider.embed("hello") == [0.25, 0.75]
     assert FakeTextEmbedding.calls == 1
+
+
+def test_fastembed_provider_accepts_explicit_device() -> None:
+    assert FastEmbedEmbedding("test-model", device="cpu").device == "cpu"
+    assert FastEmbedEmbedding("test-model", device="cuda").device == "cuda"
+    with pytest.raises(ValueError, match="device must be one of"):
+        FastEmbedEmbedding("test-model", device="tpu")
+
+
+def test_fastembed_cuda_request_rejects_silent_cpu_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeSession:
+        def get_providers(self) -> list[str]:
+            return ["CPUExecutionProvider"]
+
+    class FakeOnnxModel:
+        model = FakeSession()
+
+    class FakeTextEmbedding:
+        def __init__(self, **kwargs: object) -> None:
+            self.model = FakeOnnxModel()
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "fastembed",
+        SimpleNamespace(TextEmbedding=FakeTextEmbedding),
+    )
+    provider = FastEmbedEmbedding("test-model", device="cuda")
+
+    with pytest.raises(EmbeddingProviderUnavailableError, match="CUDA"):
+        provider.embed("hello")
 
 
 def test_unknown_embedding_provider_is_rejected() -> None:
