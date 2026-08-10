@@ -83,7 +83,7 @@ FASTEMBED_CACHE_PATH=E:\\project_code\\hospital\\var\\fastembed
 
 360 次模型调用中有 18 次结构化输出 fallback，比例为 5.00%。回答类型准确率和必需来源召回率分别下降 3.13、2.19 个百分点，无答案场景准确率仍为 0。以上都是合成测试环境工程指标，不是临床准确率或生产 SLA。
 
-详细过程见 [RAG 四指标优化实施与复测](RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)，数据字段与路径见 [合成 RAG 评测数据集](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
+数据字段、路径、初始/当前指标、RAGAS 和优化收益统一见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)；M2–M5 历史实现细节见 [RAG 四指标优化实施与复测](RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)。
 
 ## 7. 尚未完成
 
@@ -91,3 +91,11 @@ FASTEMBED_CACHE_PATH=E:\\project_code\\hospital\\var\\fastembed
 - 无答案场景判定与结构化输出 fallback 稳定性优化。
 - 使用合法脱敏真实语言和人工 Gold 的独立质量评测。
 - 真实医院、药店和通知系统的生产接入。
+
+## 8. 5A 分层评测推进中
+
+当前真实全链路脚本在冻结 Chunk ID Gold 上已计算 Recall@3/5/10、MRR@10、二值 nDCG@10、无答案准确率、过期版本过滤和检索 P50/P95/P99。二值 nDCG 使用相关 Chunk 的排名折损，不调用 LLM Judge，用于区分“召回到了但排位靠后”和“没有召回”。
+
+bad case 统一区分 `RETRIEVAL_MISS`、`RANKING_MISS`、`NO_ANSWER_FAILURE`、`STALE_VERSION_HIT` 与生成层的 `ANSWER_SOURCE_BINDING_FAILURE`。RAGAS 0.2.9 的 Faithfulness、Response Relevancy 和 Context Recall 已由离线适配器接入：只在答案、来源和冻结 Gold 写入后运行，默认关闭；未配置、依赖缺失或调用失败时逐条保留成功指标并将缺失项记为 N/A，绝不影响真实检索、回答或 bad case 判定。冻结记录离线复评已覆盖 320 条，300 条三项齐全、20 条部分评分；实测状态统一见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
+
+报告解析产生的来源仍是成员业务数据，不进入 RAG 知识库 namespace、向量索引或长期记忆。`ParsedDocument` 只为报告直接读取服务；结构化指标不能作为医疗知识召回结果或模型事实来源，除非由业务工具在当前成员作用域内重新读取。

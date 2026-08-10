@@ -415,6 +415,45 @@ def test_high_risk_request_is_blocked_before_business_tools(
     ] == "awaiting_confirmation"
 
 
+def test_off_topic_request_stops_before_business_execution_and_model(
+    business_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = business_client
+
+    response = client.post(
+        "/api/business-tasks",
+        json={
+            "business_domain": "chronic_care",
+            "member_id": FATHER_ID,
+            "user_input": "帮我写一段 Python 代码。",
+            "input_payload": {},
+            "idempotency_key": "business-scope-guard-1",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["status"] == "blocked"
+    assert payload["scope_decision"] == {
+        "action": "reject_off_topic",
+        "reason_code": "programming_request",
+        "confidence": 0.98,
+        "latency_ms": payload["scope_decision"]["latency_ms"],
+    }
+    assert payload["tool_calls"] == []
+    assert payload["provider_calls"] == []
+    assert payload["model_call_trace"] is None
+    observations = payload["run_trace"]["observations"]
+    scope_observation = next(
+        item for item in observations if item["event_type"] == "scope_guard"
+    )
+    assert scope_observation["scope_action"] == "reject_off_topic"
+    assert scope_observation["reason_code"] == "programming_request"
+    assert "unified_complexity_router" not in {
+        item["node_name"] for item in observations if item["event_type"] == "node"
+    }
+
+
 def test_provider_mode_is_explicitly_degraded_when_no_sandbox_adapter_exists(
     business_client: tuple[TestClient, Session],
 ) -> None:
@@ -529,6 +568,7 @@ def test_task8_checkpoint_is_authoritative_for_continuation_and_tracks_versions(
     assert checkpoint.thread_id == "thread-task8-checkpoint"
     assert "scratchpad" not in str(checkpoint.frozen_artifacts)
     assert "candidate_inferences" not in str(checkpoint.frozen_artifacts)
+    assert "final_answer_quality" in checkpoint.frozen_artifacts
     restored = TaskCheckpointService(
         session,
         cache=TaskCheckpointCache(_RedisMiss(), ttl_seconds=10),

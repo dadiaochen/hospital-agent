@@ -31,6 +31,7 @@ from app.tools.business_tools import register_business_tools
 from app.tools.db_tools import create_db_tool_registry
 from app.tools.tool_schemas import ToolExecutionContext, ToolResult
 from app.core.config import Settings
+from app.safety.final_answer_quality_gate import FinalAnswerQualityGate
 
 
 ConfirmationAction = Literal[
@@ -106,6 +107,8 @@ class ProductWorkflowState(TypedDict, total=False):
     confirmation_draft: dict[str, Any]
     safety_decisions: list[dict[str, Any]]
     final_output_safety: dict[str, Any]
+    final_answer_quality: dict[str, Any]
+    triage_state: dict[str, Any]
     visited_nodes: list[str]
     orchestration_run: dict[str, Any]
     unified_graph_version: str
@@ -139,6 +142,7 @@ class FamilyHealthProductWorkflow:
         )
         self.safety_guard = ThreeLayerSafetyGuard()
         self.confirmation_machine = ConfirmationStateMachine()
+        self.final_answer_quality_gate = FinalAnswerQualityGate()
         self.retriever = knowledge_retriever or create_knowledge_retriever(db)
         self.registry = create_db_tool_registry(db, include_confirmation_tools=True)
         register_business_tools(
@@ -1026,6 +1030,14 @@ class FamilyHealthProductWorkflow:
             return
 
         answer = result.output
+        answer = self._apply_final_answer_quality_gate(
+            state=state,
+            answer=answer,
+            payload=payload,
+            waiting=waiting,
+        )
+        if answer is None:
+            return
         if not self._answer_matches_workflow_state(
             answer,
             waiting=waiting,
@@ -1061,6 +1073,65 @@ class FamilyHealthProductWorkflow:
             claim.model_dump(mode="json") for claim in answer.claims
         ]
         state["final_answer"] = answer.content
+
+    def _apply_final_answer_quality_gate(
+        self,
+        *,
+        state: ProductWorkflowState,
+        answer: WorkflowFinalAnswerDraft,
+        payload: dict[str, Any],
+        waiting: bool,
+    ) -> WorkflowFinalAnswerDraft | None:
+        """Allow one model-only display repair; unsupported facts fail closed."""
+
+        def review(candidate: WorkflowFinalAnswerDraft, attempts: int):
+            return self.final_answer_quality_gate.review(
+                content=candidate.content,
+                waiting_for_confirmation=waiting,
+                contains_factual_claims=candidate.contains_factual_claims,
+                claim_count=len(candidate.claims),
+                source_count=len(state.get("source_refs", [])),
+                regeneration_attempts=attempts,
+            )
+
+        quality = review(answer, 0)
+        if quality.requires_regeneration:
+            repair_payload = dict(payload)
+            repair_payload["quality_issue"] = list(quality.issues)
+            repair = self.model_gateway.invoke(
+                ModelCallRequest(
+                    run_id=state["run_id"], task_id=state["task_id"], member_id=state["member_id"],
+                    purpose=f"business_{state['business_domain']}_final_answer_repair",
+                    messages=(
+                        ModelMessage(role="system", content=(
+                            "Return only valid JSON for WorkflowFinalAnswerDraft. This is one bounded, "
+                            "no-tool formatting repair. Preserve every supplied claim and status field. "
+                            "If confirmation is required, make the confirmation instruction explicit."
+                        )),
+                        ModelMessage(role="user", content=json.dumps(repair_payload, ensure_ascii=False)),
+                    ),
+                ),
+                WorkflowFinalAnswerDraft,
+            )
+            state.setdefault("final_answer_quality", {})["regeneration_trace"] = repair.trace.model_dump(mode="json")
+            if repair.output is not None:
+                answer = repair.output
+            quality = review(answer, 1)
+
+        prior_quality = state.get("final_answer_quality", {})
+        state["final_answer_quality"] = {
+            **(prior_quality if isinstance(prior_quality, dict) else {}),
+            **quality.model_dump(mode="json"),
+            "regeneration_attempts": quality.regeneration_attempts,
+        }
+        if quality.passed:
+            return answer
+        state["status"] = "blocked" if quality.hard_failed else "failed"
+        state["confirmation_state"] = "BLOCKED" if quality.hard_failed else state.get("confirmation_state", "NONE")
+        state["need_human_confirmation"] = False
+        state["final_answer"] = "当前回答未通过输出质量校验，未发送任何外部动作，请转人工复核。"
+        state.setdefault("errors", []).extend(f"final_answer_quality:{issue}" for issue in quality.issues)
+        return None
 
     def _check_existing_final_answer(self, state: ProductWorkflowState) -> None:
         """Run the output gate for fixed blocked/error messages too."""
@@ -1173,6 +1244,7 @@ class FamilyHealthProductWorkflow:
             "confirmation_draft": {},
             "safety_decisions": [],
             "final_output_safety": {},
+            "final_answer_quality": {},
             "visited_nodes": [],
         }
         return cast(ProductWorkflowState, self.graph.invoke(state))

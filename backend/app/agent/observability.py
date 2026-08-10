@@ -54,6 +54,18 @@ def build_observation_traces(state: Mapping[str, Any]) -> tuple[ObservationTrace
         redacted_fields=("user_input", "input_payload"),
     )
 
+    scope_decision = state.get("scope_decision")
+    if isinstance(scope_decision, Mapping):
+        scope_action = _optional_text(scope_decision.get("action"))
+        append(
+            "scope_guard",
+            "request_scope_guard",
+            success=scope_action == "allow",
+            latency_ms=_non_negative_int(scope_decision.get("latency_ms")),
+            scope_action=scope_action,
+            reason_code=_optional_text(scope_decision.get("reason_code")),
+        )
+
     for node_name in _string_sequence(state.get("visited_nodes")):
         append("node", node_name, success=True)
 

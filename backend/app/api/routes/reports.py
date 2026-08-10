@@ -2,11 +2,22 @@ from fastapi import APIRouter
 
 from app.api.dependencies import DbSession, DemoUser
 from app.schemas.common import ApiErrorResponse
-from app.schemas.reports import ReportDetailResponse, ReportListResponse
+from app.schemas.reports import (
+    ReportDetailResponse,
+    ReportListResponse,
+    ReportUploadRequest,
+    ReportUploadResponse,
+)
+from app.services.report_lifecycle_service import ReportLifecycleService
 from app.services.report_read_service import ReportReadService
 
 
 router = APIRouter(prefix="/family-members/{member_id}/reports")
+
+
+@router.post("", response_model=ReportUploadResponse, status_code=201)
+def upload_report(member_id: str, payload: ReportUploadRequest, db: DbSession, demo_user: DemoUser) -> ReportUploadResponse:
+    return ReportLifecycleService(db, demo_user.id).upload(member_id, payload)
 
 
 @router.get(
@@ -34,3 +45,4 @@ def get_report(
     demo_user: DemoUser,
 ) -> ReportDetailResponse:
     return ReportReadService(db, demo_user.id).get_report(member_id, report_id)
+

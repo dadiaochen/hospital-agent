@@ -9,6 +9,7 @@ from app.agent.model_gateway_schemas import ModelCallTrace
 from app.agent.run_trace_schemas import RunTrace
 from app.schemas.business import BusinessDomain, SourceRef
 from app.schemas.business_task import (
+    BusinessTaskClarificationRequest,
     BusinessTaskConfirmRequest,
     BusinessTaskCreateRequest,
     BusinessTaskExecutionResponse,
@@ -49,6 +50,11 @@ def _execution_response(
         confirmation_state=str(state.get("confirmation_state") or "NONE"),
         confirmation_draft=state.get("confirmation_draft") or {},
         safety_flags=[str(item) for item in state.get("safety_flags", [])],
+        scope_decision=(
+            state.get("scope_decision")
+            if isinstance(state.get("scope_decision"), dict)
+            else None
+        ),
         source_refs=source_refs,
         tool_calls=[item for item in state.get("tool_calls", []) if isinstance(item, dict)],
         provider_calls=[
@@ -182,6 +188,32 @@ def confirm_business_task(
         idempotency_key=request.idempotency_key,
         checkpoint_version=request.checkpoint_version,
         confirmation_version=request.confirmation_version,
+    )
+    return _execution_response(execution)
+
+
+@router.post(
+    "/{task_id}/clarify",
+    response_model=BusinessTaskExecutionResponse,
+    responses={
+        404: {"model": ApiErrorResponse},
+        409: {"model": ApiErrorResponse},
+        422: {"model": ApiErrorResponse},
+        503: {"model": ApiErrorResponse},
+    },
+)
+def clarify_business_task(
+    task_id: str,
+    request: BusinessTaskClarificationRequest,
+    db: DbSession,
+    demo_user: DemoUser,
+) -> BusinessTaskExecutionResponse:
+    execution = BusinessTaskService(db, user_id=demo_user.id).clarify_task(
+        task_id=task_id,
+        user_input=request.user_input,
+        input_payload=request.input_payload,
+        idempotency_key=request.idempotency_key,
+        checkpoint_version=request.checkpoint_version,
     )
     return _execution_response(execution)
 

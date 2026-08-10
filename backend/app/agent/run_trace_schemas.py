@@ -19,6 +19,7 @@ ActionTraceStatus = Literal["none", "draft", "awaiting_confirmation", "executed"
 TraceSchemaVersion = Literal["4d-b2.2", "4d-b2.3"]
 ObservationEventType = Literal[
     "request",
+    "scope_guard",
     "node",
     "tool",
     "provider",
@@ -92,6 +93,8 @@ class ObservationTrace(FrozenTraceModel):
     output_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
     token_usage_available: bool = False
+    scope_action: NonEmptyStr | None = None
+    reason_code: NonEmptyStr | None = None
     redaction_applied: bool = False
     redacted_fields: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
 

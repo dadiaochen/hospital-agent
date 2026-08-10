@@ -12,6 +12,7 @@
 | --- | --- |
 | 多 Agent 如何协作 | 先判断简单还是复杂任务；复杂任务由 Planner 制定有限计划，再由 Supervisor 协调三个业务 Agent，过程有明确的结束条件 |
 | 医疗动作如何避免越权 | 请求、动作和最终回答都会经过安全检查；续方、购药和提醒等动作必须经过用户确认 |
+| 业务外输入如何避免浪费链路 | 在医疗安全前用确定性 Scope Guard 拦截高置信度天气、编程、股票等请求；不调用 Router、RAG、工具或模型 |
 | 如何避免家庭成员信息混在一起 | 每次任务只围绕一个家庭成员建立上下文，查询结果和来源都带成员范围 |
 | 中断任务如何继续 | PostgreSQL 保存可以恢复的任务记录，Redis 只保存短期缓存，缓存失效时重新从 PostgreSQL 读取 |
 | RAG 如何保证有依据 | 使用 PostgreSQL 和 pgvector 做知识检索，同时保留关键词检索和来源编号 |
@@ -28,7 +29,9 @@
 ```mermaid
 flowchart TB
     UI["用户端页面"] --> API["后端接口"]
-    API --> GUARD1["请求安全检查"]
+    API --> SCOPE["请求范围检查"]
+    SCOPE -->|"业务外/模糊"| END["固定回复或澄清"]
+    SCOPE -->|"健康相关"| GUARD1["请求安全检查"]
     GUARD1 --> GRAPH["统一业务流程"]
     GRAPH --> ROUTER["任务复杂度判断"]
     ROUTER -->|"简单任务"| DIRECT["直接进入业务 Agent"]
@@ -183,9 +186,12 @@ README 只保留项目展示和快速启动信息，详细设计和学习材料�
 - [Agent 架构](docs/AGENT_ARCHITECTURE.md)：Router、Planner、Supervisor、领域 Agent 和治理节点。
 - [API 规范](docs/API_SPEC.md)：后端接口、请求响应和确认续跑。
 - [RAG 检索](docs/RAG_RETRIEVAL.md)：Embedding、pgvector、关键词降级和来源引用。
-- [RAG 合成评测方案](docs/RAG_SYNTHETIC_EVALUATION_DATASET_PLAN.md)：测试环境仿真语料、125/500 Query 自动评测与后续优化候选清单。
-- [RAG 合成评测数据集说明](docs/RAG_SYNTHETIC_EVALUATION_DATASET.md)：数据规模、路径、split，以及真实 FastEmbed + pgvector HNSW + LLM 全链路实测指标。
-- [RAG 四指标优化实施与复测](docs/RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)：版本过滤、证据门、运行内缓存、GPU Embedding、真实 LLM 复测和指标边界。
+- [RAG 合成评测统一报告](docs/RAG_SYNTHETIC_EVALUATION_DATASET.md)：数据规模、路径、split、初始/当前指标、RAGAS、已实施优化、收益和后续思路的唯一指标口径。
+- [RAG 合成数据集构建方案](docs/RAG_SYNTHETIC_EVALUATION_DATASET_PLAN.md)：125/500 数据集 A–G 构建任务和冻结交付状态。
+- [RAG 四指标优化实施明细](docs/RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)：M2–M5 的历史实现细节和回溯入口，数值以统一报告为准。
+- [RAGAS 离线适配器与三视图 Harness](docs/implementation/RAGAS_OFFLINE_ADAPTER.md)：可选语义交叉验证、失败不阻断和 125/500 冻结数据集的三视图投影。
+- [Triage 多轮澄清与安全续跑](docs/implementation/TRIAGE_CLARIFICATION_CONTINUATION.md)：缺槽位停止、PostgreSQL 权威 Checkpoint、新 run 续跑与成员隔离。
+- [Triage 多轮澄清与安全续跑](docs/implementation/TRIAGE_CLARIFICATION_CONTINUATION.md)：缺槽位停止、PostgreSQL 权威 Checkpoint、新 run 续跑与成员隔离。
 - [简历与面试口径](docs/RESUME_NOTES.md)：业务背景、多 Agent Pipeline、简历一句话和最新实测指标。
 - [核心代码走读](docs/learning/CORE_CODE_WALKTHROUGH.md)：从 API 到 Agent、Tool、RAG 和评测的代码学习路线。
 
@@ -228,3 +234,5 @@ hospital/
 - 不建议用户自行停药、加量、减量或换药。
 - 复诊、购药和提醒执行等受保护动作必须显式确认。
 - 没有业务数据或知识来源时，不编造病史、库存、处方或医疗规则。
+- 报告上传后直接返回来源可追溯的结构化指标，不诊断、不处方、不生成健康记录草稿；处方及有外部副作用的动作仍须显式确认。
+- 最终回答在冻结前经过质量门；安全失败或无来源事实直接阻断，格式问题最多进行一次无工具修复。

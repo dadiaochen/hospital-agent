@@ -197,6 +197,52 @@ class TaskCheckpointService:
             "confirmation_draft": self._mapping_value(confirmation, "draft"),
             "safety_decisions": [],
             "final_output_safety": {},
+            "final_answer_quality": {},
+        }
+
+    def restore_state_for_clarification(
+        self,
+        *,
+        task: BusinessTask,
+        payload: TaskCheckpointPayload,
+    ) -> dict[str, Any]:
+        """Restore only structured Triage slots for a new user turn."""
+
+        triage_state = payload.frozen_artifacts.get("triage_state", {})
+        if not isinstance(triage_state, Mapping):
+            triage_state = {}
+        return {
+            "task_id": task.id,
+            "user_id": task.user_id,
+            "member_id": task.member_id,
+            "business_domain": task.business_domain,
+            "intent": payload.intent,
+            "user_goal": task.user_input,
+            "user_input": task.user_input,
+            "input_payload": dict(task.input_payload or {}),
+            "provider_mode": task.provider_mode,
+            "human_confirmation_granted": False,
+            "idempotency_key": task.idempotency_key,
+            "status": "running",
+            "final_answer": "",
+            "final_claims": [],
+            "need_human_confirmation": False,
+            "safety_flags": [],
+            "source_refs": [],
+            "tool_calls": [],
+            "provider_calls": [],
+            "model_call_trace": {},
+            "degraded": False,
+            "errors": [],
+            "confirmation_request": {},
+            "confirmation_result": {},
+            "confirmation_state": "NONE",
+            "confirmation_scope": {},
+            "confirmation_draft": {},
+            "safety_decisions": [],
+            "final_output_safety": {},
+            "final_answer_quality": {},
+            "triage_state": dict(triage_state),
         }
 
     def restore_state_for_replay(
@@ -288,6 +334,7 @@ class TaskCheckpointService:
             "safety_flags": self._json_safe(state.get("safety_flags", [])),
             "safety_decisions": self._json_safe(state.get("safety_decisions", [])),
             "final_output_safety": self._json_safe(state.get("final_output_safety", {})),
+            "final_answer_quality": self._json_safe(state.get("final_answer_quality", {})),
             "errors": self._json_safe(state.get("errors", [])),
             "degraded": bool(state.get("degraded", False)),
             "model_call_trace": self._json_safe(state.get("model_call_trace", {})),
@@ -304,6 +351,7 @@ class TaskCheckpointService:
                 if isinstance(state.get("context_envelope"), Mapping)
                 else []
             ),
+            "triage_state": self._json_safe(state.get("triage_state", {})),
             "external_action_status": "not_submitted",
         }
         return TaskCheckpointPayload(

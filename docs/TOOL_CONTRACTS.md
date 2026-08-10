@@ -171,3 +171,5 @@ UX-08 不改变六类业务工具的 schema、权限、超时、重试或人工�
 ## 用户端 UX-09 联调契约
 
 UX-09 联调没有新增 Tool。发现低库存续方在缺少用户显式药品名时无法构造 `check_pharmacy_inventory` 输入，现由 `WorkflowToolInputBuilder` 从当前成员本轮成功的 `query_medicine_box` 或 `query_prescriptions` 结果补齐 `medicine_name`。该值必须有工具证据；没有证据时仍按原契约失败，不允许模型猜测。工具的 `input_schema`、`output_schema`、`permission_scope`、超时、重试和 `requires_human_confirmation` 保持不变。
+
+报告上传、解析和历史查询是 API/service 闭环，不新增可由 Supervisor 自由选择的 Tool。上传结果直接是成员作用域内的可读结构，不创建报告确认草稿；业务 Agent 的既有 `create_health_record_draft` 仅用于其独立的健康记录任务，最终回答质量门不调用任何 Tool。

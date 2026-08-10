@@ -81,6 +81,8 @@ Supervisor 只调度 Agent，不越级调用工具。没有工具或 RAG 证据�
 
 业务 DAG 只描述 Router、Planner、Supervisor 和领域 Agent 之间的业务依赖。Agent 安全、人工确认、Checkpoint、最终回答和 Agent 评测属于固定治理边，不进入 Supervisor 的可选计划。
 
+5A 在可信身份与成员作用域之后、医疗安全之前增加 `RequestScopeGuard`。它只判断请求是否属于家庭健康产品：高置信度天气、编程、金融、旅游等业务外请求直接使用固定回复结束；“帮我看看”等无明确健康对象的输入返回澄清；含健康信号的混合意图保守放行。它不调用模型，不替代医疗安全，不进入 Supervisor，也不创建第二套状态服务。
+
 阻断型安全标记出现后，不能创建草稿或执行动作。购药、复诊和提醒首次只生成本地草稿；确认通过同一 task 下的新 run 续跑，并重新读取可变事实。
 
 ## 8. 状态恢复
@@ -100,3 +102,9 @@ Router、Planner、领域 Agent 和 Supervisor 可以使用 Model Gateway 产生
 冻结产物至少包含路由、计划、步骤结果、工具调用、来源、Agent 安全、确认、FinalAnswer、FinalClaim 和延迟。只读评测器分别检查任务完成、工具正确性、来源覆盖、幻觉、安全、成员隔离和状态恢复。
 
 当前架构、数据和指标见 [技术设计](TECH_DESIGN.md)、[Agent 评测](EVALUATOR_AGENT.md) 与 [简历和面试口径](RESUME_NOTES.md)；历史阶段见 [项目执行历史](EXECUTION_HISTORY.md)。
+
+5A-2 已将 synthetic RAG 评测明确分为检索层和生成层。检索层以冻结 chunk ID Gold 计算 Recall@3/5/10、MRR@10、二值 nDCG@10、无答案准确率、过期版本过滤和 P50/P95/P99；生成层继续保留来源绑定、Claim、Citation 和安全的确定性评分。RAGAS 只允许作为离线语义交叉验证，失败不得影响业务链路或冻结答案。
+
+5A-4 为 Triage 增加最小多轮槽位状态机：首个必填槽位为 `symptoms`，缺失时只返回稳定槽位名与 `needs_clarification`。续跑由服务层校验 `user_id`、`member_id`、任务范围与 Checkpoint 版本，并创建带 `parent_run_id` 的新 run；Triage 不保留完整原始对话、不诊断疾病，也不在信息不完整时创建复诊草稿。
+
+最终回答在既有 Final Output Safety 后经过 `FinalAnswerQualityGate`。该门只检查展示完整性、确认提示和事实来源契约，不能调用工具或重规划；格式缺陷至多进行一次同 schema 的无 Tool 修复，安全失败和无来源事实直接 fail-closed。审计随 Run/Checkpoint 冻结，`EvaluatorAgent` 仍只读且发生在答案冻结之后。

@@ -14,6 +14,7 @@
 | 产品交付 | Next.js 患者端、Docker Compose、固定演示和浏览器 E2E | 四个演示场景、7 条早期浏览器 E2E |
 | 统一评测 | FinalClaim、Trace v2、300 个 WorldState、1200 条表达 | Gold 人工审核、九维 deterministic grader |
 | RAG 优化 | 版本过滤、Query 实体证据门、运行内知识快照 | 500 条 synthetic Query 的真实模型全链路对比 |
+| 5A 业务闭环 | 统一报告解析、直接结构化解读、最终回答质量门、Checkpoint 审计收口 | 真实 RapidOCR 冒烟与增量回归；详见 `implementation/5A_CLOSEOUT.md` |
 
 ## 2. 主要架构决策
 
@@ -67,7 +68,15 @@
 - 自动文档摄取和通用切片流水线不是当前产品能力；现有知识数据为结构化合成语料和人工规则单元。
 - LLM Judge 不进入运行链路，也不作为发布硬门槛。
 
-## 6. Git 回溯方法
+## 6. 5A-2 RAGAS 冻结记录离线复评
+
+- 修复 `raise_exceptions=True` 导致单个 `StringIO.question` 格式异常拖垮 320 条批次的问题；改为单项失败隔离、非有限分数转 N/A，并保留同一 Query 的其他成功指标。
+- 新增冻结记录离线评分入口，只读取 `answer_results.jsonl`、`query_results.jsonl`、`answer_harness_view.jsonl` 和冻结 Chunk；不重跑语料 Embedding、PostgreSQL/HNSW 检索或目标回答模型。
+- 首轮 320 条全部至少获得一项分数，296 条三项齐全；随后只补跑 24 条缺失项，最终 300 条三项齐全、20 条部分评分。
+- 最终统一排除 20 条部分评分样本，不按 0 分处理；使用 300 条三项齐全共同样本计算：Faithfulness `0.6166`、Response Relevancy `0.4316`、Context Recall `0.6700`。补跑后独立 Judge 返回 HTTP 402 余额不足，缺失项只保留为诊断记录。
+- 运行产物位于被 Git 忽略的 `output/benchmarks/rag_synthetic/rag-synthetic-v1-ragas-offline-full-fix-retry-20260810/`，不提交数据集、答案或 Judge 明细。
+
+## 7. Git 回溯方法
 
 需要恢复旧阶段文档时：
 

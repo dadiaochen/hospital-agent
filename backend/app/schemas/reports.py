@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Literal
 
+from pydantic import Field
+
 from app.schemas.common import ApiSchema
 
 
@@ -88,3 +90,19 @@ class ReportDetailResponse(ApiSchema):
     sections: list[ReportSectionResponse]
     sources: list[ReportSourceResponse]
     safety: ReportSafetyResponse
+
+
+class ReportUploadRequest(ApiSchema):
+    """Initial JSON upload contract; file content is kept in memory only."""
+
+    title: str = Field(min_length=1, max_length=160)
+    document_type: str = Field(min_length=1, max_length=80)
+    input_type: Literal["text", "pdf", "image"]
+    text: str = ""
+    content_base64: str | None = None
+    extracted_text: str = ""
+
+
+class ReportUploadResponse(ApiSchema):
+    report: ReportSummaryResponse
+    metric_count: int

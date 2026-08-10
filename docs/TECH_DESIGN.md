@@ -13,6 +13,8 @@ Next.js
   -> FastAPI API
   -> Service / Transaction
   -> UnifiedHealthGraph
+       -> RequestScopeGuard
+            -> reject off-topic / clarify scope: END
        -> Request Safety
        -> Router
             -> simple: Domain Agent
@@ -43,6 +45,8 @@ Next.js
 | `rag` | Embedding、混合检索、版本和来源 | 保存个人健康记忆 |
 | `safety` | 请求、动作和最终输出安全 | 代替业务执行或事后评测 |
 | `core` | 配置、数据库、缓存、日志和异常 | 业务决策 |
+
+`RequestScopeGuard` 在 `safety` 层实现、以 `schemas.request_scope.ScopeDecision` 输出 Pydantic 契约。它不判断疾病或治疗风险：只对高置信度产品外输入终止，对模糊输入提示澄清，对出现健康信号的输入保守放行给既有 Request Safety。
 
 ## 4. 多 Agent 编排
 
@@ -85,7 +89,11 @@ Model Gateway 的 Provider、模型、Base URL、Key 和 timeout 只来自服务
 
 RAG 使用 FastEmbed、PostgreSQL pgvector HNSW 和关键词并行召回，经 RRF 融合、活动版本过滤、来源校验和实体证据筛选后，把最小直接来源交给模型。知识库与个人状态使用不同 namespace 和写入策略。
 
-当前 500 Query 合成测试中，Recall@5 从 70.96% 提升到 85.19%，来源绑定回答准确率从 23.44% 提升到 63.75%，端到端 p95 从 3.40 秒降到 2.19 秒。详细指标和限制见 [RAG 四指标优化实施与复测](RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)。
+当前 500 Query 合成测试中，Recall@5 从 70.96% 提升到 85.19%，来源绑定回答准确率从 23.44% 提升到 63.75%，端到端 p95 从 3.40 秒降到 2.19 秒。详细指标、RAGAS 状态和限制见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
+
+全链路评测在答案冻结后还可执行 RAGAS 离线语义交叉验证。该适配器不属于业务工作流：默认关闭；独立 Judge、依赖或网络不可用时按指标保留成功分数、缺失项记 N/A，不改变检索、回答、bad case 或验收结论。它支持直接读取冻结回答、证据和 Gold 进行复评，不重跑语料 Embedding、PostgreSQL/HNSW 或目标回答模型。相同的 125 个基础 Case / 500 条 Query 会同时生成入口、检索、回答三种 Harness 视图，保持 Gold 与 split 的可追溯性。运行说明见 [RAGAS 离线适配器与三视图 Harness](implementation/RAGAS_OFFLINE_ADAPTER.md)。
+
+预问诊路径采用最小 Triage 槽位状态机：症状缺失时先返回 `needs_clarification`，将最小结构化槽位保存到 PostgreSQL Checkpoint；补充后以同一任务下的新 `AgentRun` 续跑，并通过 `parent_run_id`、用户/成员范围和 Checkpoint 版本保证可追溯与隔离。该流程不传递旧 scratchpad，也不会在信息不足时生成复诊草稿或诊断结论。
 
 ## 8. Agent 安全与人工确认
 
@@ -105,3 +113,7 @@ LLM Judge 不进入运行链路，也不作为发布硬门槛。旧执行阶段�
 - 生产认证、密钥托管、监控、容量压测、备份恢复和高可用。
 - 正式知识文档摄取、审核、切片、发布和回滚流水线。
 - 使用合法脱敏真实语言与人工 Gold 的质量评测。
+
+## 11. 报告解析与最终回答收口
+
+`DocumentParserService` 将文本、Markdown 表格、PDF 文本层和本地图片 OCR 分别处理并投影为统一 `ParsedDocument`。报告 API 上传后直接持久化为可读结构，不生成报告确认草稿或健康记录事件；它只整理来源信息，不输出诊断或治疗结论。`FinalAnswerQualityGate` 位于最终输出安全检查之后、冻结之前：它不调用业务工具，最多允许一次模型格式修复；无来源事实和安全失败保持 fail-closed。质量审计随既有 PostgreSQL Checkpoint 冻结，Redis 不承载事实。

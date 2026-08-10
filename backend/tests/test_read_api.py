@@ -105,6 +105,29 @@ def test_report_reads_follow_the_frozen_detail_contract_and_member_scope(
     assert cross_member.json()["error"]["code"] == "not_found"
 
 
+def test_report_upload_returns_ready_structured_metrics_without_confirmation(
+    api_client: tuple[TestClient, dict[str, str]],
+) -> None:
+    client, ids = api_client
+    uploaded = client.post(
+        f"/api/family-members/{ids['father_id']}/reports",
+        json={
+            "title": "本次化验单",
+            "document_type": "checkup_report",
+            "input_type": "text",
+            "text": "血糖: 5.6 mmol/L (3.9-6.1)",
+        },
+    )
+    assert uploaded.status_code == 201
+    report_id = uploaded.json()["report"]["id"]
+    assert uploaded.json()["report"]["status"] == "ready"
+    assert uploaded.json()["metric_count"] == 1
+    detail = client.get(f"/api/family-members/{ids['father_id']}/reports/{report_id}")
+    assert detail.status_code == 200
+    assert detail.json()["metrics"][0]["name"] == "血糖"
+    assert detail.json()["safety"]["requires_professional_review"] is True
+
+
 def test_cross_member_reads_return_a_uniform_not_found_error(
     api_client: tuple[TestClient, dict[str, str]],
 ) -> None:
