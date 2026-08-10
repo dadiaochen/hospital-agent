@@ -9,13 +9,15 @@
 所有业务请求先经过相同治理入口，再按复杂度分流：
 
 ```text
-用户请求 -> 可信成员/资源校验 -> Request Safety Guard -> Complexity Router
+用户请求 -> 可信成员/资源校验 -> RequestScopeGuard -> Request Safety Guard -> Complexity Router
   -> 简单：对应 Domain Agent
   -> 复杂：一次性 TaskPlanner -> bounded Supervisor -> Domain Agents
 -> Action Policy Guard -> 可选本地 DRAFT
 -> Model Gateway 候选答案 -> Final Output SafetyAgent
 -> 冻结产物 -> Context Reset -> Deterministic Evaluator
 ```
+
+`RequestScopeGuard` 对高置信度业务外输入返回固定产品范围提示，对无明确健康对象的输入返回澄清，并在这两种情况下直接结束；因此不会消耗 Router、Planner、Supervisor、领域 Agent、RAG、Tool、Provider 或主模型。含健康信号的混合意图只保留健康部分继续执行，医疗风险仍由 Request Safety Guard 处理。
 
 4D-B2.1/B4 已将患者端入口接入 `UnifiedHealthGraph` 和 `SupervisorBusinessWorkflow`：Router 形成目标角色，复杂任务由一次性 Planner 冻结计划，Supervisor 再实际调用运行时 Triage/Medication/Report Agent；领域 Agent 通过 Tool Registry 获取业务 Tool、Provider 和 RAG 证据，结果返回同一个业务 state。`FamilyHealthProductWorkflow` 只提供共享的 Safety、Confirmation、FinalAnswer 和 artifact helper，不再由外部 `business_domain` 直接选择最终执行分支。4D-B2.2 已把复杂计划表示成有界 DAG，但正式业务路径强制串行，避免确认和写状态竞争；独立只读并行仍用于受控评测。4D-B2.3 已在同一次最终答案产物中保存 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`，4D-B2.4 已生成待审核的 300/1200 v2 数据；B2.5 已完成内存 projection、九类 grader 和 preview Runner；B2.6 已接入 PostgreSQL shadow transaction、case-scoped RAG、Provider sandbox、真实图执行和 Docker 19/19 回归，但全量正式消融报告仍未冻结。
 
@@ -52,6 +54,8 @@
 4. 检索分级导诊规则、红旗症状规则和就医流程知识。
 5. Agent 安全检查先判断是否需要立即就医、急诊或人工介入。
 6. 对非阻断请求由 TriageAgent 生成科室方向、就诊准备材料和可选服务入口草稿。
+
+复诊准备首次缺少 `symptoms` 时，Triage 返回 `needs_clarification`，不调用科室、号源或草稿工具。用户通过 `/api/business-tasks/{task_id}/clarify` 补充结构化槽位后，服务从 PostgreSQL 权威 Checkpoint 恢复最小状态，以新的 run 重新执行；旧 scratchpad、临时工具输出和未确认推断不会续跑。
 7. 本地草稿自动保存；由用户确认是否执行允许的本地后续状态，不提交真实挂号或在线问诊。
 
 ### 输出
@@ -182,3 +186,7 @@ Router、TaskPlanner、三个 Domain Agent 和 Supervisor 在 4B 目标架构中
 联调主线为：成员选择 → AI 健康助手首轮整理 → 必要时显式确认 → 结果回看 → 历史咨询/家庭管理/报告解读按成员读取。服务端继续负责成员权限、来源、Safety 和确认状态；浏览器只负责提交用户输入、展示冻结结果和执行确认，不重算医疗事实。
 
 低库存续方场景中，药店库存查询需要药品名时，输入构建器从本轮同一成员的药箱或处方读取结果补齐参数；无来源时保持失败。联调不创建购药、复诊、支付或提醒外部动作，页面不展示这些内部执行边界。
+
+## 报告上传与结构化解读
+
+用户上传报告后，系统直接解析章节、Markdown 表格和结构化指标并标记为可读；不对指标作诊断、治疗或处方推导。PDF 使用 `pypdf` 读取文本层；图片使用本地 RapidOCR + ONNX Runtime CPU 提取文字，均复用同一结构化解析。报告列表即为同成员历史，不创建报告确认草稿或健康记录事件，也不触发外部提交。

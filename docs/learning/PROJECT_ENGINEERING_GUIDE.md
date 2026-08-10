@@ -1373,7 +1373,7 @@ assert response.status_code == 200
 
 - `docs/EXECUTION_HISTORY.md`：旧阶段、消融、Docker 与浏览器验收摘要
 - `docs/RESUME_NOTES.md`：当前简历与面试口径
-- `docs/RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md`：当前 RAG 实测指标
+- `docs/RAG_SYNTHETIC_EVALUATION_DATASET.md`：当前 RAG 实测指标、RAGAS、已实施优化与统一口径
 
 简历如何选择数字由 [简历文档](RESUME_GUIDE.md) 和 [证据边界](../RESUME_NOTES.md) 负责，本篇不再维护第二份简历口径。
 

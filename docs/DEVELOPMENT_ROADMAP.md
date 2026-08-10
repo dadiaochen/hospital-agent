@@ -60,3 +60,22 @@
 - 某次运行报告默认写入被 Git 忽略的 output/ 或 var/。
 - 只有可复用的结论进入当前文档；阶段过程进入 [执行历史归档](EXECUTION_HISTORY.md)。
 - .env、API Key、真实患者数据、本机身份映射和人工审核队列不得提交。
+
+## 8. 5A 业务闭环与分层评测收口
+
+本轮以 `Hospital_Agent_业务闭环补齐_Codex执行方案` 为输入，仍以本路线图为唯一授权来源。采用增量方式补齐前置范围拦截、RAG 分层评测与业务闭环缺口；不推翻当前 Router、一次性 Planner、bounded Supervisor、三个领域 Agent、固定 Agent 安全和 post-run Agent 评测边界。
+
+| 顺序 | 工作 | 状态 | 完成标准 |
+| --- | --- | --- | --- |
+| 5A-0 | 代码审计与基线冻结 | DONE | 已建立审计文档和本地基线备份分支 |
+| 5A-1 | RequestScopeGuard | DONE | 高置信度业务外请求在 Router / RAG / Tool / 主模型前终止，保留隐私安全 Trace |
+| 5A-2 | RAG Retrieval 与 Generation 分层评测 | DONE | frozen Gold 自动计算 Recall/MRR/nDCG 与 bad case 归因；RAGAS 0.2.9 支持冻结回答离线复评、单项失败隔离和缺失项定向补分，320 条中 300 条三项齐全 |
+| 5A-3 | 合成数据集接入 Harness | DONE | 同一 125/500 冻结数据集已投影为 Entry、Retrieval、Answer 三类离线 Harness 视图，并与全链路报告同目录输出 |
+| 5A-4 | Triage 多轮槽位状态机 | DONE | `needs_clarification` 冻结最小槽位状态；补充后以新 run、版本校验和成员隔离从 PostgreSQL Checkpoint 安全续跑 |
+| 5A-5 | 统一文档解析 | DONE | 文本、PDF、图像和表格独立解析后输出统一 `ParsedDocument`，不生成诊断或治疗建议 |
+| 5A-6 | 报告上传与结构化解读 | DONE | 报告上传后直接持久化为可读结构；文本/表格、PDF 文本层和本地图片 OCR 统一解析，不生成报告确认草稿 |
+| 5A-7 | FinalAnswerQualityGate | DONE | 冻结前最多一次无 Tool 的格式修复；无来源事实或安全失败 fail-closed |
+| 5A-8 | Context / Checkpoint 收口 | DONE | 新质量门状态进入既有 PostgreSQL Checkpoint；Redis TTL 缓存继续失效回源 |
+| 5A-9 | E2E、报告与 Git Freeze | IN PROGRESS | 分层回归、bad case 归因、文档收口及可复现命令已完成；待其他窗口释放 Git index 后恢复旧测试快照并完成 Git Freeze |
+
+5A 的详细审计、复用边界和已知限制见 [业务闭环与分层评测差距审计](implementation/FINAL_BUSINESS_GAP_AUDIT.md)。所有 synthetic 数据和单次运行报告继续只保存在被 Git 忽略的 `output/` 或 `var/`。

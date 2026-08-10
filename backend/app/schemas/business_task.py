@@ -11,6 +11,7 @@ from app.agent.model_gateway_schemas import ModelCallTrace
 from app.agent.run_trace_schemas import RunTrace
 from app.schemas.business import BusinessDomain, ProviderMode, SourceRef
 from app.schemas.common import ApiSchema
+from app.schemas.request_scope import ScopeDecision
 
 
 class BusinessTaskCreateRequest(ApiSchema):
@@ -29,6 +30,15 @@ class BusinessTaskConfirmRequest(ApiSchema):
     idempotency_key: str = Field(min_length=1, max_length=120)
     checkpoint_version: int | None = Field(default=None, ge=1)
     confirmation_version: int | None = Field(default=None, ge=1)
+
+
+class BusinessTaskClarificationRequest(ApiSchema):
+    """One user turn that fills the slots of a paused Triage task."""
+
+    user_input: str = Field(min_length=1)
+    input_payload: dict[str, Any] = Field(default_factory=dict)
+    idempotency_key: str = Field(min_length=1, max_length=120)
+    checkpoint_version: int = Field(ge=1)
 
 
 class BusinessTaskSummaryResponse(ApiSchema):
@@ -65,6 +75,7 @@ class BusinessTaskExecutionResponse(ApiSchema):
     confirmation_state: str = "NONE"
     confirmation_draft: dict[str, Any] = Field(default_factory=dict)
     safety_flags: list[str]
+    scope_decision: ScopeDecision | None = None
     source_refs: list[SourceRef]
     tool_calls: list[dict[str, Any]]
     provider_calls: list[dict[str, Any]]

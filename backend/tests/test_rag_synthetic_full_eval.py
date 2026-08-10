@@ -11,6 +11,7 @@ from scripts.rag_synthetic_eval import generate_corpus, generate_dataset
 from scripts.run_synthetic_rag_full_eval import (
     SyntheticAnswer,
     _answer_row,
+    _retrieval_row,
     resolve_retrieval_profile,
 )
 
@@ -252,3 +253,38 @@ def test_m4_profile_enables_only_run_scoped_snapshot_cache() -> None:
     assert profile.candidate_limit is None
     assert profile.rerank_enabled is False
     assert profile.dedupe_enabled is False
+
+
+def test_retrieval_row_reports_binary_ndcg_for_frozen_chunk_gold() -> None:
+    query = {
+        "query_id": "query-ndcg",
+        "base_case_id": "case-ndcg",
+        "split": "validation",
+        "variant_type": "canonical",
+        "case_type": "single_document",
+        "retrieval_gold": {
+            "relevant_chunk_ids": ["relevant-1", "relevant-2"],
+            "stale_chunk_ids": [],
+        },
+    }
+    result = SimpleNamespace(
+        sources=[
+            _retrieved_chunk("irrelevant", chunk_index=0, content="无关", rrf_score=0.3),
+            _retrieved_chunk("relevant-1", chunk_index=1, content="相关一", rrf_score=0.2),
+            _retrieved_chunk("relevant-2", chunk_index=2, content="相关二", rrf_score=0.1),
+        ],
+        requested_mode="hybrid",
+        effective_mode="hybrid",
+        retrieval_provider="pgvector",
+        embedding_model="test-embedding",
+        embedding_dimension=384,
+        embedding_schema_version="rag-embedding-v1",
+        fallback_used=False,
+        fallback_reason=None,
+    )
+
+    row = _retrieval_row(query, result, retrieval_ms=1.0)
+
+    assert row["recall_at_3"] == 1.0
+    assert row["mrr_at_10"] == 0.5
+    assert row["ndcg_at_10"] == 0.6934

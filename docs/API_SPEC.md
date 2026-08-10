@@ -154,6 +154,7 @@ Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider �
 | `GET` | `/api/business-tasks/{task_id}/sources` | 查询该任务保留的 Provider/RAG/工具来源引用。 |
 | `GET` | `/api/business-tasks/{task_id}/artifacts` | 查询最新冻结的 `RunTrace`、`RunSummary`、`EvaluationResult` 和工具/Provider 产物。 |
 | `POST` | `/api/business-tasks/{task_id}/confirm` | 对已有本地 `DRAFT` 确认执行，创建同一 task 的独立 continuation run。 |
+| `POST` | `/api/business-tasks/{task_id}/clarify` | 仅为 `needs_clarification` 的 Triage 任务补充结构化槽位；校验 Checkpoint 版本后创建新 run。 |
 | `POST` | `/api/preferences` | 在同 task 的已执行人工确认和 source version 校验通过后写入可撤销偏好。 |
 
 首次创建示例：
@@ -269,6 +270,8 @@ UX-06 已按冻结的 `report-detail.v1` 契约接入以下只读接口：
 
 每条 Observation 只包含 request/task/run/member 标识、事件类型、node、序号、工具/Provider/模型名、结果、时延、重试、fallback、source ID 和可用 token 计数。请求正文、`input_payload`、Tool 输入输出、Provider 请求响应、模型 messages、最终答案正文和凭据不进入该数组。Provider 未返回完整 usage 时三个 token 字段均为 `null`，`token_usage_available=false`，服务端不估造数值。
 
+5A 新增的 Scope Guard 不增加 HTTP 路径。`POST /api/business-tasks` 和 artifacts 响应可返回 `scope_decision`，其中只有 `action`、`reason_code`、`confidence` 和 `latency_ms`；`run_trace.observations` 同时记录一条不含输入正文的 `scope_guard` 事件。`reject_off_topic` 或 `clarify_scope` 时不出现 Router、Tool、Provider 或模型调用。
+
 这是兼容性扩展：旧客户端可以忽略新增字段。`RunTrace` 和 Observation 均为只读审计产物，不能通过 API 回写业务状态。
 
 ## 11. Harness 入口边界
@@ -290,3 +293,9 @@ UX-08 没有新增或删除 API。前端公共入口只消费既有的 Agent、�
 UX-09 没有新增 HTTP 路径、数据库字段或外部动作。前端真实消费既有成员、Agent run、家庭记录和报告 DTO，并验证 `user_id + member_id` 隔离、确认续跑和兼容跳转。用户端只展示用户可读结果，原始运行标识、工具调用和来源指针继续留在服务端冻结产物中。
 
 联调发现既有低库存续方请求在用户没有显式填写药品名时，药店库存工具输入无法通过契约校验。现由 `WorkflowToolInputBuilder` 从同一成员已成功读取的药箱或处方事实补齐 `medicine_name`；如果没有可验证事实仍保持缺失并失败，不由模型或浏览器猜测。该修正只同步既有 Tool 输入契约，不改变接口语义、确认规则或外部提交能力。
+
+## 报告上传与结构化解读 API
+
+- `POST /api/family-members/{member_id}/reports`：JSON 上传文本、PDF 或图像内容，立即返回 `ready` 报告与结构化指标数量；不接受由客户端声明的诊断或治疗结论。
+- `GET /api/family-members/{member_id}/reports`：按当前用户和成员返回报告历史；`GET /.../{report_id}` 返回章节、Markdown 表格投影、指标、来源和固定安全提示。
+- 已移除报告专用确认与健康记录事件写入 API；处方和有外部副作用的动作仍沿用既有确认接口。

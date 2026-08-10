@@ -17,6 +17,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
+import math
 from pathlib import Path
 import statistics
 import sys
@@ -41,6 +42,9 @@ from app.agent.model_gateway import (  # noqa: E402
     create_model_gateway,
 )
 from app.agent.model_gateway_schemas import ModelCallRequest, ModelMessage  # noqa: E402
+from app.agent.ragas_adapter import RagasEvaluationAdapter  # noqa: E402
+from app.agent.ragas_schemas import RagasGenerationEvalInput  # noqa: E402
+from app.agent.synthetic_case_harness import SyntheticCaseHarnessAdapter  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.models import KnowledgeChunk, KnowledgeDocument  # noqa: E402
 from app.rag.embedding_provider import (  # noqa: E402
@@ -534,6 +538,27 @@ def _latency_summary(values: list[float]) -> dict[str, float | None]:
     }
 
 
+def _ndcg_at_k(retrieved_ids: list[str], relevant_ids: set[str], top_k: int) -> float | None:
+    """Binary-relevance nDCG for frozen chunk-id Gold.
+
+    The synthetic Gold currently provides stable relevant chunk ids rather
+    than subjective graded labels.  Binary nDCG still distinguishes a result
+    that retrieves the right evidence at rank 1 from one that only finds it at
+    the tail of Top-K, without introducing an LLM Judge into retrieval scoring.
+    """
+
+    if not relevant_ids:
+        return None
+    dcg = sum(
+        1 / math.log2(rank + 1)
+        for rank, chunk_id in enumerate(retrieved_ids[:top_k], start=1)
+        if chunk_id in relevant_ids
+    )
+    ideal_count = min(len(relevant_ids), top_k)
+    ideal_dcg = sum(1 / math.log2(rank + 1) for rank in range(1, ideal_count + 1))
+    return round(dcg / ideal_dcg, 4) if ideal_dcg else 0.0
+
+
 def _cost_usd(input_tokens: int, output_tokens: int) -> float | None:
     if (
         settings.model_input_price_per_1m_usd is None
@@ -562,6 +587,37 @@ def _token_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "usage_rate": _ratio(len(usage_rows), len(rows)),
         "input_price_per_1m_usd": settings.model_input_price_per_1m_usd,
         "output_price_per_1m_usd": settings.model_output_price_per_1m_usd,
+    }
+
+
+def _ragas_reference(query: dict[str, Any]) -> str:
+    """Build an offline reference from frozen answer Gold, never from output."""
+
+    claims = query["answer_gold"]["required_claims"]
+    reference = "\n".join(str(claim["text"]) for claim in claims).strip()
+    return reference or "该测试用例不要求生成知识性回答。"
+
+
+def _ragas_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    scored = [row for row in rows if row["status"] == "scored"]
+
+    def mean_score(key: str) -> float | None:
+        values = [float(row[key]) for row in scored if row.get(key) is not None]
+        return round(statistics.mean(values), 4) if values else None
+
+    return {
+        "sample_count": len(rows),
+        "scored_count": len(scored),
+        "skipped_count": sum(row["status"] == "skipped" for row in rows),
+        "failed_count": sum(row["status"] == "failed" for row in rows),
+        "faithfulness": mean_score("faithfulness"),
+        "response_relevancy": mean_score("response_relevancy"),
+        "context_recall": mean_score("context_recall"),
+        "status": "available" if scored else "unavailable",
+        "metric_note": (
+            "RAGAS is an optional, post-run semantic cross-check. A disabled, "
+            "missing or failed judge leaves the deterministic harness result unchanged."
+        ),
     }
 
 
@@ -631,6 +687,7 @@ def _retrieval_row(
         None,
     )
     row["mrr_at_10"] = round(1 / first_rank, 4) if first_rank else 0.0
+    row["ndcg_at_10"] = _ndcg_at_k(retrieved_ids, relevant, 10)
     row["no_answer_correct"] = not relevant and not retrieved_ids
     row["stale_filter_passed"] = not row["stale_hit_chunk_ids"]
     return row
@@ -729,6 +786,8 @@ def _split_summary(
         "rag_recall_at_3": round(statistics.mean(row["recall_at_3"] for row in retrieval if row["recall_at_3"] is not None), 4) if any(row["recall_at_3"] is not None for row in retrieval) else None,
         "rag_recall_at_5": round(statistics.mean(row["recall_at_5"] for row in retrieval if row["recall_at_5"] is not None), 4) if any(row["recall_at_5"] is not None for row in retrieval) else None,
         "rag_recall_at_10": round(statistics.mean(row["recall_at_10"] for row in retrieval if row["recall_at_10"] is not None), 4) if any(row["recall_at_10"] is not None for row in retrieval) else None,
+        "rag_mrr_at_10": round(statistics.mean(row["mrr_at_10"] for row in retrieval), 4) if retrieval else None,
+        "rag_ndcg_at_10": round(statistics.mean(row["ndcg_at_10"] for row in retrieval if row["ndcg_at_10"] is not None), 4) if any(row["ndcg_at_10"] is not None for row in retrieval) else None,
         "model_answer_accuracy": _ratio(sum(row["source_bound_answer_correct"] for row in answers), len(answers)),
         "answer_response_type_accuracy": _ratio(sum(row["response_type_correct"] for row in answers), len(answers)),
         "answer_required_source_recall": round(statistics.mean(row["required_source_recall"] for row in answers), 4) if answers else None,
@@ -775,10 +834,13 @@ This is a test-only source-bound engineering evaluation. It exercises the config
 | Recall@3 | {metrics['rag']['recall_at_3']} |
 | Recall@5 | {metrics['rag']['recall_at_5']} |
 | Recall@10 | {metrics['rag']['recall_at_10']} |
+| MRR@10 | {metrics['rag']['mrr_at_10']} |
+| nDCG@10 | {metrics['rag']['ndcg_at_10']} |
 | Model answer accuracy (RAG cases) | {metrics['answer']['model_answer_accuracy']} |
 | End-to-end p50 / p95 / p99 (ms) | {metrics['performance']['end_to_end_latency_ms']['p50']} / {metrics['performance']['end_to_end_latency_ms']['p95']} / {metrics['performance']['end_to_end_latency_ms']['p99']} |
 | LLM input / output / total tokens | {metrics['tokens_and_cost']['input_tokens']} / {metrics['tokens_and_cost']['output_tokens']} / {metrics['tokens_and_cost']['total_tokens']} |
 | LLM cost (USD) | {metrics['tokens_and_cost']['cost_usd']} |
+| RAGAS Faithfulness / Response Relevancy / Context Recall | {metrics['ragas']['faithfulness']} / {metrics['ragas']['response_relevancy']} / {metrics['ragas']['context_recall']} |
 
 ## Node latency and token cost
 
@@ -787,6 +849,14 @@ This is a test-only source-bound engineering evaluation. It exercises the config
 ```
 
 Embedding is a local model operation, so it has no LLM token billing. Its latency is included in the `rag_retrieval` node and its model, dimension and HNSW index are recorded above.
+
+## Optional RAGAS cross-check
+
+```json
+{json.dumps(metrics['ragas'], ensure_ascii=False, indent=2, sort_keys=True)}
+```
+
+RAGAS only runs after the answer trace is frozen. It is intentionally optional: no configuration, package/import failure, provider error or scoring failure changes the retrieval result, answer result, bad-case decision or process exit status.
 
 ## Split metrics
 
@@ -844,6 +914,21 @@ def run_full_eval(
 
     prepared = prepare_postgres_knowledge_base(corpus, database_url)
     output_dir.mkdir(parents=True, exist_ok=True)
+    entry_view, retrieval_view, answer_view = SyntheticCaseHarnessAdapter().build_views(
+        selected
+    )
+    _write_jsonl(
+        output_dir / "entry_harness_view.jsonl",
+        [item.model_dump(mode="json") for item in entry_view],
+    )
+    _write_jsonl(
+        output_dir / "retrieval_harness_view.jsonl",
+        [item.model_dump(mode="json") for item in retrieval_view],
+    )
+    _write_jsonl(
+        output_dir / "answer_harness_view.jsonl",
+        [item.model_dump(mode="json") for item in answer_view],
+    )
     database_manifest = {
         **prepared.import_result,
         "retrieval_profile": retrieval_profile.as_dict(),
@@ -855,6 +940,7 @@ def run_full_eval(
     retrieval_rows: list[dict[str, Any]] = []
     answer_rows: list[dict[str, Any]] = []
     query_rows: list[dict[str, Any]] = []
+    ragas_inputs: list[tuple[dict[str, Any], RagasGenerationEvalInput]] = []
     badcases: list[dict[str, Any]] = []
     entry_latencies: list[float] = []
     evaluation_latencies: list[float] = []
@@ -912,12 +998,39 @@ def run_full_eval(
                 retrieval_row = _retrieval_row(query, retrieval_result, retrieval_ms)
                 retrieval_rows.append(retrieval_row)
                 retrieved_ids = list(retrieval_row["retrieved_chunk_ids"])
-                if query["retrieval_gold"]["relevant_chunk_ids"] and retrieval_row["recall_at_10"] < 1.0:
+                if (
+                    query["retrieval_gold"]["relevant_chunk_ids"]
+                    and retrieval_row["recall_at_10"] < 1.0
+                ):
                     badcases.append(
                         {
                             "query_id": query["query_id"],
                             "base_case_id": query["base_case_id"],
                             "category": "RETRIEVAL_MISS",
+                            "details": retrieval_row,
+                        }
+                    )
+                elif (
+                    query["retrieval_gold"]["relevant_chunk_ids"]
+                    and retrieval_row["recall_at_5"] < 1.0
+                ):
+                    badcases.append(
+                        {
+                            "query_id": query["query_id"],
+                            "base_case_id": query["base_case_id"],
+                            "category": "RANKING_MISS",
+                            "details": retrieval_row,
+                        }
+                    )
+                if (
+                    not query["retrieval_gold"]["relevant_chunk_ids"]
+                    and not retrieval_row["no_answer_correct"]
+                ):
+                    badcases.append(
+                        {
+                            "query_id": query["query_id"],
+                            "base_case_id": query["base_case_id"],
+                            "category": "NO_ANSWER_FAILURE",
                             "details": retrieval_row,
                         }
                     )
@@ -989,6 +1102,27 @@ def run_full_eval(
                     model_ms=model_ms,
                 )
                 answer_rows.append(model_row)
+                if flow["should_call_rag"] and model_result.output is not None:
+                    ragas_inputs.append(
+                        (
+                            {
+                                "query_id": query["query_id"],
+                                "base_case_id": query["base_case_id"],
+                                "split": query["split"],
+                                "retrieved_chunk_ids": [
+                                    source.chunk_id for source in evidence_sources
+                                ],
+                            },
+                            RagasGenerationEvalInput(
+                                user_input=query["user_input"],
+                                response=model_result.output.answer,
+                                retrieved_contexts=tuple(
+                                    source.content for source in evidence_sources
+                                ),
+                                reference=_ragas_reference(query),
+                            ),
+                        )
+                    )
                 if (
                     flow["should_call_rag"]
                     and not model_row["source_bound_answer_correct"]
@@ -1065,6 +1199,13 @@ def run_full_eval(
         for query in selected
     )
     effective_providers = Counter(row["provider"] for row in answer_rows)
+    ragas_results = RagasEvaluationAdapter().evaluate_batch(
+        [item for _, item in ragas_inputs]
+    )
+    ragas_rows = [
+        {**metadata, **result.model_dump(mode="json")}
+        for (metadata, _), result in zip(ragas_inputs, ragas_results, strict=True)
+    ]
     metrics = {
         "status": "completed" if len(selected) == len(dataset.queries) else "partial",
         "run_id": f"{DATASET_VERSION}-full-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
@@ -1100,6 +1241,12 @@ def run_full_eval(
             "mode": "frozen synthetic governance contract; high-risk/scope/governance stop before LLM",
             "high_risk_guard_recall": _ratio(high_risk_guard_pass, expected_high_risk),
         },
+        "harness_views": {
+            "entry_count": len(entry_view),
+            "retrieval_count": len(retrieval_view),
+            "answer_count": len(answer_view),
+            "source": "frozen 125 base cases / 500 query expressions",
+        },
         "rag": {
             "rag_query_count": len(retrieval_rows),
             "recall_denominator": len(rag_recall_rows),
@@ -1107,6 +1254,7 @@ def run_full_eval(
             "recall_at_5": round(statistics.mean(row["recall_at_5"] for row in rag_recall_rows), 4) if rag_recall_rows else None,
             "recall_at_10": round(statistics.mean(row["recall_at_10"] for row in rag_recall_rows), 4) if rag_recall_rows else None,
             "mrr_at_10": round(statistics.mean(row["mrr_at_10"] for row in retrieval_rows), 4) if retrieval_rows else None,
+            "ndcg_at_10": round(statistics.mean(row["ndcg_at_10"] for row in rag_recall_rows), 4) if rag_recall_rows else None,
             "no_answer_accuracy": _ratio(sum(row["no_answer_correct"] for row in no_answer_rows), len(no_answer_rows)),
             "stale_document_filter_rate": _ratio(sum(row["stale_filter_passed"] for row in retrieval_rows if row["stale_hit_chunk_ids"] or row["case_type"] == "stale_version"), sum(bool(row["case_type"] == "stale_version" or row["stale_hit_chunk_ids"]) for row in retrieval_rows)),
             "fallback_rate": _ratio(sum(row["fallback_used"] for row in retrieval_rows), len(retrieval_rows)),
@@ -1143,6 +1291,7 @@ def run_full_eval(
             "deterministic_evaluator": _node_metric(latencies=evaluation_latencies, token_rows=[], node_type="deterministic post-run evaluator"),
         },
         "tokens_and_cost": _token_summary(answer_rows),
+        "ragas": _ragas_summary(ragas_rows),
         "badcase_count": len(badcases),
         "database": prepared.import_result,
         "by_split": {
@@ -1154,6 +1303,7 @@ def run_full_eval(
     _write_jsonl(output_dir / "query_results.jsonl", query_rows)
     _write_jsonl(output_dir / "retrieval_results.jsonl", retrieval_rows)
     _write_jsonl(output_dir / "answer_results.jsonl", answer_rows)
+    _write_jsonl(output_dir / "ragas_results.jsonl", ragas_rows)
     _write_jsonl(output_dir / "badcases.jsonl", badcases)
     run_manifest = {
         "run_id": metrics["run_id"],
@@ -1167,6 +1317,16 @@ def run_full_eval(
         "dataset_manifest_sha256": _file_sha256(fixture_root / "dataset" / "dataset_manifest.json"),
         "corpus_manifest_sha256": _file_sha256(fixture_root / "corpus" / "corpus_manifest.json"),
         "metrics": metrics,
+        "artifacts": {
+            "entry_harness_view": "entry_harness_view.jsonl",
+            "retrieval_harness_view": "retrieval_harness_view.jsonl",
+            "answer_harness_view": "answer_harness_view.jsonl",
+            "ragas_results": "ragas_results.jsonl",
+            "query_results": "query_results.jsonl",
+            "retrieval_results": "retrieval_results.jsonl",
+            "answer_results": "answer_results.jsonl",
+            "badcases": "badcases.jsonl",
+        },
     }
     _write_json(output_dir / "run_manifest.json", run_manifest)
     _build_report(output_dir, metrics, prepared.import_result, validation)

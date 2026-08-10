@@ -318,6 +318,7 @@ class SupervisorBusinessWorkflow(FamilyHealthProductWorkflow):
             "confirmation_draft": {},
             "safety_decisions": [],
             "final_output_safety": {},
+            "final_answer_quality": {},
             "visited_nodes": [],
         }
 
@@ -405,6 +406,9 @@ class SupervisorBusinessWorkflow(FamilyHealthProductWorkflow):
             None,
         )
         if clarification is not None:
+            triage_state = clarification.facts.get("triage_state")
+            if isinstance(triage_state, dict):
+                state["triage_state"] = dict(triage_state)
             state["status"] = "needs_clarification"
             state["final_answer"] = (
                 "请补充以下信息后再继续："
@@ -501,6 +505,46 @@ class SupervisorBusinessWorkflow(FamilyHealthProductWorkflow):
 
         result = self._run_supervisor(resumed, is_confirmation_run=True)
         self._apply_orchestration_failure(resumed, result)
+        self._finalize(resumed)
+        return resumed
+
+    def resume_clarification(
+        self,
+        state: ProductWorkflowState,
+        *,
+        run_id: str,
+        user_input: str,
+        input_payload: dict[str, Any],
+    ) -> ProductWorkflowState:
+        """Create a fresh Triage run from checkpointed slots, not scratchpad."""
+
+        resumed = cast(ProductWorkflowState, dict(state))
+        resumed["run_id"] = run_id
+        resumed["user_input"] = user_input
+        resumed["user_goal"] = user_input
+        resumed["input_payload"] = dict(input_payload)
+        resumed["human_confirmation_granted"] = False
+        resumed["status"] = "running"
+        resumed["final_answer"] = ""
+        resumed["final_claims"] = []
+        resumed["errors"] = []
+        resumed["tool_calls"] = []
+        resumed["provider_calls"] = []
+        resumed["model_call_trace"] = {}
+        resumed["visited_nodes"] = []
+        resumed["confirmation_request"] = {}
+        resumed["confirmation_result"] = {}
+        resumed["confirmation_state"] = "NONE"
+        resumed["confirmation_scope"] = {}
+        resumed["confirmation_draft"] = {}
+        self._safety_entry(resumed)
+        if resumed.get("status") == "blocked":
+            self._finalize(resumed)
+            return resumed
+        result = self._run_supervisor(resumed, is_confirmation_run=False)
+        self._apply_orchestration_failure(resumed, result)
+        if resumed.get("status") not in {"failed", "needs_clarification"}:
+            self._safety_review(resumed)
         self._finalize(resumed)
         return resumed
 

@@ -113,6 +113,44 @@ class Settings(BaseModel):
         ),
         ge=0,
     )
+    ragas_enabled: bool = Field(
+        default_factory=lambda: _env_bool("RAGAS_ENABLED", False)
+    )
+    ragas_version: str = Field(
+        default_factory=lambda: os.getenv("RAGAS_VERSION", "0.2.9")
+    )
+    ragas_judge_api_base: str | None = Field(
+        default_factory=lambda: os.getenv("RAGAS_JUDGE_API_BASE") or None
+    )
+    ragas_judge_api_key: SecretStr | None = Field(
+        default_factory=lambda: SecretStr(value)
+        if (value := os.getenv("RAGAS_JUDGE_API_KEY"))
+        else None
+    )
+    ragas_judge_model: str | None = Field(
+        default_factory=lambda: os.getenv("RAGAS_JUDGE_MODEL") or None
+    )
+    ragas_embedding_provider: Literal["fastembed", "openai"] = Field(
+        default_factory=lambda: os.getenv("RAGAS_EMBEDDING_PROVIDER", "fastembed")
+    )
+    ragas_embedding_model: str | None = Field(
+        default_factory=lambda: os.getenv("RAGAS_EMBEDDING_MODEL") or None
+    )
+    ragas_batch_size: int = Field(
+        default_factory=lambda: int(os.getenv("RAGAS_BATCH_SIZE", "8")),
+        ge=1,
+        le=128,
+    )
+    ragas_max_workers: int = Field(
+        default_factory=lambda: int(os.getenv("RAGAS_MAX_WORKERS", "4")),
+        ge=1,
+        le=32,
+    )
+    ragas_timeout_seconds: int = Field(
+        default_factory=lambda: int(os.getenv("RAGAS_TIMEOUT_SECONDS", "60")),
+        ge=1,
+        le=600,
+    )
     cors_origins: str = Field(default_factory=lambda: os.getenv("CORS_ORIGINS", "http://localhost:3000"))
     demo_user_phone: str = Field(
         default_factory=lambda: os.getenv("DEMO_USER_PHONE", "13800000001")

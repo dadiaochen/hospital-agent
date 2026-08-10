@@ -156,6 +156,28 @@ class RuntimeTriageAgent(RuntimeDomainAgent):
         "create_confirmation_draft",
     )
 
+    @staticmethod
+    def _triage_state(payload: Mapping[str, Any]) -> dict[str, Any]:
+        prior = payload.get("triage_state")
+        state = dict(prior) if isinstance(prior, Mapping) else {}
+        confirmed = state.get("confirmed_slots")
+        confirmed_slots = dict(confirmed) if isinstance(confirmed, Mapping) else {}
+        symptoms = str(
+            payload.get("symptoms")
+            or payload.get("chief_complaint")
+            or confirmed_slots.get("symptoms")
+            or ""
+        ).strip()
+        if symptoms:
+            confirmed_slots["symptoms"] = symptoms
+        missing_slots = [] if symptoms else ["symptoms"]
+        return {
+            "confirmed_slots": confirmed_slots,
+            "missing_slots": missing_slots,
+            "clarification_turn": int(state.get("clarification_turn", 0))
+            + (1 if missing_slots else 0),
+        }
+
     def _execute(self, agent_input: DomainAgentInput) -> AgentTaskResult:
         if self.runtime.is_confirmation_run:
             if not self.runtime.is_confirmation_target(self.role):
@@ -173,6 +195,21 @@ class RuntimeTriageAgent(RuntimeDomainAgent):
                 status="failed",
                 facts={"workflow_action": "confirmation_failed"},
                 failure_reason="confirmation_execution_failed",
+            )
+
+        triage_state = self._triage_state(self.runtime.input_payload)
+        if triage_state["missing_slots"]:
+            self.runtime.set_final_answer(
+                "请补充需要整理的症状或主要不适；系统只做症状整理和就医准备，不作诊断。"
+            )
+            return self._result(
+                agent_input,
+                status="needs_clarification",
+                facts={
+                    "workflow_action": "request_triage_symptoms",
+                    "triage_state": triage_state,
+                },
+                missing_information=("symptoms",),
             )
 
         profile = self._call(
@@ -274,6 +311,7 @@ class RuntimeTriageAgent(RuntimeDomainAgent):
             facts={
                 "workflow_action": "prepare_preconsultation",
                 "medical_claims_generated": False,
+                "triage_state": triage_state,
             },
             requested_confirmation=self.runtime.should_prepare_confirmation(self.role),
         )

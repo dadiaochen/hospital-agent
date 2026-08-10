@@ -61,7 +61,7 @@ LLM Judge 只允许作为离线辅助分析，不能替代来源、权限、成�
 | 总 token | 620,183 | 231,268 |
 | 观测成本 | $0.675887 | $0.276581 |
 
-全量真实模型调用中有 5.00% 结构化输出 fallback。详细边界见 [RAG 四指标优化实施与复测](RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)。
+全量真实模型调用中有 5.00% 结构化输出 fallback。详细指标、RAGAS 状态和边界见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
 
 ## 5. 指标解释
 
@@ -72,9 +72,13 @@ LLM Judge 只允许作为离线辅助分析，不能替代来源、权限、成�
 - fixture latency 不能当作真实 wall-clock；本机 wall-clock 也不是生产 SLA。
 - 没有 Provider usage 时，token 和成本必须为不可用，不能按字符估算。
 - 分母为零的指标记为 `N/A`，不能当作 100%。
+- MRR@10 衡量第一个相关 Chunk 的排名；二值 nDCG@10 衡量所有相关 Chunk 在 Top-10 内的整体排位。二者属于 Retrieval 层，不能替代回答正确性。
+- RAGAS Faithfulness、Response Relevancy 和 Context Recall 只作为离线语义交叉验证。适配器只读取已冻结的回答、检索来源和答案 Gold，默认关闭且不得写业务状态；单项失败时保留同一 Query 的其他分数并把缺失项记为 `N/A`，不能用既有来源绑定指标冒充。当前最终口径使用 300 条三项齐全的共同样本，另外 20 条部分评分样本整体排除且不按 0 分处理。
 
 ## 6. 运行与产物
 
 固定测试和报告命令见 [测试指南](TESTING_GUIDE.md)。运行产物默认写入被 Git 忽略的 `output/benchmarks/`；当前文档只保存可复用结论，旧阶段与旧报告摘要见 [项目执行历史](EXECUTION_HISTORY.md)。
 
 评测数据、人工审核队列、身份映射、API Key 和 Provider 原始文本不得提交。真实模型输出必须先经过 JSON、Pydantic schema 和输出安全检查，失败时只保留脱敏 attempt trace。
+
+最终回答质量门不是 `EvaluatorAgent`：它是答案冻结前的运行时治理检查，不调用业务工具、最多一次无 Tool 修复；`EvaluatorAgent` 继续在冻结后只读评分。质量门审计可作为 RunTrace/Checkpoint 的辅助证据，但不能替代 groundedness、safety 或人工 Gold 的评测结论。

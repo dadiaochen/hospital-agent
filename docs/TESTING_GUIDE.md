@@ -37,6 +37,16 @@ $env:PYTHONPATH=(Resolve-Path 'backend').Path
 
 显式使用项目 `.venv`，避免系统 Conda/Python 缺少 `pgvector` 等项目依赖。`PYTHONPYCACHEPREFIX` 和新的 `output` basetemp 用于绕开 Windows 旧 `__pycache__`/Temp ACL 问题。只验证某个改动时，先跑对应测试文件；准备提交前再跑完整套件。Harness 的 fixture 位于 `backend/tests/fixtures/`，它们是 deterministic 演示输入，不是临床数据或线上评估数据。
 
+5A 报告解析、直接结构化读取、最终回答质量门与 Checkpoint 回归：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+$env:PYTHONDONTWRITEBYTECODE='1'
+.\.venv\Scripts\python.exe -B -m pytest backend\tests\test_document_parser_service.py backend\tests\test_final_answer_quality_gate.py backend\tests\test_read_api.py backend\tests\test_business_task_api.py::test_task8_checkpoint_is_authoritative_for_continuation_and_tracks_versions backend\tests\test_task_checkpoint_cache.py -q -p no:cacheprovider
+```
+
+这组用例验证文本/PDF/图像独立路径与表格草稿、同成员上传/显式确认/幂等历史、质量门单次无 Tool 修复上限，以及 Redis miss 时 PostgreSQL Checkpoint 回源。它不代表 OCR、真实 PDF 复杂版式或生产性能压测通过。
+
 生成当前固定用例指标：
 
 ```powershell
@@ -98,6 +108,40 @@ Set-Location E:\project_code\hospital
 ```
 
 该脚本把 Docker migration/seed、固定四场景 Demo、deterministic Harness、A/B/C 消融和浏览器 E2E 串成一个验收命令。它不会把 Harness fixture 放入 backend 镜像，也不会调用真实 LLM；步骤结果写入被 Git 忽略的 `var/closeout/`。本机最终结果为 Demo `4/4`、浏览器 `7/7`、前后端 health `200`。
+
+## 5A-2 / 5A-3 离线 RAGAS 与三视图验证
+
+```powershell
+$env:PYTHONPATH='E:\project_code\hospital\backend;E:\project_code\hospital'
+.\.venv\Scripts\python.exe -m pytest -p no:cacheprovider --basetemp=output\pytest-5a-ragas `
+  backend\tests\test_ragas_adapter.py `
+  backend\tests\test_frozen_ragas_eval.py `
+  backend\tests\test_synthetic_case_harness.py `
+  backend\tests\test_rag_synthetic_eval.py `
+  backend\tests\test_rag_synthetic_full_eval.py -q
+```
+
+该测试覆盖 RAGAS 默认跳过、独立 Judge 结果映射、单项异常隔离、非有限分数转 N/A、冻结结果定向合并、自评配置拒绝，以及冻结 125/500 数据集到 Entry/Retrieval/Answer 三视图的稳定投影。真实全链路运行会在 `output/benchmarks/` 生成三份视图和 `ragas_results.jsonl`；这些测试数据与运行产物均不得提交到 Git。
+
+已有冻结回答时，可只运行独立 Judge：
+
+```powershell
+$env:PYTHONPATH='E:\project_code\hospital\backend;E:\project_code\hospital'
+.\.venv\Scripts\python.exe -B scripts\run_frozen_ragas_eval.py `
+  --source-dir output\benchmarks\rag_synthetic\rag-synthetic-v1-ragas-full-20260810-101500 `
+  --output-dir output\benchmarks\rag_synthetic\rag-synthetic-v1-ragas-offline
+```
+
+该命令读取冻结 JSONL 和语料 Chunk，只调用独立 Judge 与 RAGAS 自身的指标 Embedding；不会重跑语料向量化、PostgreSQL/pgvector HNSW 检索或目标回答模型。缺失项补跑使用 `--retry-from <ragas_results.jsonl>`。
+
+## 5A-4 Triage 澄清续跑验证
+
+```powershell
+$env:PYTHONPATH='E:\project_code\hospital\backend;E:\project_code\hospital'
+.\.venv\Scripts\python.exe -m pytest -p no:cacheprovider --basetemp=output\pytest-5a4 backend\tests\test_triage_clarification.py backend\tests\test_business_task_api.py -q
+```
+
+覆盖首次缺槽位停止、PostgreSQL Checkpoint 冻结、补充症状后的第二次 run、`parent_run_id`、成员隔离和陈旧版本冲突。Redis 只作为短期缓存，失效时由既有 Checkpoint 服务回源 PostgreSQL。
 
 ## 代码覆盖率与业务覆盖
 

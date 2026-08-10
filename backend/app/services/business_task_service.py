@@ -357,6 +357,134 @@ class BusinessTaskService:
             if workflow is not None:
                 workflow.close()
 
+    def clarify_task(
+        self,
+        *,
+        task_id: str,
+        user_input: str,
+        input_payload: dict[str, Any],
+        idempotency_key: str,
+        checkpoint_version: int,
+    ) -> BusinessTaskExecution:
+        """Resume a paused Triage task with explicitly supplied slot values."""
+
+        task = self._get_task(task_id, for_update=True)
+        if task.idempotency_key != idempotency_key:
+            raise ApiError(
+                status_code=409,
+                code="idempotency_conflict",
+                message="clarification idempotency_key does not match the task",
+            )
+        if task.status != "needs_clarification":
+            raise InvalidRequestError("task is not waiting for clarification")
+        if checkpoint_version != task.checkpoint_version:
+            raise ApiError(
+                status_code=409,
+                code="checkpoint_version_conflict",
+                message="clarification checkpoint version is stale",
+            )
+
+        restored = self.checkpoints.restore(task=task)
+        checkpoint = restored.payload
+        if checkpoint.status != "needs_clarification":
+            raise ApiError(
+                status_code=409,
+                code="checkpoint_state_conflict",
+                message="authoritative checkpoint is not waiting for clarification",
+            )
+        previous_run = self.db.scalar(
+            select(AgentRun).where(
+                AgentRun.id == task.current_run_id,
+                AgentRun.user_id == self.user_id,
+            )
+        )
+        if previous_run is None:
+            raise ApiError(
+                status_code=409,
+                code="missing_runtime_state",
+                message="task cannot be resumed because its runtime state is unavailable",
+            )
+
+        merged_payload = {
+            **dict(task.input_payload or {}),
+            **dict(input_payload),
+        }
+        prior_triage = checkpoint.frozen_artifacts.get("triage_state", {})
+        if isinstance(prior_triage, dict):
+            merged_payload["triage_state"] = prior_triage
+        run_id = str(uuid4())
+        run = AgentRun(
+            id=run_id,
+            user_id=self.user_id,
+            member_id=task.member_id,
+            user_goal=user_input,
+            intent=task.intent,
+            parent_run_id=previous_run.id,
+            status="running",
+            safety_result={},
+            raw_state={},
+        )
+        task.current_run_id = run_id
+        task.status = "running"
+        task.user_input = user_input
+        task.input_payload = merged_payload
+        self.db.add(run)
+        workflow: UnifiedHealthGraph | None = None
+        try:
+            workflow = UnifiedHealthGraph(self.db)
+            self.db.flush()
+            resume_state = self.checkpoints.restore_state_for_clarification(
+                task=task,
+                payload=checkpoint,
+            )
+            state = workflow.resume_clarification(
+                resume_state,
+                run_id=run_id,
+                user_input=user_input,
+                input_payload=merged_payload,
+            )
+            checkpoint_payload = self._persist_state(
+                task,
+                run,
+                state,
+                parent_run_id=previous_run.id,
+            )
+            self.db.commit()
+            self.db.refresh(task)
+            self.db.refresh(run)
+            self.checkpoints.publish(checkpoint_payload)
+            return BusinessTaskExecution(
+                task=task,
+                run=run,
+                state=state,
+                checkpoint_version=task.checkpoint_version,
+                confirmation_version=task.confirmation_version,
+                checkpoint_source=restored.source,
+                resumed_from_run_id=previous_run.id,
+                restored_source_ids=tuple(
+                    item.source_id for item in checkpoint.source_refs
+                ),
+            )
+        except ApiError:
+            self.db.rollback()
+            raise
+        except SQLAlchemyError as exc:
+            self.db.rollback()
+            logger.exception(
+                "triage clarification persistence failed: task_id=%s run_id=%s",
+                task.id,
+                run.id,
+            )
+            raise ApiError(
+                status_code=503,
+                code="persistence_error",
+                message="triage clarification persistence failed",
+                details=[{"type": exc.__class__.__name__}],
+            ) from exc
+        finally:
+            if workflow is not None:
+                workflow.close()
+
     def get_task(self, task_id: str) -> BusinessTask:
         return self._get_task(task_id)
 
@@ -737,6 +865,7 @@ class BusinessTaskService:
             "confirmation_request": payload.get("confirmation_request"),
             "confirmation_result": payload.get("confirmation_result"),
             "safety_flags": payload.get("safety_flags", []),
+            "scope_decision": payload.get("scope_decision"),
             "source_refs": payload.get("source_refs", []),
             "tool_calls": [],
             "provider_calls": [],
@@ -759,6 +888,7 @@ class BusinessTaskService:
             "safety_decisions": state.get("safety_decisions", []),
             "final_output_safety": state.get("final_output_safety", {}),
             "safety_flags": state.get("safety_flags", []),
+            "scope_decision": state.get("scope_decision"),
             "source_refs": state.get("source_refs", []),
             "errors": state.get("errors", []),
             "model_call_trace": state.get("model_call_trace", {}),

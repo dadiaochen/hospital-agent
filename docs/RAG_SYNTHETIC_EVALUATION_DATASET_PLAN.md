@@ -1,5 +1,7 @@
 # 互联网医院 Agent 全自动合成 RAG 评测数据集实施方案
 
+> 本文只维护数据集 A–G 构建任务和交付状态。数据规模、初始/当前指标、RAGAS、已实施优化和收益统一以 [合成 RAG 评测：数据集、指标与优化结果](RAG_SYNTHETIC_EVALUATION_DATASET.md) 为准。
+
 ## 1. 目的和边界
 
 本方案记录当前合成评测数据的构建方法；历史授权和执行顺序见 [项目执行历史](EXECUTION_HISTORY.md)。目标是：
@@ -63,7 +65,7 @@
 
 A–G 自动门通过后立即生成并冻结完整数据，不增加人工复核门。该数据集不能替代 300 个 WorldState、1200 条 Query 的人工审核金标准。
 
-## 6. 评测链路和指标
+## 6. 评测链路和指标定义
 
 ```text
 Query -> 入口治理 -> Embedding -> pgvector HNSW
@@ -75,7 +77,7 @@ Query -> 入口治理 -> Embedding -> pgvector HNSW
 
 没有 provider usage 时，token/cost 必须写为不可用，不允许按字符估算。
 
-## 7. 后续候选清单（只列方案，不在本方案直接优化）
+## 7. 构建阶段提出的候选清单（历史）
 
 | 指标 | 候选方案 | 触发依据 | 风险 |
 |---|---|---|---|
@@ -85,13 +87,15 @@ Query -> 入口治理 -> Embedding -> pgvector HNSW
 | token/cost | 减少无关上下文、输出上限、no-answer 短路、模型分级 | input/output token 高 | 过度压缩答案或拒答 |
 | 质量稳定性 | schema failure 分类、有限重试、fallback 统计和 provider 超时分层 | fallback 非零 | 重试增加延迟/成本 |
 
-不通过额外实验，不把候选方案写成已经带来收益。
+这些是构建阶段提出的候选项；哪些已经实施、哪些被放弃、实际提升多少，以统一指标文档为准。
 
-## 8. 当前优化执行结果索引
+## 8. 结果索引
 
-- M2：仅活动版本过滤通过检索门，Recall@5 `0.7096→0.8519`。
-- M3：32 条方向样本来源绑定准确率 `37.50%→59.38%`，全量由 M5 收口。
-- M4：RAG p95 `2104.529→393.442ms`；8 条成本变量总 token 下降 `1.06%`。
-- M5：最终 profile 全量 500 Query；Recall@5 `0.8519`，来源绑定回答准确率 `0.6375`，来源绑定幻觉率 `0.0750`，端到端 p95 `2187.268ms`，观测总 token `231268`，观测成本 `$0.276581`；fallback `5.00%`。
+- 数据集、全链路初始/当前指标、RAGAS、改进思路、实现和收益：[统一指标文档](RAG_SYNTHETIC_EVALUATION_DATASET.md)；
+- M2–M5 阶段状态：[优化实施记录](RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)；
+- 逐次实验、旧产物和回退线索：[项目执行历史](EXECUTION_HISTORY.md)；
+- 中文简历和面试表达：[简历与面试口径](RESUME_NOTES.md)。
 
-详细结果、路径、中文简历和面试口径见 [RAG synthetic v1 数据集说明](RAG_SYNTHETIC_EVALUATION_DATASET.md) 和 [最小优化实施与复测](RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)。
+## 9. RAGAS 最终离线结果口径
+
+RAGAS 只复用已冻结的回答、检索来源和答案 Gold，不重跑 Embedding、HNSW、PostgreSQL 检索或目标回答模型。最终共同样本为 300 条：Faithfulness `0.6166`、Response Relevancy `0.4316`、Context Recall `0.6700`；20 条未获得三项完整分数的记录整体标记为 `N/A` 并排除，不计为 0 分。完整指标、样本口径和限制见[统一指标文档](RAG_SYNTHETIC_EVALUATION_DATASET.md)。

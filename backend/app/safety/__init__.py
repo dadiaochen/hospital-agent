@@ -5,10 +5,15 @@ from app.safety.model_output import (
     ModelOutputSafetyResult,
     RuleBasedModelOutputSafetyChecker,
 )
+from app.safety.request_scope import RequestScopeGuard
+from app.safety.final_answer_quality_gate import FinalAnswerQualityGate, FinalAnswerQualityResult
 
 __all__ = [
     "ModelOutputSafetyChecker",
     "ModelOutputSafetyResult",
     "RuleBasedModelOutputSafetyChecker",
+    "RequestScopeGuard",
+    "FinalAnswerQualityGate",
+    "FinalAnswerQualityResult",
 ]
 

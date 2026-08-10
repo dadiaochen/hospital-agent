@@ -175,3 +175,7 @@ UX-08 不新增表、字段、迁移或持久化状态。首页和导航只是�
 ## 用户端 UX-09 数据边界
 
 UX-09 没有新增 ORM、Alembic migration、seed 或 Redis key。前后端联调只读取既有成员、AgentRun、草稿、报告和确认记录；历史结果与家庭管理页面的用户语言转换发生在响应投影层，不回写原始运行状态。低库存工具输入所需的药品名来自同一成员既有 Tool 结果，不形成新的医疗事实或长期记忆。
+
+## 报告闭环复用表
+
+本轮不新增迁移：`medical_documents` 保存原始文本和可直接读取的统一解析结果，上传后状态即为 `ready`。报告解析不创建 `health_record_events`，也不引入报告确认状态；最终回答质量审计保存于既有 `task_checkpoints.frozen_artifacts.final_answer_quality`，PostgreSQL 是权威来源，Redis 不新增 key 或持久状态。
