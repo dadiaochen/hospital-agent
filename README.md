@@ -14,6 +14,7 @@
 | 医疗动作如何避免越权 | 请求、动作和最终回答都会经过安全检查；续方、购药和提醒等动作必须经过用户确认 |
 | 业务外输入如何避免浪费链路 | 在医疗安全前用确定性 Scope Guard 拦截高置信度天气、编程、股票等请求；不调用 Router、RAG、工具或模型 |
 | 如何避免家庭成员信息混在一起 | 每次任务只围绕一个家庭成员建立上下文，查询结果和来源都带成员范围 |
+| 检查报告怎样快速变成可读信息 | 文本和 Markdown 表格直接解析；PDF 用 `pypdf` 读取文本层；图片在本地通过 RapidOCR + ONNX Runtime CPU 识别，再统一输出章节、表格、指标与来源 |
 | 中断任务如何继续 | PostgreSQL 保存可以恢复的任务记录，Redis 只保存短期缓存，缓存失效时重新从 PostgreSQL 读取 |
 | RAG 如何保证有依据 | 使用 PostgreSQL 和 pgvector 做知识检索，同时保留关键词检索和来源编号 |
 | 外部服务失败怎么办 | 统一处理超时、有限重试、错误分类和降级，不把失败伪装成成功 |
@@ -44,9 +45,11 @@ flowchart TB
     TOOLS --> CACHE["Redis 短期缓存"]
     TOOLS --> PROVIDERS["外部服务适配层"]
     DOMAIN --> RESULT["业务结果与来源"]
-    RESULT --> GUARD2["动作安全检查"]
+    RESULT --> ACTION{"是否受保护动作"}
+    ACTION -->|"续方/购药/复诊/提醒"| GUARD2["动作安全检查"]
     GUARD2 --> CONFIRM["生成草稿并等待确认"]
-    CONFIRM --> GUARD3["最终回答安全检查"]
+    ACTION -->|"报告结构化读取"| GUARD3["最终回答安全检查"]
+    CONFIRM --> GUARD3
     GUARD3 --> ANSWER["返回用户答案"]
     ANSWER --> CTX["任务摘要与上下文清理"]
     CTX --> TRACE["保存运行记录"]
@@ -57,7 +60,7 @@ flowchart TB
 
 - 预问诊 Agent：整理症状和危险信号，提供就医或科室候选，不做诊断。
 - 用药 Agent：整理处方、药箱、库存、续方材料和提醒草稿，不开方、不改剂量、不下单。
-- 报告 Agent：整理报告内容和指标，给出有来源的通俗解释，不给诊断或治疗方案。
+- 报告 Agent：整理报告内容和指标，给出有来源的通俗解释，不给诊断或治疗方案；报告上传后直接保存为可读结构，不生成确认草稿。
 - Agent 安全：运行过程中拦截高风险请求和越权动作。
 - Agent 评估：回答生成后检查这次任务是否完成，不修改答案和业务状态。
 
@@ -84,8 +87,8 @@ flowchart LR
 | --- | --- | --- | --- |
 | 首页 | [`/`](frontend/app/page.tsx) | 当前成员和四个主要服务入口 | 统一导航和成员选择 |
 | AI 健康助手 | [`/agent`](frontend/app/agent/page.tsx) | 自然语言咨询、续方、提醒、复诊准备和确认 | 先整理，再由用户确认继续 |
-| 报告列表 | [`/reports`](frontend/app/reports/page.tsx) | 报告选择和最近报告 | 按成员显示，区分加载和空数据 |
-| 报告详情 | [`/reports/[reportId]`](frontend/app/reports/%5BreportId%5D/page.tsx) | 报告摘要、指标、趋势、内容和来源 | 只做解释，不输出诊断结论 |
+| 报告列表 | [`/reports`](frontend/app/reports/page.tsx) | 报告选择和最近报告 | 按成员显示，上传后直接进入可读历史 |
+| 报告详情 | [`/reports/[reportId]`](frontend/app/reports/%5BreportId%5D/page.tsx) | 报告摘要、指标、趋势、内容和来源 | 文本、表格、PDF 文本层和图片 OCR 统一读取；只做解释，不输出诊断结论 |
 | 家庭管理 | [`/family`](frontend/app/family/page.tsx) | 健康档案、药箱、处方和购药记录 | 切换成员后重新加载对应资料 |
 | 历史咨询 | [`/agent-runs`](frontend/app/agent-runs/page.tsx) | 过去的咨询状态和整理结果 | 只显示当前成员的历史 |
 
@@ -171,6 +174,13 @@ Copy-Item .env.example .env
 - 默认 `MODEL_PROVIDER=deterministic`，不需要模型密钥。
 - 真实模型只允许通过服务端环境变量配置，详见 [LLM 配置](docs/LLM_CONFIGURATION.md)。
 
+### 报告解析能力
+
+- 文本和 Markdown 表格：直接解析，连续表格按表头切分。
+- PDF：使用 `pypdf` 读取可选择的文本层。
+- 图片：使用本地 RapidOCR + ONNX Runtime CPU 识别，不发送图片到外部服务。
+- 扫描版 PDF 暂不做 OCR；手写、模糊图片和复杂表格仅提供结构化整理，不能当作诊断结果。
+
 ### 上传边界
 
 - 可以提交：源码、数据库迁移、脱敏 seed、合成测试数据和必要的设计文档。
@@ -191,7 +201,7 @@ README 只保留项目展示和快速启动信息，详细设计和学习材料�
 - [RAG 四指标优化实施明细](docs/RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)：M2–M5 的历史实现细节和回溯入口，数值以统一报告为准。
 - [RAGAS 离线适配器与三视图 Harness](docs/implementation/RAGAS_OFFLINE_ADAPTER.md)：可选语义交叉验证、失败不阻断和 125/500 冻结数据集的三视图投影。
 - [Triage 多轮澄清与安全续跑](docs/implementation/TRIAGE_CLARIFICATION_CONTINUATION.md)：缺槽位停止、PostgreSQL 权威 Checkpoint、新 run 续跑与成员隔离。
-- [Triage 多轮澄清与安全续跑](docs/implementation/TRIAGE_CLARIFICATION_CONTINUATION.md)：缺槽位停止、PostgreSQL 权威 Checkpoint、新 run 续跑与成员隔离。
+- [5A 业务闭环收口](docs/implementation/5A_CLOSEOUT.md)：报告统一解析、直接结构化读取、质量门和可复现验证。
 - [简历与面试口径](docs/RESUME_NOTES.md)：业务背景、多 Agent Pipeline、简历一句话和最新实测指标。
 - [核心代码走读](docs/learning/CORE_CODE_WALKTHROUGH.md)：从 API 到 Agent、Tool、RAG 和评测的代码学习路线。
 

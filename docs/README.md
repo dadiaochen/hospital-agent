@@ -18,7 +18,7 @@
 | 产品 | [PRD](PRD.md) | 用户、场景、目标和非目标 |
 | 总体架构 | [技术设计](TECH_DESIGN.md) | 分层、状态、数据流和技术选型 |
 | 多 Agent | [Agent 架构](AGENT_ARCHITECTURE.md) | 路由、计划、调度、领域 Agent 和治理节点 |
-| 业务 | [业务流程](BUSINESS_WORKFLOWS.md) | 三条业务链路、草稿和确认 |
+| 业务 | [业务流程](BUSINESS_WORKFLOWS.md) | 三条业务链路、受保护动作确认与报告直接结构化读取 |
 | 上下文 | [上下文管理](CONTEXT_MANAGEMENT.md) | 最小角色视图、压缩、重置和分层记忆 |
 | 工具 | [工具契约](TOOL_CONTRACTS.md) | Tool Registry、权限、超时、重试和来源 |
 | 模型 | [Model Gateway](MODEL_GATEWAY.md) | deterministic/真实模型双模式和输出校验 |
@@ -27,6 +27,7 @@
 | 评测 | [Agent 评测](EVALUATOR_AGENT.md) | 冻结产物、确定性评分和指标边界 |
 | 数据库 | [数据库设计](DB_SCHEMA.md) | 表、迁移、Checkpoint 和成员隔离 |
 | API | [接口文档](API_SPEC.md) | 当前 HTTP 接口、请求响应和错误 |
+| 报告解析 | [5A 业务闭环收口](implementation/5A_CLOSEOUT.md) | 文本/Markdown 表格、PDF 文本层、本地图片 OCR 与可读结构 |
 | 前端 | [前端架构](FRONTEND_ARCHITECTURE.md) | 页面、状态和后端接口映射 |
 
 ## 开发与运行
