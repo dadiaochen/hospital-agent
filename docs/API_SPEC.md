@@ -114,7 +114,7 @@ draft -> rejected
 
 `backend/app/rag/` 提供 Agent 内部检索接口。`search_safety_knowledge` Tool 通过 Retriever 获取来源，但它不会创建新的 FastAPI 路由，也不会替代第 4 节面向客户端的 `GET /api/knowledge/search`。
 
-内部请求和结果由 `RetrievalRequest`、`RetrievedChunk` 与 `RetrievalResult` 描述。每个命中项带 `source_id`、document/chunk ID 与版本、相关性 `score`、本次检索 `purpose` 和 `matched_by`；结果还声明 requested/effective mode 与 fallback 原因。HTTP API 后续可以调用 Retriever，但仍应定义自己的 API DTO 和错误语义，不能直接暴露内部模型。
+内部请求和结果由 `RetrievalRequest`、`RetrievedChunk` 与 `RetrievalResult` 描述。每个命中项带 `source_id`、document/chunk ID 与版本、相关性 `score`、本次检索 `purpose` 和 `matched_by`；结果还声明 requested/effective mode 与 fallback 原因。内部可使用 BM25 + 向量 RRF、实体过滤和轻量 rerank，但不改变 HTTP API、DTO 或来源字段契约。HTTP API 后续可以调用 Retriever，仍应定义自己的 API DTO 和错误语义，不能直接暴露内部模型。
 
 ## 7. 2F-2 Model Gateway 也不是 HTTP API
 
@@ -122,7 +122,7 @@ draft -> rejected
 
 Gateway 返回目标 Pydantic output 和 `ModelCallTrace`，不返回 provider 的未校验原始文本。2G-2 Agent Runtime 只通过 Gateway 获得结构化结果，并持久化脱敏 Trace；Router 不能直接调用模型 HTTP endpoint。
 
-4B 任务五新增的 `ComplexityRoute`、`TaskPlan`、`AgentTaskResult`、`SupervisorDecision` 和三阶段 `SafetyDecision`，以及任务六的 `OrchestrationRunResult`，仍然不是独立 HTTP endpoint。4D-B2.1/B4 已由 `UnifiedHealthGraph` 将 `/api/business-tasks` 接入这条编排边界，并由默认 `SupervisorBusinessWorkflow` 实际调用运行时领域 Agent 和 Tool Registry；4D-B2.2 又将 `execution_mode`、`context_mode` 和 `parallel_batches` 写入冻结 `run_trace.orchestration`；4D-B2.3 进一步在业务冻结产物中加入 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`；4D-B2.4 已生成独立的 300/1200 v2 评测文件；B2.5 已在 `backend/app/agent/` 增加内存 Materializer、九类 grader 和 preview Runner；B2.6 又增加了离线的 PostgreSQL shadow transaction、Provider sandbox、case-scoped RAG 和真实图执行适配器，但这些仍不是 HTTP endpoint。业务响应只返回经过校验的 route/plan/decision/domain-result 投影，不直接暴露原始请求或内部临时状态；Docker 19/19 已通过，300/1200 Gold 已完成人工审核，但完整三 split 正式评测仍需完成真实 integration、消融和 badcase 冻结。
+4B 任务五新增的 `ComplexityRoute`、`TaskPlan`、`AgentTaskResult`、`SupervisorDecision` 和三阶段 `SafetyDecision`，以及任务六的 `OrchestrationRunResult`，仍然不是独立 HTTP endpoint。`UnifiedHealthGraph` 已将 `/api/business-tasks` 接入编排边界，并由默认 `SupervisorBusinessWorkflow` 调用领域 Agent 和 Tool Registry；运行产物冻结 `FinalClaim`、`AnswerEnvelope`、实际 `tool_input` 和安全状态。当前统一评测数据集的 Agent 活动视图为 fast-400（100 WorldState / 400 Query），已接入 PostgreSQL shadow transaction、Provider sandbox、case-scoped RAG 和真实图 deterministic 集成运行；这些评测适配器仍不是 HTTP endpoint，也不改变业务响应契约。
 
 ## 8. 2G-2 Agent Runtime API
 

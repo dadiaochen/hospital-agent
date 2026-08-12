@@ -2,6 +2,8 @@
 
 > 本文只维护数据集 A–G 构建任务和交付状态。数据规模、初始/当前指标、RAGAS、已实施优化和收益统一以 [合成 RAG 评测：数据集、指标与优化结果](RAG_SYNTHETIC_EVALUATION_DATASET.md) 为准。
 
+> 自 2026-08-12 起，所有 Agent、工具、RAG、回答、安全、延迟和成本评测统一使用 `internet-hospital-agent-eval-v1`。历史 Agent 数据已迁入统一目录，只作迁移源；缺少标签时只允许扩充统一数据集并更新 manifest/hash，不再新增平行评测集。
+
 ## 1. 目的和边界
 
 本方案记录当前合成评测数据的构建方法；历史授权和执行顺序见 [项目执行历史](EXECUTION_HISTORY.md)。目标是：
@@ -15,7 +17,7 @@
 
 ## 2. 冻结规模和目录
 
-当前冻结版本：`rag-synthetic-v1`。
+当前唯一冻结版本：`internet-hospital-agent-eval-v1`。下表是其中的 RAG 视图；Agent 当前活动视图为 fast-400，包含 100 个 WorldState、400 条 Query 和工具参数标签。完整 300/1200 来源已留档，不作为默认评测输入。
 
 | 对象 | 数量 |
 |---|---:|
@@ -28,7 +30,7 @@
 
 冻结目录：
 
-`E:\project_code\hospital\output\benchmarks\rag_synthetic\fixtures\rag_synthetic_v1\`
+`E:\project_code\hospital\output\benchmarks\evaluation_dataset\internet-hospital-agent-eval-v1\rag\`
 
 目录包含 `corpus/`、`dataset/`、`labels/` 三部分，以及各自 manifest/hash。真实评测产物位于 `output/benchmarks/rag_synthetic/`。
 
@@ -63,7 +65,7 @@
 | F | 隔离知识库导入、Embedding、HNSW 和确定性基线 | `DONE` | deterministic report |
 | G | 真实 FastEmbed + PostgreSQL pgvector HNSW + LLM 评测 | `DONE` | baseline/M2–M5 reports |
 
-A–G 自动门通过后立即生成并冻结完整数据，不增加人工复核门。该数据集不能替代 300 个 WorldState、1200 条 Query 的人工审核金标准。
+A–G 自动门通过后立即生成并冻结数据，不增加人工复核门。当前统一数据集的 Agent 活动视图为 100 个 WorldState / 400 条 Query；完整 300/1200 来源只作为留档，不再作为默认评测集。全部结果必须注明 synthetic、test-only、human-reviewed=false，不能表述为临床 Gold。
 
 ## 6. 评测链路和指标定义
 
@@ -99,3 +101,15 @@ Query -> 入口治理 -> Embedding -> pgvector HNSW
 ## 9. RAGAS 最终离线结果口径
 
 RAGAS 只复用已冻结的回答、检索来源和答案 Gold，不重跑 Embedding、HNSW、PostgreSQL 检索或目标回答模型。最终共同样本为 300 条：Faithfulness `0.6166`、Response Relevancy `0.4316`、Context Recall `0.6700`；20 条未获得三项完整分数的记录整体标记为 `N/A` 并排除，不计为 0 分。完整指标、样本口径和限制见[统一指标文档](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
+
+## 10. 5A-9 当前确定性校准状态
+
+完整 Agent 来源曾用 300 个 WorldState / 1,200 条 Query 通过 PostgreSQL 隔离事务和实际 `UnifiedHealthGraph` 完成复测；当前默认活动视图已缩减为 fast-400。先区分 Gold 过时与实现错误，再修复运行契约；未进入任何检索、提示词、模型或成本优化。
+
+| 校准项 | 结论 |
+|---|---|
+| Gold 过时 | 阻断不等于等待用户确认；失败后未执行的下游动作不应列为必调；跨域故障后的独立只读分支需保留在 Gold。 |
+| 实现错误 | `search_safety_knowledge` 未使用 case-scoped retriever；空来源未 fail-closed；Supervisor 在独立兄弟步骤前提前终止；失败状态可能创建确认草稿。 |
+| 校准后 | 最终回答正确率 100%、端到端任务成功率 100%、工具集合/参数准确率 100%、高风险拦截率 100%、误拦截率 0%；P50/P95/P99 为 26/36/96 ms。 |
+
+真实 LLM 的回答质量、延迟和 token/成本仍未测量，必须在确定性契约保持稳定并获得授权后再运行。

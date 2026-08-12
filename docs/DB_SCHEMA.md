@@ -56,6 +56,8 @@
 | `knowledge_documents` | `title`、`category`、`source`、`content`、`safety_level` | 可说明来源的知识文档。 |
 | `knowledge_chunks` | `document_id`、`chunk_index`、`content`、`keywords`、`embedding`、`embedding_model`、`embedding_content_hash`、`embedded_at` | 文档分块、关键词检索单元和可选 512 维向量索引。 |
 
+BM25、RRF、实体过滤与轻量 rerank 只读取现有知识字段，不新增表或迁移。评测中的 HNSW 复用必须同时校验 document/chunk ID、版本和 embedding model；它只是运行内加速，不成为知识事实来源。
+
 RAG 输出必须带来源指针；没有命中文档或工具 evidence 时不能编造医学事实。4A migration `0003_lightweight_vector_rag` 在 PostgreSQL 启用 pgvector，并增加可空 `VECTOR(512)`、模型名、内容哈希和索引时间。关键词基线不依赖这些字段；向量后端仍只返回 ID 和相关性分数，Retriever 必须用 ID 重新加载数据库正文。模型不一致、索引缺失、指针不存在或 document/chunk 不匹配时会拒绝向量结果并回退关键词。
 
 ## 7. Agent 审计
@@ -166,7 +168,7 @@ RRF rank、原始两路分数、版本、fallback 和脱敏 Observation 继续�
 
 ## 17. 评测物化边界
 
-`backend/app/agent/v2_materializer.py` 的 `InMemoryProjectionBackend` 仍然不是 ORM、不是业务数据库，也不新增 Alembic revision。B2.6 通过 `PostgresV2Materializer` 在单个 case 的 shadow transaction 中创建临时表并回滚，真实执行业务图后只保留 JSON/Markdown 评测产物，不污染业务表。身份和 source alias 必须由本地 identity map 显式提供；未映射的 benchmark 身份直接失败，不能猜测或跨成员回源。Docker 已完成 19/19 后端验收，300/1200 Gold 已完成人工审核；全量正式报告仍待真实三 split integration、消融和 badcase 复核。
+内存 Projection Backend 不是 ORM、不是业务数据库，也不新增 Alembic revision。PostgreSQL Materializer 在单个 Case 的 shadow transaction 中物化合成状态并回滚，真实执行业务图后只保留 Git 忽略的 JSON/Markdown 评测产物，不污染业务表。身份和 source alias 必须由本地 identity map 显式提供；意外知识来源只保存不可逆的 `unexpected` 观测 ID，不泄露本地数据库 ID。当前活动 fast-400 合成 Agent 视图用于后续三个 split 的评测，完整 300/1200 来源仅留档。
 
 ## 用户端 UX-08 数据边界
 

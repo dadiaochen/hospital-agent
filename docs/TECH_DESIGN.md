@@ -89,9 +89,9 @@ Model Gateway 的 Provider、模型、Base URL、Key 和 timeout 只来自服务
 
 RAG 使用 FastEmbed、PostgreSQL pgvector HNSW 和关键词并行召回，经 RRF 融合、活动版本过滤、来源校验和实体证据筛选后，把最小直接来源交给模型。知识库与个人状态使用不同 namespace 和写入策略。
 
-当前 500 Query 合成测试中，Recall@5 从 70.96% 提升到 85.19%，来源绑定回答准确率从 23.44% 提升到 63.75%，端到端 p95 从 3.40 秒降到 2.19 秒。详细指标、RAGAS 状态和限制见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
+当前 500 Query 合成测试保留 BM25 + FastEmbed/pgvector HNSW 双路召回、RRF、实体过滤、候选 20 条轻量 rerank 和主片段优先：Recall@3/@5/@10 为 100%/100%/100%，Precision@3/@5/@10 为 43.59%/26.15%/13.08%，来源绑定回答正确率为 74.69%，确定性来源绑定幻觉率为 0%。这些是冻结合成数据的工程结果，不是临床准确率；本轮平均 token、成本和端到端 P95 没有下降，RAGAS 新复评因独立 Judge 账户计费不可用记为 N/A。详细口径、对照和限制见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
 
-全链路评测在答案冻结后还可执行 RAGAS 离线语义交叉验证。该适配器不属于业务工作流：默认关闭；独立 Judge、依赖或网络不可用时按指标保留成功分数、缺失项记 N/A，不改变检索、回答、bad case 或验收结论。它支持直接读取冻结回答、证据和 Gold 进行复评，不重跑语料 Embedding、PostgreSQL/HNSW 或目标回答模型。相同的 125 个基础 Case / 500 条 Query 会同时生成入口、检索、回答三种 Harness 视图，保持 Gold 与 split 的可追溯性。运行说明见 [RAGAS 离线适配器与三视图 Harness](implementation/RAGAS_OFFLINE_ADAPTER.md)。
+全链路评测在答案冻结后还可执行 RAGAS 离线语义交叉验证。业务回答模型只读取 `MODEL_*`，独立 Judge 只读取 `RAGAS_JUDGE_*`，两组 Base URL、Key 和模型名可以来自同一账号或不同服务商，但模型名必须不同；Qwen-compatible Judge 默认关闭隐藏思考以控制评测 token。该适配器不属于业务工作流：默认关闭；独立 Judge、依赖或网络不可用时按指标保留成功分数、缺失项记 N/A，不改变检索、回答、bad case 或验收结论。它支持直接读取冻结回答、证据和 Gold 进行复评，不重跑语料 Embedding、PostgreSQL/HNSW 或目标回答模型。相同的 125 个基础 Case / 500 条 Query 会同时生成入口、检索、回答三种 Harness 视图，保持 Gold 与 split 的可追溯性。运行说明见 [RAGAS 离线适配器与三视图 Harness](implementation/RAGAS_OFFLINE_ADAPTER.md)。
 
 预问诊路径采用最小 Triage 槽位状态机：症状缺失时先返回 `needs_clarification`，将最小结构化槽位保存到 PostgreSQL Checkpoint；补充后以同一任务下的新 `AgentRun` 续跑，并通过 `parent_run_id`、用户/成员范围和 Checkpoint 版本保证可追溯与隔离。该流程不传递旧 scratchpad，也不会在信息不足时生成复诊草稿或诊断结论。
 
@@ -103,7 +103,7 @@ RAG 使用 FastEmbed、PostgreSQL pgvector HNSW 和关键词并行召回，经 R
 
 ## 9. 评测与可观测性
 
-系统冻结 FinalAnswer、FinalClaim、Tool/Provider attempts、RAG 排名、Safety、Checkpoint 和 RunTrace，再由只读确定性评测器评分。300 个 WorldState、1,200 条表达用于编排与治理；125 个基础 Case、500 条 Query 用于真实 RAG、回答、延迟和成本。
+系统冻结 FinalAnswer、FinalClaim、Tool/Provider attempts、实际 `tool_input`、RAG 排名、`expected_blocked/observed_blocked`、Checkpoint 和 RunTrace，再由只读确定性评测器评分。唯一评测数据集 `internet-hospital-agent-eval-v1` 的当前活动 Agent 视图为 fast-400：100 个 WorldState / 400 条表达；125 个基础 Case / 500 条 Query 用于真实 RAG、回答、延迟和成本，32 个种子 Case / 48 次调用用于工具参数精确匹配。完整 300/1200 Agent 来源已留档，不被默认评测读取。历史 1,200 条 Agent Query 已完成 PostgreSQL + UnifiedHealthGraph deterministic 集成复测；WorldState 的药箱和处方进入同一隔离事务供真实业务工具读取，结束后回滚。当前 fast-400 已完成 3 条真实 LLM 冒烟和按 split 的 400 条分批全量运行；冻结业务状态 Gold 自动评分覆盖意图、路由、工具、参数、Claim、来源、安全、确认、隔离与数据库状态，不设人工审核门。结果写入 `output/benchmarks/4d-b3-real-llm-fast-400-gold-20260812-v2/`；最终回答正确率是合成业务 Gold 下的工程正确率，不是临床准确率。标签不足时只扩充当前统一数据集并更新 manifest/hash，不再建立平行评测集。
 
 LLM Judge 不进入运行链路，也不作为发布硬门槛。旧执行阶段和历史验收数字见 [项目执行历史](EXECUTION_HISTORY.md)，当前状态只看 [开发总路线图](DEVELOPMENT_ROADMAP.md)。
 

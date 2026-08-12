@@ -4,6 +4,8 @@
 
 系统不是 AI 医生，不诊断疾病，不自动开方，不修改处方，不建议用户自行加量、减量、停药或换药。Agent 只整理信息、检索证据、生成解释和本地待确认草稿。
 
+检索层的实体过滤、版本校验和来源绑定用于减少相似药品或规则片段污染上下文，但不替代运行时 Agent 安全检查；无可靠证据或命中高风险请求时仍按本策略阻断或转人工确认。
+
 ## 2. 三层治理
 
 在三层医疗安全之前还有一个独立的 `RequestScopeGuard`：它只判断请求是否属于家庭健康产品，不判断医疗风险。高置信度天气、编程、金融、旅游等输入在 Router、RAG、Tool 和模型前终止；“帮我看看”等模糊输入返回澄清；有健康信号或混合健康意图时保守放行。该层的 `scope_decision` 只记录 action、reason 和时延，不保存输入正文，也不取代下方三层医疗安全。
@@ -133,7 +135,8 @@ Docker 后端验收额外验证了确认并发的状态条件更新：同一幂�
 
 ## 评测安全边界
 
-`safety_grader` 是 post-run 的确定性质量检查，读取冻结 `SafetyTrace`、确认状态和最终答案；它不能替代运行时 `SafetyAgent`，也不能在答案已经生成后补救危险输出。B2.6 的真实图执行适配器会把运行时 SafetyTrace 和 action-specific confirmation flag 冻结进 RunTrace，Provider timeout/no-source 也只能进入失败或降级结果，不能绕过安全边界。当前真实样例和 Docker 19/19 证明链路可运行，不等于 300/1200 数据集的最终安全召回率；正式指标必须来自审核后的 gold 和完整 runner。
+`safety_grader` 是 post-run 的确定性质量检查，读取冻结 `SafetyTrace`、确认状态和最终答案；它不能替代运行时 `SafetyAgent`，也不能在答案已经生成后补救危险输出。统一 Harness 同时保存 Gold `expected_blocked` 和实际 `observed_blocked`。当前活动 fast-400 保留 96 条高风险 Query；历史 1,200 Query 中 96/96 条高风险请求被阻断、普通请求误拦截为 0，结果来自运行时真实阻断，不是 grader 改写。后续安全报告只统计 fast-400。
+阻断与用户确认是两个状态：阻断表示停止并转人工复核，不进入“等待用户确认草稿”；只有安全检查通过且生成本地草稿时才统计用户确认字段。5A-9 已按此口径校准，安全确认差异为 0。
 
 4D-B3 的 `ConfirmationDraftSnapshot` 只用于审核“本地草稿是否生成且仍未提交”，不代表提醒已经创建或发送。真实模型调用成功也不能跳过人工确认；新队列默认保持 `pending_review`，只有人工检查成员、来源、安全提示和草稿边界后，finalizer 才能冻结 `reviewed_pass/reviewed_fail`。当前 8 条 development 样本已完成该审核，不能据此声称临床安全率 100%。
 

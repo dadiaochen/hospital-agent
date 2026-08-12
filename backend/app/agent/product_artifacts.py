@@ -78,6 +78,11 @@ def build_run_trace(state: Mapping[str, Any]) -> RunTrace:
             ToolCallTrace(
                 tool_name=str(item.get("tool_name") or "unknown"),
                 member_id=str(item.get("member_id") or member_id),
+                tool_input=(
+                    dict(item["tool_input"])
+                    if isinstance(item.get("tool_input"), Mapping)
+                    else {}
+                ),
                 source_id=source_id,
                 source_name=(
                     str(item.get("source_name"))
@@ -156,7 +161,11 @@ def build_run_trace(state: Mapping[str, Any]) -> RunTrace:
         for item in state.get("final_claims", [])
         if isinstance(item, Mapping)
     )
-    if not claims:
+    # Failed/blocked/clarification runs may still have read structured data
+    # before a later source or provider failure.  Those pointers remain useful
+    # for audit, but they must not be converted into user-visible factual
+    # claims after the run has failed closed.
+    if not claims and status not in {"failed", "blocked", "needs_clarification"}:
         claims = build_workflow_claims(
             run_id=str(state["run_id"]),
             member_id=member_id,
@@ -204,7 +213,10 @@ def build_run_trace(state: Mapping[str, Any]) -> RunTrace:
         final_answer=FinalAnswerTrace(
             answer_id=answer_id,
             content=display_content,
-            contains_factual_claims=bool(_source_refs(state)) or bool(claims),
+            contains_factual_claims=(
+                status not in {"failed", "blocked", "needs_clarification"}
+                and (bool(_source_refs(state)) or bool(claims))
+            ),
             waiting_for_user_confirmation=waiting,
             human_confirmation_present=confirmation_present,
             action_status=action_status,

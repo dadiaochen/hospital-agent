@@ -101,6 +101,26 @@ def test_keyword_retriever_matches_key_terms_inside_a_natural_chinese_query(
     assert result.sources[0].chunk_id == "chunk-safety"
 
 
+def test_keyword_retriever_uses_bm25_and_filters_explicit_entity(
+    knowledge_session: Session,
+) -> None:
+    store = SQLAlchemyKnowledgeStore(knowledge_session)
+    retriever = KeywordRetriever(
+        store,
+        scoring_strategy="bm25",
+    )
+
+    result = retriever.retrieve(
+        RetrievalRequest(
+            query="请说明 SYN-SAFETY-01 的规则",
+            purpose="safety_check",
+            mode="keyword",
+        )
+    )
+
+    assert result.evidence_present is False
+
+
 def test_keyword_retriever_returns_no_evidence_for_unknown_query(
     knowledge_session: Session,
 ) -> None:

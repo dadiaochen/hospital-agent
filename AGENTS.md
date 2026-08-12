@@ -190,13 +190,14 @@ Context Compaction 规则：
 
 ## 12. Agent Harness 验收
 
-- 保留早期 16 条 evaluator 失败识别用例、32 条编排消融用例和 260 条 v1 专项 gold；4D-B 最终评测集为 300 个 WorldState、每个 4 条表达，共 1200 条 v2 Query。
+- 所有后续指标评测只能读取 `output/benchmarks/evaluation_dataset/internet-hospital-agent-eval-v1/` 统一评测数据集；历史 fixture 只允许作为迁移源或回归兼容输入，不能再作为独立评测集或指标口径。
+- 统一数据集包含 125 个 RAG 基础 Case / 500 条 RAG Query、300 个 Agent WorldState / 1200 条 Agent Query，以及 32 个工具参数种子 Case / 48 次精确参数调用。现有标签不能支持新指标时，必须在该统一数据集内生成带 `label_provenance` 的新标注数据并更新 manifest/hash，不得另建平行数据集。
 - `EvaluatorAgent` 是 post-run agent，只允许读取 `RunTrace`、`ContextEnvelope`、`ToolEvidence`、`RAGSources`、`FinalAnswer`、`FinalClaim` 和 `ExpectedCase`。
 - `EvaluatorAgent` 输出 `EvaluationResult`，至少包含 `task_success`、`tool_call_accuracy`、`groundedness`、`schema_valid`、`hallucination_detected`、`safety_recall`、`human_confirmation_required`、`human_confirmation_present`、`context_isolation_passed`、`latency_ms` 和 `failure_reasons`。
 - `EvaluatorAgent` 不允许修改用户答案，不允许生成医疗建议，不允许调用业务工具或写业务状态。
 - 后续 `AgentHarness` 汇总多个 `EvaluationResult` 生成 `agent_eval_report.md`，聚合 `task_success`、`tool_call_accuracy`、`groundedness`、`schema_valid`、`hallucination_rate`、`safety_recall`、`human_confirmation_rate`、`context_isolation_pass_rate` 和 `p95_latency`。
 - 未真实跑出的指标只能写为“设计/定义/目标”，不能写成已达成结果。
-- v2 数据必须按 base WorldState 拆分 development、validation 和 holdout；同一 WorldState 的表达不得跨 split。
+- Agent 数据必须按 base WorldState 拆分 development、validation 和 holdout；同一 WorldState 的表达不得跨 split。
 - Gold 必须来自冻结业务状态和人工审核，不能从本次 Agent 输出反向生成；AI 只允许生成表达变体和候选标签。
 
 ## 13. LangGraph 工作流规则

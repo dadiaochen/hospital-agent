@@ -5,6 +5,8 @@ from typing import Any, cast
 from pydantic import Field, model_validator
 from sqlalchemy.orm import Session
 
+from app.rag.retrieval_schemas import RetrievalRequest
+from app.rag.retriever import Retriever
 from app.services.agent_tool_query_service import (
     get_health_profile_context,
     get_medicine_box_context,
@@ -96,9 +98,10 @@ def create_db_tool_registry(
     db: Session,
     *,
     include_confirmation_tools: bool = False,
+    knowledge_retriever: Retriever | None = None,
 ) -> ToolRegistry:
     registry = ToolRegistry()
-    register_db_tools(registry, db)
+    register_db_tools(registry, db, knowledge_retriever=knowledge_retriever)
     if include_confirmation_tools:
         from app.tools.confirmation_tools import register_confirmation_draft_tool
 
@@ -106,7 +109,12 @@ def create_db_tool_registry(
     return registry
 
 
-def register_db_tools(registry: ToolRegistry, db: Session) -> None:
+def register_db_tools(
+    registry: ToolRegistry,
+    db: Session,
+    *,
+    knowledge_retriever: Retriever | None = None,
+) -> None:
     registry.register(
         ToolSpec(
             name="query_health_profile",
@@ -171,7 +179,12 @@ def register_db_tools(registry: ToolRegistry, db: Session) -> None:
             allowed_agent_roles=("TriageAgent", "MedicationAgent", "SafetyAgent", "RefillAgent", "ReminderAgent"),
             read_only=True,
         ),
-        lambda tool_input, context: _search_safety_knowledge(db, tool_input, context),
+        lambda tool_input, context: _search_safety_knowledge(
+            db,
+            tool_input,
+            context,
+            knowledge_retriever=knowledge_retriever,
+        ),
     )
 
 
@@ -234,14 +247,44 @@ def _search_safety_knowledge(
     db: Session,
     tool_input,
     context: ToolExecutionContext,
+    *,
+    knowledge_retriever: Retriever | None = None,
 ) -> dict[str, Any]:
     parsed = cast(SafetyKnowledgeInput, tool_input)
-    result = search_safety_knowledge_context(db, parsed.query)
-    evidence = _require_evidence(
-        result,
-        "safety knowledge not found",
-        fallback_action="manual_review",
-    )
+    if knowledge_retriever is None:
+        result = search_safety_knowledge_context(db, parsed.query)
+        evidence = _require_evidence(
+            result,
+            "safety knowledge not found",
+            fallback_action="manual_review",
+        )
+    else:
+        retrieval = knowledge_retriever.retrieve(
+            RetrievalRequest(
+                query=parsed.query,
+                purpose="safety_and_workflow_grounding",
+            )
+        )
+        if not retrieval.evidence_present:
+            raise ToolExecutionError(
+                "safety knowledge not found",
+                error_type="not_found",
+                fallback_action="refuse_unsupported_answer",
+            )
+        sources = [source.model_dump(mode="json") for source in retrieval.sources]
+        evidence = {
+            "source_id": "knowledge_search:" + ",".join(
+                str(item["source_id"]) for item in sources
+            ),
+            "source_name": "knowledge_chunks",
+            "evidence_present": True,
+            "query": parsed.query,
+            "requested_mode": retrieval.requested_mode,
+            "effective_mode": retrieval.effective_mode,
+            "fallback_used": retrieval.fallback_used,
+            "fallback_reason": retrieval.fallback_reason,
+            "sources": sources,
+        }
     sources = evidence.get("sources", [])
     evidence["source_refs"] = [
         SourceRef(

@@ -144,7 +144,11 @@ class FamilyHealthProductWorkflow:
         self.confirmation_machine = ConfirmationStateMachine()
         self.final_answer_quality_gate = FinalAnswerQualityGate()
         self.retriever = knowledge_retriever or create_knowledge_retriever(db)
-        self.registry = create_db_tool_registry(db, include_confirmation_tools=True)
+        self.registry = create_db_tool_registry(
+            db,
+            include_confirmation_tools=True,
+            knowledge_retriever=self.retriever,
+        )
         register_business_tools(
             self.registry,
             self.db,
@@ -228,6 +232,27 @@ class FamilyHealthProductWorkflow:
             payload,
             self._context(state, agent_role, tool_name),
         )
+        # A successful tool envelope without knowledge evidence is not a
+        # usable answer source.  Treat it as a hard, fail-closed boundary so
+        # downstream Agents cannot create a draft or generate source-backed
+        # claims from an empty RAG result.  The business knowledge handler
+        # returns ``success=True`` for a syntactically valid empty result;
+        # here we promote that condition to the runtime reliability contract.
+        if (
+            result.success
+            and not result.evidence_present
+            and tool_name in {"search_safety_knowledge", "search_business_knowledge"}
+        ):
+            result = result.model_copy(
+                update={
+                    "success": False,
+                    "error_type": "not_found",
+                    "error_category": "not_found",
+                    "error_message": "knowledge source not found",
+                    "fallback_action": "refuse_unsupported_answer",
+                    "retryable": False,
+                }
+            )
         state.setdefault("tool_calls", []).append(result.model_dump(mode="json"))
         output = self._data(result)
         state.setdefault("source_refs", []).extend(
@@ -237,6 +262,8 @@ class FamilyHealthProductWorkflow:
         provider_call = output.get("provider_call")
         if provider_call:
             state.setdefault("provider_calls", []).append(provider_call)
+        if result.fallback_action:
+            state["fallback_action"] = result.fallback_action
         if output.get("degraded"):
             state["degraded"] = True
         if not result.success or output.get("success") is False:
@@ -763,6 +790,14 @@ class FamilyHealthProductWorkflow:
         if state.get("status") in {"failed", "needs_clarification", "blocked"}:
             return state
         request = state.get("confirmation_request")
+        if not request:
+            # Read-only completion has no protected action. Calling the action
+            # guard here would incorrectly turn an ordinary triage/report
+            # answer into `human_confirmation_required`.
+            state["confirmation_state"] = "NONE"
+            state["need_human_confirmation"] = False
+            state["status"] = "completed"
+            return state
         decision = self.safety_guard.action(
             message=" ".join(
                 [
@@ -992,6 +1027,12 @@ class FamilyHealthProductWorkflow:
                 task_id=state["task_id"],
                 member_id=state["member_id"],
                 purpose=f"business_{state['business_domain']}_final_answer",
+                # The final-answer contract echoes source-bound claims.  The
+                # default 512-token budget can truncate a valid JSON payload
+                # before Pydantic validation, especially when source IDs are
+                # UUIDs.  Keep the payload bounded but leave enough room for
+                # one complete structured answer.
+                max_output_tokens=1024,
                 messages=(
                     ModelMessage(
                         role="system",
@@ -1102,6 +1143,7 @@ class FamilyHealthProductWorkflow:
                 ModelCallRequest(
                     run_id=state["run_id"], task_id=state["task_id"], member_id=state["member_id"],
                     purpose=f"business_{state['business_domain']}_final_answer_repair",
+                    max_output_tokens=1024,
                     messages=(
                         ModelMessage(role="system", content=(
                             "Return only valid JSON for WorkflowFinalAnswerDraft. This is one bounded, "

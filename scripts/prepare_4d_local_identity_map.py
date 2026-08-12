@@ -1,4 +1,4 @@
-"""Build a case-scoped v2 identity map from the local Docker seed database.
+"""Build a case-scoped unified-evaluation identity map from the local Docker seed database.
 
 The v2 benchmark has synthetic users and members.  This command maps those
 namespaces to the disposable local demo user and members so the real graph can
@@ -26,7 +26,7 @@ from sqlalchemy import select
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 
-from app.agent.v2_benchmark_generator import load_v2_benchmark  # noqa: E402
+from app.agent.unified_eval_dataset import load_unified_agent_benchmark  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     FamilyMember,
@@ -61,7 +61,7 @@ def build_local_identity_map(
 ) -> dict[str, Any]:
     """Create a deterministic case map and report local data coverage."""
 
-    worlds, _, manifest = load_v2_benchmark(project_root=project_root)
+    worlds, _, manifest = load_unified_agent_benchmark(project_root=project_root)
     user = _single_user(session, user_id)
     members = list(
         session.scalars(
@@ -146,7 +146,7 @@ def build_local_identity_map(
         }
 
     return {
-        "schema_version": "4d-final-identity-map-v1",
+        "schema_version": "unified-agent-identity-map-v1",
         "benchmark_dataset_version": manifest.dataset_version,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "local_demo_scope": {
@@ -172,7 +172,7 @@ def main() -> int:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("var/demo/v2_identity_map.4d-final.local.json"),
+        default=Path("var/demo/unified_agent_identity_map.local.json"),
     )
     args = parser.parse_args()
 
@@ -193,4 +193,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

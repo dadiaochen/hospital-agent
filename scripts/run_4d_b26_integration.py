@@ -29,6 +29,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--identity-map", type=Path, required=True)
     parser.add_argument("--max-cases", type=int, default=1)
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=4,
+        choices=range(1, 17),
+        metavar="1-16",
+        help="Bounded independent Query concurrency with one transaction per Query.",
+    )
     parser.add_argument("--split", choices=("all", "development", "validation", "holdout"), default="development")
     parser.add_argument("--allow-pending-review", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=Path("output/benchmarks/v2"))
@@ -47,6 +55,7 @@ def main() -> int:
             runner_mode="integration",
             dataset_split=args.split,
             max_cases=args.max_cases,
+            concurrency=args.concurrency,
             allow_pending_review=args.allow_pending_review,
         )
     )

@@ -575,7 +575,10 @@ class RuntimeReportAgent(RuntimeDomainAgent):
         if isinstance(knowledge, AgentTaskResult):
             return knowledge
 
-        if self.runtime.should_prepare_confirmation(self.role):
+        if (
+            self.runtime.should_prepare_confirmation(self.role)
+            and not self.runtime.input_payload.get("analysis_only", False)
+        ):
             self.runtime.prepare_confirmation(
                 agent_role=self.role,
                 action_type="health_record",
@@ -599,13 +602,14 @@ class RuntimeReportAgent(RuntimeDomainAgent):
                     "source_document_id": payload.get("source_document_id"),
                 },
             )
+
         return self._result(
             agent_input,
             facts={
                 "workflow_action": "prepare_report_explanation",
                 "medical_claims_generated": False,
             },
-            requested_confirmation=self.runtime.should_prepare_confirmation(self.role),
+            requested_confirmation=False,
         )
 
 

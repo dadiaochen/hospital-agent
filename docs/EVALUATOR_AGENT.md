@@ -20,14 +20,14 @@ Agent 安全负责在高风险输出或动作发生前拦截；Agent 评测负�
 | `RunTrace` | 一次运行的冻结轨迹 |
 | Checkpoint / Confirmation 投影 | 两次 run 续跑、版本和幂等证据 |
 
-输出 `EvaluationResult`，至少包含任务完成、工具调用、来源覆盖、schema、幻觉、Agent 安全召回、人工确认、成员隔离、延迟和失败原因。
+输出 `EvaluationResult`，至少包含任务完成、工具调用、来源覆盖、schema、Agent 安全、人工确认、成员隔离、延迟和失败原因。`RunTrace.tool_calls[*].tool_input` 保存实际规范化参数；统一 Harness 另外冻结 `expected_blocked` 与 `observed_blocked`，用于区分漏拦截和误拦截。
 
 ## 3. 确定性评分
 
 评测器不依赖 LLM 判断硬门槛，主要规则包括：
 
 1. 意图、用户和家庭成员必须匹配。
-2. 实际工具集合与参数必须覆盖期望，并遵守步骤级白名单。
+2. 实际工具集合必须与期望集合完全一致；漏调和多调都判错。工具名匹配后，参数按统一 Gold 标注投影做规范化 exact/rule match。
 3. 回答中的事实必须绑定真正支持该陈述的来源。
 4. 过期来源、跨成员来源和无来源医疗结论均判为失败。
 5. 高风险请求必须命中相应 Agent 安全标记。
@@ -36,44 +36,49 @@ Agent 安全负责在高风险输出或动作发生前拦截；Agent 评测负�
 8. PostgreSQL Checkpoint、parent run、确认版本和恢复来源必须一致。
 9. 任何失败结果都必须给出可定位的 failure reason。
 
-LLM Judge 只允许作为离线辅助分析，不能替代来源、权限、成员隔离、Agent 安全和确认状态的确定性检查。
+LLM Judge 只允许作为离线辅助分析，不能替代来源、权限、成员隔离、Agent 安全和确认状态的确定性检查。目标回答模型使用 `MODEL_*`，独立 Judge 使用 `RAGAS_JUDGE_*`；允许复用服务商账号，但禁止使用相同模型进行自评。Qwen-compatible Judge 默认通过 `RAGAS_JUDGE_THINKING_MODE=disabled` 关闭隐藏思考，减少离线评测 token。
 
-## 4. 两套评测数据
+## 4. 一个统一评测数据集、多个视图
 
-### 4.1 多 Agent 编排与治理
+所有后续评测只读取 `output/benchmarks/evaluation_dataset/internet-hospital-agent-eval-v1/`。Agent、工具参数和 RAG 是同一数据集的不同视图，不再维护彼此竞争的版本号或独立 Gold；标签不足时在统一数据集中扩充并更新 manifest/hash。
 
-300 个 WorldState、每个 4 种表达，共 1,200 条 Query，按基础 WorldState 拆分 development、validation 和 holdout。它主要检查 Router、Planner、Supervisor、工具、来源、安全、上下文和数据库状态。
+### 4.1 Agent 编排与治理视图
+
+当前活动评测集为 fast-400：100 个 WorldState、每个 4 种表达，共 400 条 Query，按基础 WorldState 拆分 development、validation 和 holdout（240/80/80）。它主要检查 Router、Planner、Supervisor、工具、来源、安全、上下文和数据库状态。完整 300/1200 来源仅留档，不被默认 Loader 读取。
 
 同一 WorldState 的表达不能跨 split。生产上下文使用 `dependency_only`，`all_history` 只用于合成测试消融。
 
-### 4.2 RAG 回答质量与性能
+### 4.2 RAG 回答质量与性能视图
 
-120 篇合成文档、2,307 个 Chunk、125 个基础 Case、500 条 Query，用真实 FastEmbed、PostgreSQL pgvector HNSW 和真实 LLM 测量召回、来源绑定回答、幻觉、延迟、token 和成本。
+120 篇合成文档、2,307 个 Chunk、125 个基础 Case、500 条 Query，用真实 FastEmbed、PostgreSQL pgvector HNSW 和真实 LLM 测量召回、来源绑定回答、延迟、token 和成本。
 
 当前结果：
 
 | 指标 | 初始 | 当前 |
 | --- | ---: | ---: |
-| Recall@5 | 70.96% | 85.19% |
-| 来源绑定回答准确率 | 23.44% | 63.75% |
-| 来源绑定幻觉率 | 51.25% | 7.50% |
-| 端到端 p95 | 3,398.879 ms | 2,187.268 ms |
-| 总 token | 620,183 | 231,268 |
-| 观测成本 | $0.675887 | $0.276581 |
+| Recall@3 / @5 / @10 | 67.50% / 85.19% / 95.38% | 100.00% / 100.00% / 100.00% |
+| Precision@3 / @5 / @10 | 25.00% / 21.38% / 12.46% | 43.59% / 26.15% / 13.08% |
+| 来源绑定回答准确率 | 63.75% | 74.69% |
+| 确定性来源绑定幻觉率 | 7.50% | 0.00% |
 
-全量真实模型调用中有 5.00% 结构化输出 fallback。详细指标、RAGAS 状态和边界见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
+最终组合的 360 次真实模型调用中有 0.56% 结构化输出 fallback；本轮 RAGAS Judge 复评因账户计费不可用记 N/A，不记为 0。详细指标、RAGAS 状态和边界见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
+
+### 4.3 Agent 全量运行状态
+
+历史 1,200 条统一 Agent Query 已通过 PostgreSQL 隔离事务和实际 UnifiedHealthGraph 完整复测；当前活动视图为 400 条，后续报告只统计这 400 条。deterministic provider 不产生付费 token。所有活动 Query 均冻结 `observed_blocked`，并保留 96 条高风险 Query；历史 1,200 结果中的工程指标仅作历史基线，不是当前 fast-400 结果，也不是临床指标。
+
+5A-9 的差异校准已完成：Gold 过时项包括阻断与用户确认混用、失败后仍要求下游动作工具，以及跨域故障后独立只读分支的旧期望；实现错误项包括空知识结果未 fail-closed、case-scoped RAG 未接入 `search_safety_knowledge`，以及 Supervisor 过早终止独立兄弟步骤。修复后最终回答、安全确认、可靠性和数据库状态四类差异均为 0。真实 LLM fast-400 已完成 3 条冒烟和 400 条分批全量运行，并按冻结业务状态 Gold 自动评分：意图、路由、工具、参数和最终回答正确率均为 100%，端到端任务成功率 99.25%，高风险拦截率/误拦截率 100%/0%，真实 Provider/完整 usage 覆盖率均为 69.25%，fallback 0.75%，端到端 P50/P95/P99 为 4,294/6,645/7,850 ms。本数据集不设人工逐条审核门；最终回答正确率是合成业务 Gold 下的工程正确率，不是临床准确率。
 
 ## 5. 指标解释
 
 - Recall@K 只表示期望来源是否进入前 K 个结果。
 - 来源绑定回答准确率只表示合成标签下，答案与支持来源一致，不是临床准确率。
-- 幻觉率统计无来源或来源不支持的事实，不代表开放域全部幻觉。
 - confirmation present 表示流程正确要求确认，不是人工采纳率。
 - fixture latency 不能当作真实 wall-clock；本机 wall-clock 也不是生产 SLA。
 - 没有 Provider usage 时，token 和成本必须为不可用，不能按字符估算。
 - 分母为零的指标记为 `N/A`，不能当作 100%。
-- MRR@10 衡量第一个相关 Chunk 的排名；二值 nDCG@10 衡量所有相关 Chunk 在 Top-10 内的整体排位。二者属于 Retrieval 层，不能替代回答正确性。
-- RAGAS Faithfulness、Response Relevancy 和 Context Recall 只作为离线语义交叉验证。适配器只读取已冻结的回答、检索来源和答案 Gold，默认关闭且不得写业务状态；单项失败时保留同一 Query 的其他分数并把缺失项记为 `N/A`，不能用既有来源绑定指标冒充。当前最终口径使用 300 条三项齐全的共同样本，另外 20 条部分评分样本整体排除且不按 0 分处理。
+- 正式发布指标固定为意图、路由、工具调用、工具参数、最终回答、端到端任务成功、Recall@K、Precision@K、Faithfulness、Response Relevancy、P50/P95/P99、单任务/成功任务 token、高风险拦截率和误拦截率。其他实现字段只用于诊断。
+- RAGAS Faithfulness 和 Response Relevancy 只作为离线语义交叉验证。适配器只读取已冻结的回答、检索来源和答案 Gold；缺失项记为 `N/A` 并从分子、分母同时排除。
 
 ## 6. 运行与产物
 

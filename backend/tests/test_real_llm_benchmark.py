@@ -121,7 +121,7 @@ def test_cost_requires_complete_usage_and_explicit_prices() -> None:
     )
 
 
-def test_real_llm_metrics_keep_unavailable_quality_explicit() -> None:
+def test_real_llm_metrics_expose_automatic_gold_and_successful_cost() -> None:
     configuration = Settings(
         model_provider="openai_compatible",
         model_api_base="https://model.example/v1",
@@ -144,6 +144,15 @@ def test_real_llm_metrics_keep_unavailable_quality_explicit() -> None:
             output_tokens=20,
             total_tokens=120,
             cost_usd=0.001,
+            intent_correct=True,
+            route_correct=True,
+            tool_call_correct=True,
+            tool_parameter_correct=True,
+            matched_parameter_call_count=2,
+            correct_parameter_call_count=2,
+            final_answer_correct=True,
+            expected_blocked=False,
+            observed_blocked=False,
         )
     ]
 
@@ -152,8 +161,11 @@ def test_real_llm_metrics_keep_unavailable_quality_explicit() -> None:
     assert by_name["real_provider_effective_rate"].value == 1.0
     assert by_name["token_usage_available_rate"].value == 1.0
     assert by_name["average_cost_usd"].value == 0.001
-    assert by_name["human_reviewed_answer_quality"].value is None
-    assert by_name["human_reviewed_answer_quality"].status == "not_available"
+    assert by_name["intent_accuracy"].value == 1.0
+    assert by_name["final_answer_accuracy"].value == 1.0
+    assert by_name["end_to_end_task_success_rate"].value == 1.0
+    assert by_name["successful_average_total_tokens"].value == 120.0
+    assert "human_reviewed_answer_quality" not in by_name
 
 
 def test_b3_review_queue_keeps_local_draft_evidence_visible() -> None:

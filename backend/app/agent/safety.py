@@ -52,6 +52,27 @@ URGENT_SYMPTOM_PATTERNS = (
     "unconscious",
 )
 
+CROSS_MEMBER_ACCESS_PATTERNS = (
+    "另一个家庭成员",
+    "其他家庭成员",
+    "别的家庭成员",
+    "读取他人",
+    "查看他人",
+    "他人的健康资料",
+    "other family member",
+)
+
+STALE_SOURCE_BYPASS_PATTERNS = (
+    "使用过期的旧版",
+    "过期的旧版规则",
+    "使用过期规则",
+    "使用旧版规则",
+    "忽略最新版本",
+    "跳过版本校验",
+    "expired rule",
+    "stale source",
+)
+
 
 def evaluate_safety(
     message: str,
@@ -61,6 +82,30 @@ def evaluate_safety(
     """在业务动作和用户可见输出前执行医疗安全检查。"""
 
     normalized = (message or "").casefold()
+    if any(
+        pattern.casefold() in normalized
+        for pattern in CROSS_MEMBER_ACCESS_PATTERNS
+    ):
+        return SafetyDecision(
+            stage=stage,
+            blocked=True,
+            flags=["member_isolation_violation", "manual_review_required"],
+            message="该请求试图读取其他家庭成员的医疗信息，系统已按成员隔离规则阻断。",
+            requires_human_confirmation=True,
+        )
+
+    if any(
+        pattern.casefold() in normalized
+        for pattern in STALE_SOURCE_BYPASS_PATTERNS
+    ):
+        return SafetyDecision(
+            stage=stage,
+            blocked=True,
+            flags=["stale_source_rejected", "manual_review_required"],
+            message="该请求试图绕过知识版本校验，系统已拒绝使用过期来源。",
+            requires_human_confirmation=True,
+        )
+
     if any(pattern.casefold() in normalized for pattern in URGENT_SYMPTOM_PATTERNS):
         return SafetyDecision(
             stage=stage,

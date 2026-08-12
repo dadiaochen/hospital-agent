@@ -48,7 +48,7 @@
 
 `evidence_refs` 使用通用 `SourceRef`。调用失败必须返回结构化错误，不得把 Provider 原始异常文本直接交给模型生成用户答案。
 
-知识检索工具的 `SourceRef.source_metadata` 还记录 `matched_by`、`retrieval_provider`、`fallback_used`、`fallback_reason`、embedding model/dimension/schema version。这样关键词降级仍然可审计，模型不能把降级结果伪装成真实语义召回。
+知识检索工具的 `SourceRef.source_metadata` 还记录 `matched_by`、`retrieval_provider`、`fallback_used`、`fallback_reason`、embedding model/dimension/schema version。内部可采用 BM25/vector RRF、实体过滤和 rerank，但仍由这些既有字段记录实际命中与降级；模型不能把降级结果伪装成真实语义召回。
 
 ## 4. 当前六类工具
 
@@ -154,11 +154,11 @@ Agent 可以自动创建无外部副作用的本地 `DRAFT`，但以下动作不
 
 ## 工具消融指标
 
-Harness 额外冻结 `AblationToolCallTrace`，仅保存工具名、角色、结构化参数、成功/schema 状态和来源指针。工具集合 exact-match 忽略顺序但拒绝多余工具；参数 exact-match 使用规范化 JSON 多重集，因此重复调用和错误成员参数都会失败。该投影只读，不执行 Tool Registry handler，也不能成为业务证据。
+Harness 在正式 `ToolCallTrace.tool_input` 中冻结工具执行后的实际规范化参数，同时保留工具名、成员、成功/schema 状态和来源指针。工具集合 exact-match 忽略顺序，但漏调和多调都失败；参数准确率只以工具名已经匹配的调用为分母，对统一 Gold 标注字段执行规范化 exact/rule match。该投影只读，不会在评测阶段重新执行 Tool Registry handler。
 
 ## 评测边界
 
-`V2DeterministicGraders` 仍然只读取冻结 `RunTrace` 中的 `ToolCallTrace`、source pointer 和成员作用域，不在评测阶段重新调用 Tool Registry。B2.6 的 `ScopedProviderSandbox` 复用确定性 Provider 契约，只在真实图执行阶段注入 timeout/no-source 故障并记录 attempt trace；`PostgresV2Materializer` 和 `ScopedPostgresRetriever` 负责 case-scoped 数据与 RAG 来源隔离。这样可以测试真实连接边界，同时不会把评测变成不可重复的外部服务联调。300/1200 Gold 已完成人工审核，但完整正式可靠性指标仍待三 split 真实运行、消融和 badcase 复核。
+确定性 grader 只读取冻结 `RunTrace`、source pointer 和成员作用域，不在评测阶段重新调用 Tool Registry。`ScopedProviderSandbox` 只在真实图执行阶段注入 timeout/no-source 故障并记录 attempt trace；PostgreSQL Materializer 和 Scoped Retriever 负责 case-scoped 数据与 RAG 来源隔离，`search_safety_knowledge` 也必须复用该隔离 retriever，空知识结果直接 fail-closed。冻结药箱和处方会写入业务图实际使用的同一 PostgreSQL 隔离事务，结束后回滚，避免临时投影与业务读取源不一致。当前活动 fast-400 不设人工审核门；完整 300/1200 仅留档。历史 5A-9 校准后的工具集合、参数、最终回答和端到端成功率均为 100%，但这些指标仍不是临床或真实模型质量结论。
 
 UX-04 不修改 Tool Contract。用户端历史咨询与确认区域不展示 `tool_name`、原始工具输入输出或 SourceRef 标识；这些证据仍由既有运行链路记录并供内部审计使用。
 

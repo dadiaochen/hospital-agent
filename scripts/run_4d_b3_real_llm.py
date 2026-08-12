@@ -16,6 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 
 from app.agent.real_llm_benchmark import RealLLMBenchmarkRunner  # noqa: E402
+from app.agent.unified_eval_dataset import load_unified_agent_benchmark  # noqa: E402
 from app.agent.v2_eval_schemas import V2RunnerOptions  # noqa: E402
 from app.agent.v2_integration import IntegrationIdentityMap  # noqa: E402
 
@@ -46,6 +47,12 @@ def main() -> int:
         help="Keep the first live run small; increase only after reviewing results.",
     )
     parser.add_argument(
+        "--query-offset",
+        type=int,
+        default=0,
+        help="Skip this many queries within the selected split before max-cases.",
+    )
+    parser.add_argument(
         "--repeat",
         type=int,
         default=1,
@@ -53,11 +60,26 @@ def main() -> int:
         help="Repeat each fixed case at most three times for local variance observation.",
     )
     parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=4,
+        choices=range(1, 17),
+        metavar="1-16",
+        help=(
+            "Bounded parallel Query groups. Each Query still uses an isolated "
+            "PostgreSQL transaction; reports remain in dataset order."
+        ),
+    )
+    parser.add_argument(
         "--split",
         choices=("all", "development", "validation", "holdout"),
         default="development",
     )
-    parser.add_argument("--allow-pending-review", action="store_true")
+    parser.add_argument(
+        "--allow-pending-review",
+        action="store_true",
+        help="Legacy v2 fixture compatibility only; the active fast-400 dataset uses automatic Gold scoring.",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -69,12 +91,26 @@ def main() -> int:
         project_root=PROJECT_ROOT,
         identity_map=_load_identity_map(args.identity_map),
     )
+    if args.query_offset < 0:
+        parser.error("--query-offset must be non-negative")
+    _, unified_queries, _ = load_unified_agent_benchmark(project_root=PROJECT_ROOT)
+    split_queries = [
+        query
+        for query in unified_queries.queries
+        if args.split == "all" or query.dataset_split == args.split
+    ]
+    selected_queries = split_queries[args.query_offset :]
+    if args.max_cases is not None:
+        selected_queries = selected_queries[: args.max_cases]
+    if not selected_queries:
+        parser.error("the selected split and query offset contain no queries")
     report = runner.run(
         V2RunnerOptions(
             runner_mode="integration",
             dataset_split=args.split,
-            max_cases=args.max_cases,
+            query_ids=tuple(query.query_id for query in selected_queries),
             repeat=args.repeat,
+            concurrency=args.concurrency,
             allow_pending_review=args.allow_pending_review,
         ),
         live=args.live,

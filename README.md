@@ -16,7 +16,7 @@
 | 如何避免家庭成员信息混在一起 | 每次任务只围绕一个家庭成员建立上下文，查询结果和来源都带成员范围 |
 | 检查报告怎样快速变成可读信息 | 文本和 Markdown 表格直接解析；PDF 用 `pypdf` 读取文本层；图片在本地通过 RapidOCR + ONNX Runtime CPU 识别，再统一输出章节、表格、指标与来源 |
 | 中断任务如何继续 | PostgreSQL 保存可以恢复的任务记录，Redis 只保存短期缓存，缓存失效时重新从 PostgreSQL 读取 |
-| RAG 如何保证有依据 | 使用 PostgreSQL 和 pgvector 做知识检索，同时保留关键词检索和来源编号 |
+| RAG 如何保证有依据 | 在活动知识版本内执行 BM25 与 pgvector HNSW 双路召回，RRF 融合后按实体过滤、轻量重排并保留来源编号 |
 | 外部服务失败怎么办 | 统一处理超时、有限重试、错误分类和降级，不把失败伪装成成功 |
 | 如何判断 Agent 做得对不对 | 保存运行记录，用固定场景检查任务完成、工具调用、来源、安全和成员隔离 |
 | 不配置模型密钥能否运行 | 默认使用本地确定性模式；配置模型服务后可以切换到真实模型 |
@@ -172,7 +172,7 @@ Copy-Item .env.example .env
 - `.env`、`.env.local`、`.env.production` 等本机配置已被 Git 忽略。
 - 接口密钥、真实密码、访问令牌和患者数据不得写入代码、测试数据、报告或 Git。
 - 默认 `MODEL_PROVIDER=deterministic`，不需要模型密钥。
-- 真实模型只允许通过服务端环境变量配置，详见 [LLM 配置](docs/LLM_CONFIGURATION.md)。
+- 业务回答模型使用 `MODEL_*`，RAGAS 独立 Judge 使用 `RAGAS_JUDGE_*`；两组 Base URL、Key 和模型名可分别配置。详见 [LLM 配置](docs/LLM_CONFIGURATION.md)。
 
 ### 报告解析能力
 
@@ -195,8 +195,8 @@ README 只保留项目展示和快速启动信息，详细设计和学习材料�
 - [技术设计](docs/TECH_DESIGN.md)：系统分层、状态、确认和关键取舍。
 - [Agent 架构](docs/AGENT_ARCHITECTURE.md)：Router、Planner、Supervisor、领域 Agent 和治理节点。
 - [API 规范](docs/API_SPEC.md)：后端接口、请求响应和确认续跑。
-- [RAG 检索](docs/RAG_RETRIEVAL.md)：Embedding、pgvector、关键词降级和来源引用。
-- [RAG 合成评测统一报告](docs/RAG_SYNTHETIC_EVALUATION_DATASET.md)：数据规模、路径、split、初始/当前指标、RAGAS、已实施优化、收益和后续思路的唯一指标口径。
+- [RAG 检索](docs/RAG_RETRIEVAL.md)：BM25、Embedding、pgvector HNSW、RRF、实体过滤、轻量重排和来源引用。
+- [Agent 统一评测数据集与报告](docs/RAG_SYNTHETIC_EVALUATION_DATASET.md)：Agent、工具参数、RAG、回答、安全、性能与成本的唯一数据和指标口径；当前 Agent 活动视图为 fast-400（100 个 WorldState、400 条 Query，240/80/80），完整 1,200 条仅作历史留档；真实 LLM 400 条自动全量与冻结 Gold 自动评分均已完成，不设人工复核门。
 - [RAG 合成数据集构建方案](docs/RAG_SYNTHETIC_EVALUATION_DATASET_PLAN.md)：125/500 数据集 A–G 构建任务和冻结交付状态。
 - [RAG 四指标优化实施明细](docs/RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)：M2–M5 的历史实现细节和回溯入口，数值以统一报告为准。
 - [RAGAS 离线适配器与三视图 Harness](docs/implementation/RAGAS_OFFLINE_ADAPTER.md)：可选语义交叉验证、失败不阻断和 125/500 冻结数据集的三视图投影。

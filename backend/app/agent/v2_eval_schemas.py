@@ -21,7 +21,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from app.agent.context_schemas import ContractModel, Intent, NonEmptyStr
-from app.agent.run_trace_schemas import RunTrace
+from app.agent.run_trace_schemas import RunTrace, ToolCallTrace
 from app.agent.v2_benchmark_schemas import (
     DatasetSplit,
     EvalDependencyEdge,
@@ -124,6 +124,7 @@ class V2RunArtifacts(ContractModel):
         default_factory=tuple
     )
     observed_tool_names: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    observed_blocked: bool
     observed_source_ids: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     observed_rag_source_ids: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     observed_database_changes: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
@@ -185,6 +186,16 @@ class V2CaseEvaluation(ContractModel):
     dataset_split: DatasetSplit
     run_id: NonEmptyStr
     task_success: bool
+    intent_correct: bool
+    route_correct: bool
+    tool_call_correct: bool
+    tool_parameter_correct: bool
+    matched_parameter_call_count: int = Field(ge=0)
+    correct_parameter_call_count: int = Field(ge=0)
+    final_answer_correct: bool
+    expected_blocked: bool
+    observed_blocked: bool
+    tool_calls: tuple[ToolCallTrace, ...] = Field(default_factory=tuple)
     layer_grades: tuple[LayerGrade, ...] = Field(min_length=9, max_length=9)
     failure_reasons: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     latency_ms: int = Field(ge=0)
@@ -195,7 +206,13 @@ class V2CaseEvaluation(ContractModel):
         "in_memory_projection"
     )
     cleanup_succeeded: bool
-    review_status: Literal["pending_review", "human_reviewed"] = "pending_review"
+    # The unified synthetic dataset is frozen from deterministic business
+    # state. It is automatically Gold-scored and never waits for a person to
+    # review every generated row. Legacy fixture flows can still use the
+    # historical pending/human states.
+    review_status: Literal["automatic_gold", "pending_review", "human_reviewed"] = (
+        "automatic_gold"
+    )
 
     @model_validator(mode="after")
     def validate_grade_set(self) -> "V2CaseEvaluation":
@@ -255,7 +272,15 @@ class V2RunnerOptions(ContractModel):
     runner_mode: RunnerMode = "synthetic_projection"
     allow_pending_review: bool = False
     repeat: int = Field(default=1, ge=1, le=3)
-    concurrency: int = Field(default=1, ge=1, le=1)
+    concurrency: int = Field(
+        default=4,
+        ge=1,
+        le=16,
+        description=(
+            "Bounded number of independent evaluation Query groups to run in "
+            "parallel. Repeats of the same Query remain serial."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_mode(self) -> "V2RunnerOptions":

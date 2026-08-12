@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID, uuid5
 
 from pydantic import ConfigDict, Field, model_validator
@@ -37,6 +37,7 @@ class FrozenTraceModel(ContractModel):
 class ToolCallTrace(FrozenTraceModel):
     tool_name: NonEmptyStr
     member_id: NonEmptyStr
+    tool_input: dict[str, Any] = Field(default_factory=dict)
     source_id: NonEmptyStr | None = None
     source_name: NonEmptyStr | None = None
     success: bool

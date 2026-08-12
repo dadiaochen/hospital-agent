@@ -37,7 +37,8 @@ DEFAULT_SOURCE_DIR = (
     "rag-synthetic-v1-ragas-full-20260810-101500"
 )
 DEFAULT_FIXTURE_ROOT = (
-    PROJECT_ROOT / "output/benchmarks/rag_synthetic/fixtures/rag_synthetic_v1"
+    PROJECT_ROOT
+    / "output/benchmarks/evaluation_dataset/internet-hospital-agent-eval-v1/rag"
 )
 
 
