@@ -89,7 +89,7 @@ Model Gateway 的 Provider、模型、Base URL、Key 和 timeout 只来自服务
 
 RAG 使用 FastEmbed、PostgreSQL pgvector HNSW 和关键词并行召回，经 RRF 融合、活动版本过滤、来源校验和实体证据筛选后，把最小直接来源交给模型。知识库与个人状态使用不同 namespace 和写入策略。
 
-当前 500 Query 合成测试保留 BM25 + FastEmbed/pgvector HNSW 双路召回、RRF、实体过滤、候选 20 条轻量 rerank 和主片段优先：Recall@3/@5/@10 为 100%/100%/100%，Precision@3/@5/@10 为 43.59%/26.15%/13.08%，来源绑定回答正确率为 74.69%，确定性来源绑定幻觉率为 0%。这些是冻结合成数据的工程结果，不是临床准确率；本轮平均 token、成本和端到端 P95 没有下降，RAGAS 新复评因独立 Judge 账户计费不可用记为 N/A。详细口径、对照和限制见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
+当前 500 Query 合成测试保留 BM25 + FastEmbed/pgvector HNSW 双路召回、RRF、实体/活动版本过滤和候选 20 条轻量 rerank，并新增步骤/例外等结构化证据角色重排与最小角色上下文：Recall@3/@5/@10 为 100%/100%/100%，Precision@3/@5/@10 为 43.59%/26.15%/13.08%，来源绑定回答正确率从 74.69% 提升到 99.69%，确定性来源绑定幻觉率为 0%。260 条可回答题 RAGAS 为 0.9837/0.6818/1.0000；60 条无答案题单列无答案准确率 100%。平均 token 与成本上升，不宣称成本优化。以上是冻结合成工程指标，不是临床准确率。详细口径见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
 
 全链路评测在答案冻结后还可执行 RAGAS 离线语义交叉验证。业务回答模型只读取 `MODEL_*`，独立 Judge 只读取 `RAGAS_JUDGE_*`，两组 Base URL、Key 和模型名可以来自同一账号或不同服务商，但模型名必须不同；Qwen-compatible Judge 默认关闭隐藏思考以控制评测 token。该适配器不属于业务工作流：默认关闭；独立 Judge、依赖或网络不可用时按指标保留成功分数、缺失项记 N/A，不改变检索、回答、bad case 或验收结论。它支持直接读取冻结回答、证据和 Gold 进行复评，不重跑语料 Embedding、PostgreSQL/HNSW 或目标回答模型。相同的 125 个基础 Case / 500 条 Query 会同时生成入口、检索、回答三种 Harness 视图，保持 Gold 与 split 的可追溯性。运行说明见 [RAGAS 离线适配器与三视图 Harness](implementation/RAGAS_OFFLINE_ADAPTER.md)。
 

@@ -50,7 +50,7 @@ LLM Judge 只允许作为离线辅助分析，不能替代来源、权限、成�
 
 ### 4.2 RAG 回答质量与性能视图
 
-120 篇合成文档、2,307 个 Chunk、125 个基础 Case、500 条 Query，用真实 FastEmbed、PostgreSQL pgvector HNSW 和真实 LLM 测量召回、来源绑定回答、延迟、token 和成本。
+120 篇合成文档、2,392 个 Chunk、125 个基础 Case、500 条 Query，用真实 FastEmbed、PostgreSQL pgvector HNSW 和真实 LLM 测量召回、来源绑定回答、延迟、token 和成本。
 
 当前结果：
 
@@ -58,10 +58,13 @@ LLM Judge 只允许作为离线辅助分析，不能替代来源、权限、成�
 | --- | ---: | ---: |
 | Recall@3 / @5 / @10 | 67.50% / 85.19% / 95.38% | 100.00% / 100.00% / 100.00% |
 | Precision@3 / @5 / @10 | 25.00% / 21.38% / 12.46% | 43.59% / 26.15% / 13.08% |
-| 来源绑定回答准确率 | 63.75% | 74.69% |
+| 来源绑定回答准确率 | 74.69% | 99.69% |
+| Faithfulness（可回答题） | 0.9545 | 0.9837 |
+| Response Relevancy（可回答题） | 0.4752 | 0.6818 |
+| Context Recall（可回答题） | 0.8462 | 1.0000 |
 | 确定性来源绑定幻觉率 | 7.50% | 0.00% |
 
-最终组合的 360 次真实模型调用中有 0.56% 结构化输出 fallback；本轮 RAGAS Judge 复评因账户计费不可用记 N/A，不记为 0。详细指标、RAGAS 状态和边界见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
+最终 320 条 RAG 子集均由真实 Provider 返回，无 fallback；来源绑定回答 319/320，唯一失败是版本题的一种口语表达保守拒答。RAGAS 只对 260 条可回答题计算，60 条无答案题单列无答案准确率 100%。详细指标和边界见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
 
 ### 4.3 Agent 全量运行状态
 

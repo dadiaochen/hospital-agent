@@ -19,6 +19,7 @@ from scripts.run_synthetic_rag_full_eval import (
     SyntheticAnswer,
     _ordered_parallel_map,
     _answer_row,
+    _build_prompt,
     _retrieval_row,
     resolve_retrieval_profile,
 )
@@ -101,6 +102,22 @@ def test_full_eval_answer_score_flags_non_gold_citation() -> None:
     assert row["source_bound_answer_correct"] is False
     assert row["hallucination_detected"] is True
     assert row["unsupported_citation_ids"] == ["syn-rag-v1-chunk-999999"]
+
+
+def test_faithfulness_prompt_allows_current_version_fact_after_filtering() -> None:
+    corpus = generate_corpus(20260807)
+    dataset = generate_dataset(corpus, 20260807)
+    query = next(query for query in dataset.queries if query["case_type"] == "stale_version")
+
+    system, _ = _build_prompt(
+        query,
+        [],
+        minimal_citation=True,
+        faithfulness_prompt_enabled=True,
+    )
+
+    assert "已经由检索层过滤为活动版本" in system
+    assert "不要仅因正文没有逐字重复“现行要求”而选择 no_answer" in system
 
 
 def _retrieved_chunk(
@@ -266,7 +283,7 @@ def test_relevance_filter_removes_other_explicit_entity_without_gold() -> None:
     assert [source.chunk_id for source in filtered] == ["chunk-exact"]
 
 
-def test_document_head_promotion_keeps_first_two_sections_for_multi_evidence() -> None:
+def test_document_head_promotion_prefers_requested_evidence_roles() -> None:
     tail = _retrieved_chunk(
         "chunk-tail",
         chunk_index=5,
@@ -279,22 +296,29 @@ def test_document_head_promotion_keeps_first_two_sections_for_multi_evidence() -
         content="SYN-DRUG-01 的当前处理要求。",
         rrf_score=0.04,
     )
-    second = _retrieved_chunk(
-        "chunk-second",
-        chunk_index=1,
-        content="SYN-DRUG-01 的例外条件。",
+    step = _retrieved_chunk(
+        "chunk-step",
+        chunk_index=3,
+        content="处理步骤：SYN-DRUG-01 先完成作用域检查，再读取必要证据。",
+        rrf_score=0.03,
+    )
+    exception = _retrieved_chunk(
+        "chunk-exception",
+        chunk_index=7,
+        content="例外路径：SYN-DRUG-01 在信息不足或来源冲突时请求补充信息。",
         rrf_score=0.03,
     )
 
     promoted = _promote_document_head_sources(
         "请综合 SYN-DRUG-01 的步骤和例外条件",
-        [tail, head, second],
+        [tail, head, exception, step],
     )
 
     assert [source.chunk_id for source in promoted] == [
-        "chunk-head",
-        "chunk-second",
+        "chunk-step",
+        "chunk-exception",
         "chunk-tail",
+        "chunk-head",
     ]
 
 
@@ -343,6 +367,37 @@ def test_m3_evidence_gate_filters_wrong_entity_and_limits_context() -> None:
         "chunk-second",
     ]
     assert missing == []
+
+
+def test_evidence_gate_selects_one_source_per_requested_role() -> None:
+    head = _retrieved_chunk(
+        "chunk-head",
+        chunk_index=0,
+        content="SYN-DRUG-01 的当前处理要求。",
+        rrf_score=0.05,
+    )
+    exception = _retrieved_chunk(
+        "chunk-exception",
+        chunk_index=7,
+        content="SYN-DRUG-01 的例外条件是信息不足或来源冲突时请求补充信息。",
+        rrf_score=0.03,
+    )
+    step = _retrieved_chunk(
+        "chunk-step",
+        chunk_index=3,
+        content="SYN-DRUG-01 的处理步骤是先完成作用域检查，再读取必要证据。",
+        rrf_score=0.02,
+    )
+
+    selected = select_minimal_evidence_sources(
+        "请综合说明 SYN-DRUG-01 的处理步骤和例外条件",
+        [head, exception, step],
+    )
+
+    assert [source.chunk_id for source in selected] == [
+        "chunk-step",
+        "chunk-exception",
+    ]
 
 
 def test_m4_profile_enables_only_run_scoped_snapshot_cache() -> None:

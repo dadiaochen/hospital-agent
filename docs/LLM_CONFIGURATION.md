@@ -101,7 +101,7 @@ RAGAS_TIMEOUT_SECONDS=60
 
 Judge 当前使用 OpenAI-compatible 接口。`RAGAS_JUDGE_API_BASE` 通常写到 `/v1`，不要追加 `/chat/completions`。`RAGAS_JUDGE_THINKING_MODE=disabled` 会通过兼容接口传递 `enable_thinking=false`，避免 Qwen Judge 为短评分请求产生大量隐藏思考 token；不支持该扩展的服务商可设为 `default`。使用本地 FastEmbed 时，Embedding 不消耗 Judge API token；RAGAS 失败、余额不足或超时只会把对应指标记为不可用，不会阻断业务回答。默认 16 条 batch、8 路 Judge 并发；若供应商出现 429 或超时，可将 `RAGAS_MAX_WORKERS` 降为 4。
 
-RAGAS 只复用已冻结的回答、检索来源与 Gold，不重跑目标回答模型或 Embedding/HNSW。本轮最终组合的 Judge 调用因账户计费不可用没有返回可解析分数；Faithfulness、Response Relevancy 与 Context Recall 必须记为 N/A，不能写为 0，也不影响检索和确定性来源绑定指标。恢复 Judge 后可直接运行冻结复评命令补分。
+RAGAS 只复用已冻结的回答、检索来源与 Gold，不重跑目标回答模型或 Embedding/HNSW。历史运行曾因账户计费不可用而将对应项记为 N/A；Judge 恢复后，2026-08-13 已对最终组合的 260 条可回答题完成离线复评，Faithfulness、Response Relevancy 与 Context Recall 分别为 `0.9837 / 0.6818 / 1.0000`，三项完整率为 260/260。60 条无答案题不适用这三项生成式指标，继续由无答案准确率独立验收，不能混入均值或记为 0。最新结果统一以 [Agent 统一评测数据集与报告](RAG_SYNTHETIC_EVALUATION_DATASET.md) 为准。
 
 推荐的两种填写方式：
 

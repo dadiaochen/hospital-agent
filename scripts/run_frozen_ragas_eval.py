@@ -121,6 +121,12 @@ def build_frozen_inputs(
     for answer in answers:
         if not answer.get("rag_evaluation_applicable"):
             continue
+        # Standard generation metrics do not describe an intentionally empty
+        # context with a correct refusal. Keep no-answer cases in the unified
+        # dataset and deterministic gates, but score them with dedicated
+        # no-answer metrics instead of treating them as zero-quality answers.
+        if answer.get("expected_response_type") != "grounded_answer":
+            continue
         output = answer.get("output")
         if not isinstance(output, dict) or not str(output.get("answer") or "").strip():
             continue

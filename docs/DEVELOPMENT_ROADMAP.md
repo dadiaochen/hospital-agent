@@ -40,7 +40,7 @@
 
 - 当前 Agent 快速评测视图为 100 个合成 WorldState、400 条表达（每个状态 4 种表达），用于路由、计划、工具、来源、安全和成员隔离的确定性评测；完整 300/1200 来源已留档，不作为默认评测输入。
 - 500 条 synthetic RAG Query 用于真实 FastEmbed、pgvector HNSW 和真实模型全链路对比。
-- RAG 当前保留方案相对旧冻结基线：Recall@3/@5 从 67.50%/85.19% 提升到 100%/100%，Precision@3/@5 从 25.00%/21.38% 提升到 43.59%/26.15%，来源绑定回答正确率从 63.75% 提升到 74.69%，确定性来源绑定幻觉率从 7.50% 降到 0%。均为冻结合成工程指标；本轮 token、成本和 P95 未下降，RAGAS 新复评因 Judge 账户计费不可用为 N/A。
+- RAG 当前保留方案相对旧冻结基线：Recall@3/@5 从 67.50%/85.19% 提升到 100%/100%，Precision@3/@5 从 25.00%/21.38% 提升到 43.59%/26.15%，确定性来源绑定幻觉率从 7.50% 降到 0%。2026-08-13 在同一 `internet-hospital-agent-eval-v1` 内修复 20 个多片段基础 Case 的“问题—正文—Gold”一致性，引入步骤/例外证据角色重排、角色最小上下文和直接回答 Prompt，并将 60 条无答案题从生成式 RAGAS 分流到无答案准确率：320 条 RAG 回答的来源绑定正确率从 74.69% 提升到 99.69%，260 条可回答题的 Faithfulness/Response Relevancy/Context Recall 从 0.9545/0.4752/0.8462 提升到 0.9837/0.6818/1.0000。无答案准确率、活动版本过滤率和来源绑定幻觉率均为 100%/100%/0%；平均 token 与成本上升 15.88%/14.99%，不能宣称成本优化。以上均为自动生成、无人工审核的冻结合成工程指标，不是临床准确率。
 - 上述指标属于本地 synthetic/test-only 工程评测，不是临床准确率、线上成功率或生产 SLA。
 
 ## 6. 仍未完成
@@ -69,14 +69,14 @@
 | --- | --- | --- | --- |
 | 5A-0 | 代码审计与基线冻结 | DONE | 已建立审计文档和本地基线备份分支 |
 | 5A-1 | RequestScopeGuard | DONE | 高置信度业务外请求在 Router / RAG / Tool / 主模型前终止，保留隐私安全 Trace |
-| 5A-2 | RAG Retrieval 与 Generation 分层评测 | DONE | frozen Gold 自动计算 Recall/MRR/nDCG 与 bad case 归因；目标回答模型与独立 Judge 使用两套服务端配置，Judge 可独立关闭隐藏思考以控制 token；RAGAS 0.2.9 支持冻结回答离线复评、单项失败隔离和缺失项定向补分，320 条中 300 条三项齐全 |
+| 5A-2 | RAG Retrieval 与 Generation 分层评测 | DONE | frozen Gold 自动计算 Recall/MRR/nDCG 与 bad case 归因；目标回答模型与独立 Judge 使用两套服务端配置，Judge 可独立关闭隐藏思考以控制 token；RAGAS 0.2.9 支持冻结回答离线复评、单项失败隔离、缺失项定向补分和生成式指标适用性分流；2026-08-13 最终 260 条可回答题经 2 条定向补分后三项齐全，60 条无答案题单列无答案准确率 |
 | 5A-3 | 合成数据集接入 Harness | DONE | 同一 125/500 冻结数据集已投影为 Entry、Retrieval、Answer 三类离线 Harness 视图，并与全链路报告同目录输出 |
 | 5A-4 | Triage 多轮槽位状态机 | DONE | `needs_clarification` 冻结最小槽位状态；补充后以新 run、版本校验和成员隔离从 PostgreSQL Checkpoint 安全续跑 |
 | 5A-5 | 统一文档解析 | DONE | 文本、PDF、图像和表格独立解析后输出统一 `ParsedDocument`，不生成诊断或治疗建议 |
 | 5A-6 | 报告上传与结构化解读 | DONE | 报告上传后直接持久化为可读结构；文本/表格、PDF 文本层和本地图片 OCR 统一解析，不生成报告确认草稿 |
 | 5A-7 | FinalAnswerQualityGate | DONE | 冻结前最多一次无 Tool 的格式修复；无来源事实或安全失败 fail-closed |
 | 5A-8 | Context / Checkpoint 收口 | DONE | 新质量门状态进入既有 PostgreSQL Checkpoint；Redis TTL 缓存继续失效回源 |
-| 5A-9 | E2E、报告与 Git Freeze | IN PROGRESS | `tool_input` 与 `observed_blocked` 已进入冻结运行产物；当前默认统一 Agent 视图固定为 fast-400：100 个 WorldState、400 条 Query，development/validation/holdout 为 240/80/80，并保留全部 96 条高风险 Query。完整 300/1200 来源已留档，不被默认 Loader 和评测命令读取。Agent 与 RAG 的独立 Query 已支持默认 4 路、上限 16 路的受控并发。RAG 已在同一 125/500 冻结集完成 BM25 + HNSW 双路召回、RRF、实体过滤、候选 20 条 rerank 和主片段优先的策略验证：Recall@3/@5 为 100%/100%，Precision@3/@5 为 43.59%/26.15%，真实模型来源绑定回答正确率为 74.69%，确定性来源绑定幻觉率为 0%；RAGAS 本轮 Judge 账户计费不可用，按 N/A 排除。已完成 3 条真实 LLM 冒烟及 400 条真实 LLM 分批全量运行，并按冻结合成 Gold 自动评分：意图、路由、工具、参数和最终回答正确率均为 100%，端到端任务成功率 99.25%，高风险拦截率/误拦截率 100%/0%，真实 Provider 覆盖率 69.25%，fallback 0.75%，完整 usage 覆盖率 69.25%，端到端 P50/P95/P99 为 4,294/6,645/7,850 ms，总 token 367,920、观测成本 `$0.529735`。本测试集不设人工 badcase 复核门；当前仍停留在 5A-9，待 Git Freeze。 |
+| 5A-9 | E2E、报告与 Git Freeze | IN PROGRESS | `tool_input` 与 `observed_blocked` 已进入冻结运行产物；当前默认统一 Agent 视图固定为 fast-400：100 个 WorldState、400 条 Query，development/validation/holdout 为 240/80/80，并保留全部 96 条高风险 Query。完整 300/1200 来源已留档，不被默认 Loader 和评测命令读取。Agent 与 RAG 的独立 Query 已支持受控并发。RAG 在同一 125/500 冻结集保留 BM25 + HNSW、RRF、版本/实体过滤和候选 20 条规则重排；新增结构化证据角色重排、最小角色上下文、直接回答 Prompt 与无答案指标分流后，Recall@3/@5 和 Precision@3/@5 保持 100%/100% 与 43.59%/26.15%，来源绑定回答正确率达到 99.69%（319/320），确定性来源绑定幻觉率 0%，可回答题 RAGAS 为 0.9837/0.6818/1.0000。平均 token 与成本增加，不作为成本优化。Agent fast-400 真实 LLM 指标仍为最终回答正确率 100%、端到端任务成功率 99.25%、高风险拦截率/误拦截率 100%/0%、P50/P95/P99 4,294/6,645/7,850 ms、总 token 367,920、观测成本 `$0.529735`。当前仍停留在 5A-9，待 Git Freeze。 |
 
 5A-9 补充完成：在同一 125/500 统一 RAG 数据集上，真实模型已对 65 个正样本基础 Case 自动补充定义、条件、步骤和例外证据标签，无人工审核、无 fallback；原 `relevant_chunk_ids` 仍保持不变。复用已冻结检索结果的 AI 自动扩展证据 Precision@3/@5/@10 为 60.51%/50.15%/31.81%，仅作为标签覆盖诊断，不替代冻结 Gold，也不作为检索模型优化收益。
 

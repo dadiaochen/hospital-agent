@@ -49,3 +49,23 @@ def test_synthetic_rag_gold_is_source_first_and_no_answer_anchor_is_absent() -> 
         if case["case_type"] == "rag_no_answer":
             assert retrieval["relevant_chunk_ids"] == []
             assert case["protected_slots"]["anchor"] not in " ".join(doc["content"] for doc in corpus.documents)
+
+
+def test_multi_evidence_gold_binds_steps_and_exceptions_to_source_text() -> None:
+    corpus = generate_corpus(20260807)
+    dataset = generate_dataset(corpus, 20260807)
+    chunks = {chunk["chunk_id"]: chunk for chunk in corpus.chunks}
+
+    for case in dataset.cases:
+        if case["case_type"] != "multi_chunk_hard_negative":
+            continue
+        claims = case["answer_gold"]["required_claims"]
+        assert {claim["evidence_role"] for claim in claims} == {
+            "processing_steps",
+            "exception_conditions",
+        }
+        assert "处理步骤" in case["canonical_query"]
+        assert "例外条件" in case["canonical_query"]
+        for claim in claims:
+            source_id = claim["supporting_chunk_ids"][0]
+            assert claim["text"] in chunks[source_id]["content"]

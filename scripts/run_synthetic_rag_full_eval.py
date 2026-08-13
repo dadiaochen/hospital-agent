@@ -674,6 +674,12 @@ def _build_prompt(
             "若证据只覆盖部分问题，response_type 必须为 no_answer，并在 answer 中仅说明当前证据不足；"
             "不得将不完整证据拼接为完整结论。claim_texts 与 cited_chunk_ids 必须一一对应，"
             "每条 claim 只能引用直接支持它的一个 chunk。"
+            "答案必须先直接回答用户明确询问的内容；如果问题询问步骤、条件或例外，"
+            "应按这些项目组织最短答案。不要输出处理分类、测试标签、内部字段、"
+            "unsupported 标记或来源指针规则等用户未询问的评测元数据。"
+            "如果用户询问当前或现行要求，且输入证据已经由检索层过滤为活动版本、"
+            "正文标明当前测试版本并直接给出规则事实，应使用该事实回答；"
+            "不要仅因正文没有逐字重复“现行要求”而选择 no_answer。"
         )
     evidence = [
         {
@@ -691,7 +697,10 @@ def _build_prompt(
             "instruction": (
                 "依据证据回答；如果检索证据不能直接支持问题，请明确说明证据不足，不要补写事实。"
                 if not faithfulness_prompt_enabled
-                else "先核对问题、证据实体和版本；仅回答每条证据可直接支持的内容。"
+                else (
+                    "先核对问题、证据实体、版本和所需证据角色；只回答用户明确询问的内容，"
+                    "每项结论绑定一个直接来源，不复述测试元数据。"
+                )
             ),
         },
         ensure_ascii=False,
@@ -1347,7 +1356,11 @@ def run_full_eval(
                 retrieved_ids=retrieved_ids,
                 model_ms=model_ms,
             )
-            if flow["should_call_rag"] and model_result.output is not None:
+            if (
+                flow["should_call_rag"]
+                and query["answer_gold"]["expected_response_type"] == "grounded_answer"
+                and model_result.output is not None
+            ):
                 ragas_input = (
                     {
                         "query_id": query["query_id"],

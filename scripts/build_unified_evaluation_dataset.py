@@ -33,7 +33,7 @@ PARAMETER_SOURCE = (
 )
 
 DATASET_REVISION = (
-    "2026-08-12-observable-safety-runtime-contract-calibration-fast-400"
+    "2026-08-13-rag-structured-evidence-and-generation-metric-applicability"
 )
 ACTIVE_AGENT_WORLD_COUNT = 100
 ACTIVE_AGENT_QUERY_COUNT = 400

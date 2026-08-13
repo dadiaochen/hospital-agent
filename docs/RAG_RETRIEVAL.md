@@ -26,7 +26,7 @@ Query
 - 两路结果按 rank 做 RRF 融合，不比较不同量纲的原始分数。
 - 活动版本过滤发生在候选截断前，避免旧版本占用 Top-K。
 - 对显式实体 Query，先排除实体不匹配来源；候选 20 条再按精确实体命中、双路命中、词项覆盖、RRF 分数与文档内位置重排。
-- 去重只移除同一 Chunk 的重复来源，不删除相邻且互补的 Chunk；文档切分场景优先交付主片段，综合问题才追加紧邻补充片段。
+- 去重只移除同一 Chunk 的重复来源，不删除相邻且互补的 Chunk；Query 明确询问步骤、条件或例外时，候选重排优先相应证据角色，最小证据门为每个角色选择一个直接 Chunk；无结构元数据时降级为两条直接证据。
 - 向量后端只返回文档与 Chunk 指针，正文和版本必须回 PostgreSQL 校验。
 - 无实体证据时不向模型提供伪证据，回答应明确无法确认。
 
@@ -69,7 +69,7 @@ FASTEMBED_CACHE_PATH=E:\\project_code\\hospital\\var\\fastembed
 
 ## 6. 当前实测结果
 
-测试集包含 120 篇合成文档、2,307 个 Chunk、125 个基础 Case 和 500 条 Query。本轮保留配置为活动版本过滤、BM25 + HNSW 双路召回、RRF、实体过滤、候选 20 条轻量 rerank、精确去重、主片段优先和单次运行知识快照。
+测试集包含 120 篇合成文档、2,392 个 Chunk、125 个基础 Case 和 500 条 Query。本轮保留配置为活动版本过滤、BM25 + HNSW 双路召回、RRF、实体过滤、候选 20 条轻量 rerank、精确去重、结构化证据角色重排、最小角色上下文和单次运行知识快照。
 
 | 指标 | 旧冻结基线 | 当前组合 | 变化 |
 | --- | ---: | ---: | ---: |
@@ -77,7 +77,10 @@ FASTEMBED_CACHE_PATH=E:\\project_code\\hospital\\var\\fastembed
 | Precision@3 / @5 / @10（原冻结 Gold） | 25.00% / 21.38% / 12.46% | 43.59% / 26.15% / 13.08% | +18.59 / +4.77 / +0.62 个百分点 |
 | Precision@3 / @5 / @10（AI 自动扩展证据） | N/A | 60.51% / 50.15% / 31.81% | 标签覆盖复测，非检索模型提升 |
 | MRR@10 | 0.5059 | 0.8125 | +0.3066 |
-| 来源绑定回答正确率 | 63.75% | 74.69% | +10.94 个百分点 |
+| 来源绑定回答正确率 | 74.69% | 99.69% | +25.00 个百分点 |
+| Faithfulness（260 条可回答题） | 0.9545 | 0.9837 | +0.0292 |
+| Response Relevancy（260 条可回答题） | 0.4752 | 0.6818 | +0.2066 |
+| Context Recall（260 条可回答题） | 0.8462 | 1.0000 | +0.1538 |
 | 确定性来源绑定幻觉率 | 7.50% | 0.00% | -7.50 个百分点 |
 
 自动扩展证据标签对 65 个正样本基础 Case 由真实模型生成，无人工审核、无 fallback，每题平均 3.95 个 Chunk；它只复用已有 `retrieval_results.jsonl` 重算 Precision，不重跑 HNSW 或回答模型。当前真实模型运行的 fallback 为 0.56%（2/360），完整 usage 覆盖率 99.44%。平均总 token 与平均成本分别上升 18.70% 和 15.51%，因为证据逐项核对提示词更长；端到端 P95 由 2,187.268 ms 变为 2,713.646 ms，但两次本地 CUDA 运行环境不一致，不能将其归因于检索策略或作为性能结论。以上均是冻结合成数据的工程指标，不是临床准确率或生产 SLA。
@@ -103,6 +106,6 @@ FASTEMBED_CACHE_PATH=E:\\project_code\\hospital\\var\\fastembed
 
 当前真实全链路脚本在冻结 Chunk ID Gold 上已计算 Recall@3/5/10、Precision@3/5/10、MRR@10、二值 nDCG@10、无答案准确率、过期版本过滤和检索 P50/P95/P99。二值 nDCG 使用相关 Chunk 的排名折损，不调用 LLM Judge，用于区分“召回到了但排位靠后”和“没有召回”。
 
-bad case 统一区分 `RETRIEVAL_MISS`、`RANKING_MISS`、`NO_ANSWER_FAILURE`、`STALE_VERSION_HIT` 与生成层的 `ANSWER_SOURCE_BINDING_FAILURE`。RAGAS 0.2.9 的 Faithfulness、Response Relevancy 和 Context Recall 已由离线适配器接入：只在答案、来源和冻结 Gold 写入后运行，默认关闭；未配置、依赖缺失或调用失败时逐条保留成功指标并将缺失项记为 N/A，绝不影响真实检索、回答或 bad case 判定。历史冻结复评有 300 条三项齐全；本轮最终组合因 Judge 账户计费不可用而为 N/A，不记为 0。实测状态统一见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
+bad case 统一区分 `RETRIEVAL_MISS`、`RANKING_MISS`、`NO_ANSWER_FAILURE`、`STALE_VERSION_HIT` 与生成层的 `ANSWER_SOURCE_BINDING_FAILURE`。RAGAS 0.2.9 只在答案、来源和冻结 Gold 写入后运行；未配置或失败时缺失项记 N/A。生成式三项只统计 260 条可回答题，60 条无答案题由无答案准确率独立验收；最终三项为 0.9837/0.6818/1.0000，260/260 完整。实测状态统一见 [RAG 合成评测统一报告](RAG_SYNTHETIC_EVALUATION_DATASET.md)。
 
 报告解析产生的来源仍是成员业务数据，不进入 RAG 知识库 namespace、向量索引或长期记忆。`ParsedDocument` 只为报告直接读取服务；结构化指标不能作为医疗知识召回结果或模型事实来源，除非由业务工具在当前成员作用域内重新读取。

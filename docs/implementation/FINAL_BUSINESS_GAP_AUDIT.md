@@ -48,7 +48,7 @@
 
 - Task 2 已完成：`RagasEvaluationAdapter` 固定适配 `ragas==0.2.9`，只读取已经冻结的用户问题、模型回答、检索文本和答案 Gold。无配置、缺少依赖、Judge 异常、超时或返回格式异常时，逐条记录 `skipped/failed`，不影响主链路、bad case、退出状态或任何业务状态。
 - Task 3 已完成：`SyntheticCaseHarnessAdapter` 从同一份冻结 125 个基础 Case / 500 条 Query 投影 `EntryHarnessView`、`RetrievalHarnessView`、`AnswerHarnessView`。三个视图保留 `query_id`、`base_case_id`、split 和冻结 Gold 来源，避免由本次 Agent 输出反向制造标签。
-- 本地已安装 `ragas==0.2.9` 并配置独立 Judge；已修复单条格式异常拖垮整批的问题，并直接复用冻结记录完成 320 条离线复评：300 条三项齐全、20 条部分评分。剩余 N/A 来自 Judge 超时/格式异常及补跑时账户余额不足，不与既有确定性指标混写。统一状态见 [RAG 合成评测统一报告](../RAG_SYNTHETIC_EVALUATION_DATASET.md)。
+- 本地已安装 `ragas==0.2.9` 并配置独立 Judge；已修复单条格式异常拖垮整批的问题。历史 320 条复评曾有 20 条部分评分，最终复测已按指标适用性把 60 条无答案题分流，并对 260 条可回答题定向补分至 260/260 三项完整：Faithfulness、Response Relevancy、Context Recall 为 `0.9837 / 0.6818 / 1.0000`。缺失项不记 0，统一状态见 [RAG 合成评测统一报告](../RAG_SYNTHETIC_EVALUATION_DATASET.md)。
 
 ## Task 4 完成记录
 

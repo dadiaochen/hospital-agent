@@ -196,7 +196,7 @@ README 只保留项目展示和快速启动信息，详细设计和学习材料�
 - [Agent 架构](docs/AGENT_ARCHITECTURE.md)：Router、Planner、Supervisor、领域 Agent 和治理节点。
 - [API 规范](docs/API_SPEC.md)：后端接口、请求响应和确认续跑。
 - [RAG 检索](docs/RAG_RETRIEVAL.md)：BM25、Embedding、pgvector HNSW、RRF、实体过滤、轻量重排和来源引用。
-- [Agent 统一评测数据集与报告](docs/RAG_SYNTHETIC_EVALUATION_DATASET.md)：Agent、工具参数、RAG、回答、安全、性能与成本的唯一数据和指标口径；当前 Agent 活动视图为 fast-400（100 个 WorldState、400 条 Query，240/80/80），完整 1,200 条仅作历史留档；真实 LLM 400 条自动全量与冻结 Gold 自动评分均已完成，不设人工复核门。
+- [Agent 统一评测数据集与报告](docs/RAG_SYNTHETIC_EVALUATION_DATASET.md)：Agent、工具参数、RAG、回答、安全、性能与成本的唯一数据和指标口径；当前 Agent 活动视图为 fast-400（100 个 WorldState、400 条 Query，240/80/80），完整 1,200 条仅作历史留档；RAG 当前来源绑定回答正确率 99.69%，260 条可回答题 RAGAS 为 0.9837/0.6818/1.0000，60 条无答案题独立验收，不混入生成式均值。所有数据自动生成与评分，不设人工复核门。
 - [RAG 合成数据集构建方案](docs/RAG_SYNTHETIC_EVALUATION_DATASET_PLAN.md)：125/500 数据集 A–G 构建任务和冻结交付状态。
 - [RAG 四指标优化实施明细](docs/RAG_SYNTHETIC_MINIMAL_OPTIMIZATION_IMPLEMENTATION.md)：M2–M5 的历史实现细节和回溯入口，数值以统一报告为准。
 - [RAGAS 离线适配器与三视图 Harness](docs/implementation/RAGAS_OFFLINE_ADAPTER.md)：可选语义交叉验证、失败不阻断和 125/500 冻结数据集的三视图投影。
