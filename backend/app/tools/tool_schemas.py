@@ -191,6 +191,7 @@ class ToolResult(ToolContractModel):
         return ToolCallTrace(
             tool_name=self.tool_name,
             member_id=trace_member_id,
+            tool_input=self.tool_input,
             source_id=source_id if isinstance(source_id, str) and source_id else None,
             source_name=self.source_name,
             success=self.success,

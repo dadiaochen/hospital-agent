@@ -103,8 +103,10 @@ Router、Planner、领域 Agent 和 Supervisor 可以使用 Model Gateway 产生
 
 当前架构、数据和指标见 [技术设计](TECH_DESIGN.md)、[Agent 评测](EVALUATOR_AGENT.md) 与 [简历和面试口径](RESUME_NOTES.md)；历史阶段见 [项目执行历史](EXECUTION_HISTORY.md)。
 
-5A-2 已将 synthetic RAG 评测明确分为检索层和生成层。检索层以冻结 chunk ID Gold 计算 Recall@3/5/10、MRR@10、二值 nDCG@10、无答案准确率、过期版本过滤和 P50/P95/P99；生成层继续保留来源绑定、Claim、Citation 和安全的确定性评分。RAGAS 只允许作为离线语义交叉验证，失败不得影响业务链路或冻结答案。
+5A-2 已将 synthetic RAG 评测明确分为检索层和生成层。检索层以冻结 chunk ID Gold 计算 Recall@3/5/10、Precision@3/5/10、MRR@10、二值 nDCG@10、无答案准确率、过期版本过滤和 P50/P95/P99；当前候选链路为 BM25/vector RRF、实体过滤、轻量 rerank 与主片段优先。生成层继续保留来源绑定、Claim、Citation 和安全的确定性评分。RAGAS 只允许作为离线语义交叉验证，失败不得影响业务链路或冻结答案。
 
 5A-4 为 Triage 增加最小多轮槽位状态机：首个必填槽位为 `symptoms`，缺失时只返回稳定槽位名与 `needs_clarification`。续跑由服务层校验 `user_id`、`member_id`、任务范围与 Checkpoint 版本，并创建带 `parent_run_id` 的新 run；Triage 不保留完整原始对话、不诊断疾病，也不在信息不完整时创建复诊草稿。
 
 最终回答在既有 Final Output Safety 后经过 `FinalAnswerQualityGate`。该门只检查展示完整性、确认提示和事实来源契约，不能调用工具或重规划；格式缺陷至多进行一次同 schema 的无 Tool 修复，安全失败和无来源事实直接 fail-closed。审计随 Run/Checkpoint 冻结，`EvaluatorAgent` 仍只读且发生在答案冻结之后。
+
+5A-9 的 deterministic 集成校准已验证：所有知识工具（包括 `search_safety_knowledge`）必须使用 case-scoped RAG retriever；无证据时立即 fail-closed。复杂 DAG 中一个领域失败后，只允许无依赖的只读兄弟步骤继续，确认草稿和写操作不得在失败状态创建。当前活动 fast-400 视图为 100 个 WorldState / 400 条 Query；历史 1,200 条结果仅作回溯基线，后续报告只使用 fast-400。

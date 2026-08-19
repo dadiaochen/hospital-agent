@@ -151,6 +151,8 @@ class SupervisorAgentRuntime(RuntimeAgentContext):
             not self.is_confirmation_run
             and agent_role == self.primary_role
             and not self.state.get("confirmation_request")
+            and not self.state.get("errors")
+            and self.state.get("status") not in {"failed", "blocked"}
         )
 
     def prepare_confirmation(

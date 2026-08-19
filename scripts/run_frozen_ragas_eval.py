@@ -37,7 +37,8 @@ DEFAULT_SOURCE_DIR = (
     "rag-synthetic-v1-ragas-full-20260810-101500"
 )
 DEFAULT_FIXTURE_ROOT = (
-    PROJECT_ROOT / "output/benchmarks/rag_synthetic/fixtures/rag_synthetic_v1"
+    PROJECT_ROOT
+    / "output/benchmarks/evaluation_dataset/internet-hospital-agent-eval-v1/rag"
 )
 
 
@@ -119,6 +120,12 @@ def build_frozen_inputs(
     seen_query_ids: set[str] = set()
     for answer in answers:
         if not answer.get("rag_evaluation_applicable"):
+            continue
+        # Standard generation metrics do not describe an intentionally empty
+        # context with a correct refusal. Keep no-answer cases in the unified
+        # dataset and deterministic gates, but score them with dedicated
+        # no-answer metrics instead of treating them as zero-quality answers.
+        if answer.get("expected_response_type") != "grounded_answer":
             continue
         output = answer.get("output")
         if not isinstance(output, dict) or not str(output.get("answer") or "").strip():

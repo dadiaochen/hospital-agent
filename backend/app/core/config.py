@@ -130,6 +130,11 @@ class Settings(BaseModel):
     ragas_judge_model: str | None = Field(
         default_factory=lambda: os.getenv("RAGAS_JUDGE_MODEL") or None
     )
+    ragas_judge_thinking_mode: Literal["default", "disabled", "enabled"] = Field(
+        default_factory=lambda: os.getenv(
+            "RAGAS_JUDGE_THINKING_MODE", "disabled"
+        )
+    )
     ragas_embedding_provider: Literal["fastembed", "openai"] = Field(
         default_factory=lambda: os.getenv("RAGAS_EMBEDDING_PROVIDER", "fastembed")
     )
@@ -137,12 +142,12 @@ class Settings(BaseModel):
         default_factory=lambda: os.getenv("RAGAS_EMBEDDING_MODEL") or None
     )
     ragas_batch_size: int = Field(
-        default_factory=lambda: int(os.getenv("RAGAS_BATCH_SIZE", "8")),
+        default_factory=lambda: int(os.getenv("RAGAS_BATCH_SIZE", "16")),
         ge=1,
         le=128,
     )
     ragas_max_workers: int = Field(
-        default_factory=lambda: int(os.getenv("RAGAS_MAX_WORKERS", "4")),
+        default_factory=lambda: int(os.getenv("RAGAS_MAX_WORKERS", "8")),
         ge=1,
         le=32,
     )

@@ -2,6 +2,21 @@
 
 测试的目标不是只把绿灯跑出来，而是证明关键边界不会被后续改动悄悄绕开：成员隔离、来源约束、人工确认、schema 契约与医疗安全。
 
+## 唯一评测数据源
+
+单元测试可以继续使用小型 fixture 验证代码分支，但任何要发布、比较、优化或写入简历的 Agent/RAG 指标，只能读取：
+
+`output/benchmarks/evaluation_dataset/internet-hospital-agent-eval-v1/`
+
+先生成或刷新统一数据集：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path '.').Path + ';' + (Resolve-Path 'backend').Path
+.\.venv\Scripts\python.exe scripts\build_unified_evaluation_dataset.py
+```
+
+历史 300/1,200 Agent 数据、125/500 RAG 数据和 32 个工具参数 Case 已迁入统一目录；当前 Agent 活动视图为 fast-400（100/400，240/80/80）。旧 fixture 和完整 1,200 留档只作迁移、回溯和兼容回归；新指标缺少标签时，只能扩充统一数据集、记录 `label_provenance` 并更新 manifest/hash，不得另建新的版本化平行评测集。`output/` 已被 Git 忽略，统一数据和运行产物不得上传 GitHub。
+
 ## 测试分层
 
 | 层级 | 目录或模块 | 重点 |
@@ -100,6 +115,16 @@ npm run test:e2e
 
 当前本机结果为 7 条通过。该结果证明固定 deterministic Docker 演示链路可重复，不代表真实 LLM 质量、临床安全或生产 SLO。API 失败场景使用 Playwright route 模拟 HTTP 503，专门验证前端错误映射，不冒充真实 Provider 故障率。
 
+5A-9 真实 LLM Agent 评测默认使用 fast-400：先执行 3 条冒烟，再按 development/validation/holdout 使用 40 条可恢复批次运行。不同 Query 默认以 4 路受控并发执行，每条仍有独立 PostgreSQL 事务和稳定的冻结顺序；最后合并固定分片：
+
+```powershell
+$env:PYTHONPATH='E:\project_code\hospital\backend'
+.\.venv\Scripts\python.exe scripts\run_4d_b3_real_llm.py --live --identity-map output\benchmarks\evaluation_runs\unified_agent_identity_map.local.json --split development --max-cases 3 --concurrency 4 --output-dir output\benchmarks\4d-b3-real-llm-fast-400-smoke-20260812
+.\.venv\Scripts\python.exe scripts\merge_4d_b3_fast400_reports.py --output-dir output\benchmarks\4d-b3-real-llm-fast-400-final-20260812
+```
+
+本次 400 条自动全量结果为：冻结 Gold 自动评分下，意图、路由、工具、参数和最终回答正确率均为 100%，端到端任务成功率 99.25%、真实 Provider/usage 覆盖率 69.25%、fallback 0.75%、端到端 P50/P95/P99 为 4,294/6,645/7,850 ms。该正确率是合成业务 Gold 的工程指标，不是临床准确率；不设人工复核门。
+
 4C-4 最终收口：
 
 ```powershell
@@ -168,18 +193,17 @@ $env:PYTHONPYCACHEPREFIX=(Resolve-Path 'output').Path + '\pycache-coverage'
 
 覆盖率低于整体水平的区域包括旧兼容 Service、真实 FastEmbed/向量存储异常路径、CLI/Demo 失败分支和生产防御性异常。业务场景还缺少真实 LLM 多次采样、中文错别字/口语/方言、真实语义检索 gold set、外部 Provider 契约漂移、认证渗透、长期负载和备份恢复。32 条 fixture 对 MVP 方法验证足够，但不足以宣称生产或医疗质量；新增用例应来自真实 bad case，而不是机械复制现有 case。
 
-面向简历的下一轮质量、延迟、Token 成本和故障恢复测量，不复用 fixture 中的模拟延迟。当前 260 条 4D-A 数据是五组专项 gold，不是 260 个端到端 WorldState；4D-B2.1 已完成 UnifiedHealthGraph 统一入口，4D-B2.2 已完成有界 DAG 并行和评测专用 `all_history` 基线，4D-B2.3 已完成 FinalClaim/AnswerEnvelope/Trace v2，4D-B2.4 已生成但尚待审核/物化的 300 个 WorldState 和 1200 条 v2 Query，B2.5 已完成内存 preview Materializer、九层 grader 和统一 Runner。下一步是人工审核、真实 PostgreSQL/Provider/RAG 物化和 Docker 统一执行。在真实运行产物和模型 usage 准备完成前，对应字段必须保持 `N/A`。
+面向简历的下一轮质量、延迟、Token 成本和故障恢复测量，不复用 fixture 中的模拟延迟。当前 260 条 4D-A 数据是五组专项 gold，不是 260 个端到端 WorldState；4D-B2.1 已完成 UnifiedHealthGraph 统一入口，4D-B2.2 已完成有界 DAG 并行和评测专用 `all_history` 基线，4D-B2.3 已完成 FinalClaim/AnswerEnvelope/Trace v2，当前统一活动视图为 fast-400（100 个 WorldState、400 条 Query），完整 300/1200 来源仅留档。下一步是使用 fast-400 进行真实 PostgreSQL/Provider/RAG 和 Docker 统一执行。在真实运行产物和模型 usage 准备完成前，对应字段必须保持 `N/A`。
 
 运行 B2.5 本地 preview：
 
 ```powershell
 Set-Location E:\project_code\hospital
 $env:PYTHONPATH=(Resolve-Path 'backend').Path
-.\.venv\Scripts\python.exe -B -m app.agent.v2_eval_runner --project-root (Resolve-Path '.') --max-cases 1200 --allow-pending-review --output-dir output\benchmarks\v2
+.\.venv\Scripts\python.exe scripts\run_unified_agent_eval.py --mode projection --split all --max-cases 400 --output-dir output\benchmarks\evaluation_runs\unified-agent-400-projection
 ```
 
-该命令会显式允许 `pending_review` 数据进入 preview，并输出 `agent_eval_report.v2.preview.json` 与 Markdown。
-它只测试数据契约、隔离、九层 grader 和报告聚合，不访问 PostgreSQL、Provider、RAG 或 LLM；preview 数字不能写进简历。
+该命令读取当前 fast-400 活动视图并输出统一 Agent 报告。它支持 `--concurrency 1-16`，默认 4；projection 仅并发独立的内存 Query 隔离，不访问 PostgreSQL、Provider、RAG 或 LLM；projection 数字不能写进简历。
 
 ## 如何 review 一个改动
 
@@ -277,7 +301,7 @@ python -m pytest `
 - 状态：PostgreSQL checkpoint、Redis 命中/失效/不可用回源、两次独立 run、并发确认和幂等 replay。
 - Provider：三类重点 Provider 的 timeout、retry、schema、权限、成员和来源转换。
 - RAG：FastEmbed/pgvector、关键词降级、RRF、版本错配、来源支持和成员隔离。
-- Harness：保留 32 条 v1 固定用例做快速 A/B/C 回归；最终用 300 个 WorldState、1200 条 v2 Query 做统一图、串行/并行和上下文 A/B/C/D 消融。
+- Harness：保留 32 条 v1 固定用例做快速 A/B/C 回归；当前统一活动视图用 100 个 WorldState、400 条 Query 做统一图、串行/并行和上下文 A/B/C/D 消融，完整 300/1200 来源只作历史回溯。
 
 其中任务九 Provider 离线可靠性、任务十 RAG/隔离/Observation、任务十一 32 条 deterministic Harness 和任务十二本机 Docker 后端验收已完成。任务十二报告记录 baseline 19/19、Redis 故障回源 18/18，以及本机 wall-clock 样本；这些结果仍不能写成生产 SLO、临床安全指标或真实模型质量。
 
@@ -323,6 +347,17 @@ docker compose up -d --build --wait --wait-timeout 300
 
 ## Agent Benchmark
 
+### 统一数据集 fast-400
+
+后续正式评测只读取 `output/benchmarks/evaluation_dataset/internet-hospital-agent-eval-v1/`。先生成本机身份映射，再运行 PostgreSQL + UnifiedHealthGraph；默认强制 deterministic provider，不消耗模型 API 额度：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\prepare_4d_local_identity_map.py --output output\benchmarks\evaluation_runs\unified_agent_identity_map.local.json
+.\.venv\Scripts\python.exe scripts\run_unified_agent_eval.py --mode integration --identity-map output\benchmarks\evaluation_runs\unified_agent_identity_map.local.json --split all --output-dir output\benchmarks\evaluation_runs\unified-agent-400-20260812
+```
+
+只有明确需要付费模型复测时才增加 `--real-model`。报告逐条保存实际 `tool_input`、`expected_blocked` 和 `observed_blocked`；身份映射和运行产物位于 Git 忽略目录，不得提交。
+
 ### 真实集成与 Docker 证据
 
 The B2.6 entry points are deliberately separate from the B2.5 synthetic
@@ -341,11 +376,7 @@ debugging. The map cannot be committed because it binds synthetic benchmark
 本机 identity map 把评测 ID 映射到 demo rows，文件不得提交；历史细节见 [项目执行历史](EXECUTION_HISTORY.md)。
 for the complete command and source mapping rules.
 
-The Docker report currently records `19/19` checks passed. The first real v2
-integration sample also passed all nine deterministic graders, but both are
-local evidence. Formal quality, RAG, safety, latency, token and cost metrics
-remain unavailable until the 300 WorldState/1200 Query data is human-reviewed
-and the three splits are run with complete identity/source maps.
+The Docker report currently records `19/19` checks passed. 历史 v2 路径和完整 1,200 留档只保留兼容回归，不再作为新正式指标的数据源。当前统一活动视图为 fast-400；由于默认使用 deterministic provider，Agent token 和付费成本仍为 N/A，不能估算。
 
 4D-A gold 数据冻结后，运行 deterministic benchmark：
 

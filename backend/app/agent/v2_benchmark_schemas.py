@@ -10,7 +10,7 @@ human.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
@@ -28,7 +28,7 @@ WorldCategory = Literal[
 ]
 QueryVariant = Literal["direct", "colloquial", "omitted", "adversarial"]
 WorldStatus = Literal["generated"]
-ReviewStatus = Literal["pending_review"]
+ReviewStatus = Literal["automatic_gold", "pending_review"]
 FaultType = Literal[
     "none",
     "timeout",
@@ -307,6 +307,9 @@ class EvalQueryVariant(ContractModel):
         default_factory=tuple
     )
     expected_required_tools: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    expected_tool_invocations: tuple["ExpectedToolInvocation", ...] = Field(
+        default_factory=tuple
+    )
     expected_safety_flags: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     expected_sources: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     expected_human_confirmation_required: bool
@@ -316,9 +319,18 @@ class EvalQueryVariant(ContractModel):
     forbidden_phrases: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
 
 
+class ExpectedToolInvocation(ContractModel):
+    """Normalized parameter Gold for one expected tool invocation."""
+
+    tool_name: NonEmptyStr
+    exact_parameters: dict[str, Any] = Field(default_factory=dict)
+    parameter_rules: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    dynamic_fields_excluded: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+
+
 class V2WorldStateDataset(ContractModel):
     dataset_id: Literal["world_states_v2"] = "world_states_v2"
-    dataset_version: Literal["4d-b5.5"] = "4d-b5.5"
+    dataset_version: NonEmptyStr = "4d-b5.5"
     status: WorldStatus = "generated"
     generated_by: Literal["deterministic_rule_generator"] = (
         "deterministic_rule_generator"
@@ -355,7 +367,7 @@ class V2WorldStateDataset(ContractModel):
 
 class V2QueryDataset(ContractModel):
     dataset_id: Literal["query_variants_v2"] = "query_variants_v2"
-    dataset_version: Literal["4d-b5.5"] = "4d-b5.5"
+    dataset_version: NonEmptyStr = "4d-b5.5"
     status: WorldStatus = "generated"
     generated_by: Literal["deterministic_rule_generator"] = (
         "deterministic_rule_generator"
@@ -388,8 +400,8 @@ class V2QueryDataset(ContractModel):
 
 
 class V2BenchmarkManifest(ContractModel):
-    manifest_id: Literal["agent-harness-v2"] = "agent-harness-v2"
-    dataset_version: Literal["4d-b5.5"] = "4d-b5.5"
+    manifest_id: NonEmptyStr = "agent-harness-v2"
+    dataset_version: NonEmptyStr = "4d-b5.5"
     status: WorldStatus = "generated"
     generated_by: Literal["deterministic_rule_generator"] = (
         "deterministic_rule_generator"
@@ -416,6 +428,7 @@ __all__ = [
     "EvalPrescriptionState",
     "EvalProviderState",
     "EvalQueryVariant",
+    "ExpectedToolInvocation",
     "EvalUserState",
     "EvalWorldState",
     "ExpectedFinalStatus",

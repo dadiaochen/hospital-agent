@@ -42,6 +42,14 @@ def main() -> int:
     )
     parser.add_argument("--max-cases", type=int, default=16)
     parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=4,
+        choices=range(1, 17),
+        metavar="1-16",
+        help="Bounded independent Query concurrency for each ablation condition.",
+    )
+    parser.add_argument(
         "--split",
         choices=("all", "development", "validation", "holdout"),
         default="development",
@@ -56,6 +64,7 @@ def main() -> int:
     runner_options = V2RunnerOptions(
         dataset_split=args.split,
         max_cases=args.max_cases,
+        concurrency=args.concurrency,
         allow_pending_review=True,
         runner_mode=(
             "integration" if args.mode == "integration" else "synthetic_projection"

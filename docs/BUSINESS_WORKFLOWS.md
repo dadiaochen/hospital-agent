@@ -19,7 +19,7 @@
 
 `RequestScopeGuard` 对高置信度业务外输入返回固定产品范围提示，对无明确健康对象的输入返回澄清，并在这两种情况下直接结束；因此不会消耗 Router、Planner、Supervisor、领域 Agent、RAG、Tool、Provider 或主模型。含健康信号的混合意图只保留健康部分继续执行，医疗风险仍由 Request Safety Guard 处理。
 
-4D-B2.1/B4 已将患者端入口接入 `UnifiedHealthGraph` 和 `SupervisorBusinessWorkflow`：Router 形成目标角色，复杂任务由一次性 Planner 冻结计划，Supervisor 再实际调用运行时 Triage/Medication/Report Agent；领域 Agent 通过 Tool Registry 获取业务 Tool、Provider 和 RAG 证据，结果返回同一个业务 state。`FamilyHealthProductWorkflow` 只提供共享的 Safety、Confirmation、FinalAnswer 和 artifact helper，不再由外部 `business_domain` 直接选择最终执行分支。4D-B2.2 已把复杂计划表示成有界 DAG，但正式业务路径强制串行，避免确认和写状态竞争；独立只读并行仍用于受控评测。4D-B2.3 已在同一次最终答案产物中保存 `FinalClaim`、`AnswerEnvelope` 和 `Trace v2`，4D-B2.4 已生成待审核的 300/1200 v2 数据；B2.5 已完成内存 projection、九类 grader 和 preview Runner；B2.6 已接入 PostgreSQL shadow transaction、case-scoped RAG、Provider sandbox、真实图执行和 Docker 19/19 回归，但全量正式消融报告仍未冻结。
+患者端入口通过 `UnifiedHealthGraph` 和 `SupervisorBusinessWorkflow` 执行：Router 形成目标角色，复杂任务由一次性 Planner 冻结计划，Supervisor 再调用 Triage/Medication/Report Agent；领域 Agent 通过 Tool Registry 获取业务 Tool、Provider 和 RAG 证据。正式运行产物保存 `FinalClaim`、`AnswerEnvelope`、实际工具参数和安全状态。当前统一评测数据集的 Agent 活动视图为 fast-400（100 WorldState / 400 Query），接入 PostgreSQL shadow transaction、case-scoped RAG、Provider sandbox 和真实图 deterministic 执行；完整 300/1200 来源仅留档。后续获得授权后只对 fast-400 测真实 LLM，不把 deterministic 结果当作模型质量结论。
 
 任务七把“可选本地 DRAFT”固定为受保护动作的状态机入口：新业务任务首轮在作用域、动作和来源检查通过后自动产生本地 `DRAFT`；用户确认的是后续本地执行，不是是否允许生成草稿。确认 continuation 必须在同一 `task_id` 下重新校验 `user_id`、`member_id`、draft version、request fingerprint、idempotency key 和 Safety decision，再串行推进 `DRAFT -> CONFIRMED -> EXECUTED`。任何外部医院、药店、支付或通知状态都保持 `not_submitted`。
 
@@ -157,7 +157,7 @@ Router、TaskPlanner、三个 Domain Agent 和 Supervisor 在 4B 目标架构中
 - 降级结果保留 error category、attempt 和 fallback reason，但 data/source 为空，业务状态进入 failed/degraded 或人工处理。
 ## 10. 来源、隔离和排障闭环
 
-三条业务链路读取通用医疗知识时，hybrid RAG 使用 RRF 融合 keyword/vector rank；处方、报告、药箱等个人医疗事实仍来自当前成员的业务数据库或 Provider，不进入个人向量记忆。向量命中的 document/chunk/schema 版本必须与 PostgreSQL 权威记录一致，否则忽略旧命中并记录降级原因。
+三条业务链路读取通用医疗知识时，hybrid RAG 使用 BM25/vector 的 RRF 融合，并在生成前执行显式实体过滤、轻量 rerank 和来源版本校验；处方、报告、药箱等个人医疗事实仍来自当前成员的业务数据库或 Provider，不进入个人向量记忆。向量命中的 document/chunk/schema 版本必须与 PostgreSQL 权威记录一致，否则忽略旧命中并记录降级原因。
 
 业务 run 冻结时同步生成白名单 Observation：能看出请求经过哪些节点、调用哪些 Tool/Provider、是否重试或降级、使用哪些 source、哪个模型以及 Provider 是否提供 token usage，但不能从 Observation 还原用户原话、医疗正文、Tool/Provider payload、Prompt 或 FinalAnswer 正文。该 Trace 只用于排障和后续评测，不参与 Supervisor 路由，也不能修改确认状态。
 

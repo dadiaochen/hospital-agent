@@ -15,7 +15,7 @@
 | 多 Agent | Router、一次性 Planner、bounded Supervisor、Triage/Medication/Report 三个领域 Agent |
 | 工具 | Tool Registry、步骤级工具白名单、输入输出校验、超时、有限重试和审计 |
 | 模型 | deterministic/真实模型双模式、结构化输出、失败降级和 token/成本记录 |
-| RAG | FastEmbed、PostgreSQL pgvector HNSW、关键词检索、RRF、版本校验和来源引用 |
+| RAG | FastEmbed、PostgreSQL pgvector HNSW、BM25、RRF、实体过滤、轻量 rerank、版本校验和来源引用 |
 | 上下文 | 最小角色视图、同任务压缩、run 后重置、PostgreSQL Checkpoint 和 Redis TTL 缓存 |
 | 安全 | 请求、动作、最终回答三层 Agent 安全；草稿和显式确认状态机 |
 | 评测 | RunTrace、FinalClaim、确定性 grader、故障注入、浏览器 E2E 和真实模型离线评测 |
@@ -38,9 +38,9 @@
 
 ## 5. 当前指标证据
 
-- 300 个合成 WorldState、1200 条表达用于路由、计划、工具、来源、安全和成员隔离的确定性评测。
+- 当前 Agent 快速评测视图为 100 个合成 WorldState、400 条表达（每个状态 4 种表达），用于路由、计划、工具、来源、安全和成员隔离的确定性评测；完整 300/1200 来源已留档，不作为默认评测输入。
 - 500 条 synthetic RAG Query 用于真实 FastEmbed、pgvector HNSW 和真实模型全链路对比。
-- RAG 最终方案相对基线：Recall@5 从 70.96% 提升到 85.19%，来源绑定回答准确率从 23.44% 提升到 63.75%，来源绑定幻觉率从 51.25% 降到 7.50%，端到端 p95 从 3398.879 ms 降到 2187.268 ms。
+- RAG 当前保留方案相对旧冻结基线：Recall@3/@5 从 67.50%/85.19% 提升到 100%/100%，Precision@3/@5 从 25.00%/21.38% 提升到 43.59%/26.15%，确定性来源绑定幻觉率从 7.50% 降到 0%。2026-08-13 在同一 `internet-hospital-agent-eval-v1` 内修复 20 个多片段基础 Case 的“问题—正文—Gold”一致性，引入步骤/例外证据角色重排、角色最小上下文和直接回答 Prompt，并将 60 条无答案题从生成式 RAGAS 分流到无答案准确率：320 条 RAG 回答的来源绑定正确率从 74.69% 提升到 99.69%，260 条可回答题的 Faithfulness/Response Relevancy/Context Recall 从 0.9545/0.4752/0.8462 提升到 0.9837/0.6818/1.0000。无答案准确率、活动版本过滤率和来源绑定幻觉率均为 100%/100%/0%；平均 token 与成本上升 15.88%/14.99%，不能宣称成本优化。以上均为自动生成、无人工审核的冻结合成工程指标，不是临床准确率。
 - 上述指标属于本地 synthetic/test-only 工程评测，不是临床准确率、线上成功率或生产 SLA。
 
 ## 6. 仍未完成
@@ -69,13 +69,23 @@
 | --- | --- | --- | --- |
 | 5A-0 | 代码审计与基线冻结 | DONE | 已建立审计文档和本地基线备份分支 |
 | 5A-1 | RequestScopeGuard | DONE | 高置信度业务外请求在 Router / RAG / Tool / 主模型前终止，保留隐私安全 Trace |
-| 5A-2 | RAG Retrieval 与 Generation 分层评测 | DONE | frozen Gold 自动计算 Recall/MRR/nDCG 与 bad case 归因；RAGAS 0.2.9 支持冻结回答离线复评、单项失败隔离和缺失项定向补分，320 条中 300 条三项齐全 |
+| 5A-2 | RAG Retrieval 与 Generation 分层评测 | DONE | frozen Gold 自动计算 Recall/MRR/nDCG 与 bad case 归因；目标回答模型与独立 Judge 使用两套服务端配置，Judge 可独立关闭隐藏思考以控制 token；RAGAS 0.2.9 支持冻结回答离线复评、单项失败隔离、缺失项定向补分和生成式指标适用性分流；2026-08-13 最终 260 条可回答题经 2 条定向补分后三项齐全，60 条无答案题单列无答案准确率 |
 | 5A-3 | 合成数据集接入 Harness | DONE | 同一 125/500 冻结数据集已投影为 Entry、Retrieval、Answer 三类离线 Harness 视图，并与全链路报告同目录输出 |
 | 5A-4 | Triage 多轮槽位状态机 | DONE | `needs_clarification` 冻结最小槽位状态；补充后以新 run、版本校验和成员隔离从 PostgreSQL Checkpoint 安全续跑 |
 | 5A-5 | 统一文档解析 | DONE | 文本、PDF、图像和表格独立解析后输出统一 `ParsedDocument`，不生成诊断或治疗建议 |
 | 5A-6 | 报告上传与结构化解读 | DONE | 报告上传后直接持久化为可读结构；文本/表格、PDF 文本层和本地图片 OCR 统一解析，不生成报告确认草稿 |
 | 5A-7 | FinalAnswerQualityGate | DONE | 冻结前最多一次无 Tool 的格式修复；无来源事实或安全失败 fail-closed |
 | 5A-8 | Context / Checkpoint 收口 | DONE | 新质量门状态进入既有 PostgreSQL Checkpoint；Redis TTL 缓存继续失效回源 |
-| 5A-9 | E2E、报告与 Git Freeze | IN PROGRESS | 分层回归、bad case 归因、文档收口及可复现命令已完成；待其他窗口释放 Git index 后恢复旧测试快照并完成 Git Freeze |
+| 5A-9 | E2E、报告与 Git Freeze | IN PROGRESS | `tool_input` 与 `observed_blocked` 已进入冻结运行产物；当前默认统一 Agent 视图固定为 fast-400：100 个 WorldState、400 条 Query，development/validation/holdout 为 240/80/80，并保留全部 96 条高风险 Query。完整 300/1200 来源已留档，不被默认 Loader 和评测命令读取。Agent 与 RAG 的独立 Query 已支持受控并发。RAG 在同一 125/500 冻结集保留 BM25 + HNSW、RRF、版本/实体过滤和候选 20 条规则重排；新增结构化证据角色重排、最小角色上下文、直接回答 Prompt 与无答案指标分流后，Recall@3/@5 和 Precision@3/@5 保持 100%/100% 与 43.59%/26.15%，来源绑定回答正确率达到 99.69%（319/320），确定性来源绑定幻觉率 0%，可回答题 RAGAS 为 0.9837/0.6818/1.0000。平均 token 与成本增加，不作为成本优化。Agent fast-400 真实 LLM 指标仍为最终回答正确率 100%、端到端任务成功率 99.25%、高风险拦截率/误拦截率 100%/0%、P50/P95/P99 4,294/6,645/7,850 ms、总 token 367,920、观测成本 `$0.529735`。当前仍停留在 5A-9，待 Git Freeze。 |
+
+5A-9 补充完成：在同一 125/500 统一 RAG 数据集上，真实模型已对 65 个正样本基础 Case 自动补充定义、条件、步骤和例外证据标签，无人工审核、无 fallback；原 `relevant_chunk_ids` 仍保持不变。复用已冻结检索结果的 AI 自动扩展证据 Precision@3/@5/@10 为 60.51%/50.15%/31.81%，仅作为标签覆盖诊断，不替代冻结 Gold，也不作为检索模型优化收益。
+
+5A-9 补充完成：`BAAI/bge-reranker-base` Cross-Encoder 在相同冻结 Top-10 候选的 15 个基础 Case、60 条 Query 对照中，使自动扩展证据 Precision@3 从 60.56% 降至 17.78%，原冻结 Gold Precision@3 从 33.33% 降至 0%。其不能表达“规则主片段优先、版本和实体约束”，已作为无效方案留档，不接入 RAG 主链路；5A-9 状态仍为 IN PROGRESS，待 Git Freeze。
+
+5A-9 补充完成：真实 LLM `deepseek-v4-flash` 在相同的 60 Query 受限重排对照中，只允许输出原 Top-10 的完整排列；自动扩展证据 Precision@3/@5 从 60.56%/53.33% 变为 55.00%/49.33%，冻结 Gold Precision 持平，且每条额外消耗约 2,850 token、2.12 秒。未获得质量净收益，已作为无效方案留档，不接入 RAG 主链路；5A-9 状态仍为 IN PROGRESS，待 Git Freeze。
+
+5A-9 补充完成：真实 LLM 仅规范化原问句的已出现实体/条件后，进入同一 BM25 + HNSW + RRF 检索；60 Query 的自动扩展证据 Precision@3/@5 从 60.56%/53.33% 变为 64.45%/54.33%，但原冻结 Gold Recall/Precision 持平，并增加约 220 token、1.88 秒/条。收益仅限自动标签覆盖诊断，不接入默认 RAG 主链路或简历；5A-9 状态仍为 IN PROGRESS，待 Git Freeze。
+
+5A-9 补充完成：结构化实体过滤 + 父子 Chunk 组装在 60 Query 核验中，与当前 M5 的实体过滤、主片段优先和最小证据门产生 60/60 完全相同的模型输入证据；因此没有新增 profile 或主链路改动。后续真正的父子检索需 `parent_chunk_id` / `section_id` 元数据与独立人工多证据 Gold 验证；5A-9 状态仍为 IN PROGRESS，待 Git Freeze。
 
 5A 的详细审计、复用边界和已知限制见 [业务闭环与分层评测差距审计](implementation/FINAL_BUSINESS_GAP_AUDIT.md)。所有 synthetic 数据和单次运行报告继续只保存在被 Git 忽略的 `output/` 或 `var/`。

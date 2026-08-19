@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from threading import RLock
 from typing import Any
 
 from app.agent.v2_benchmark_schemas import EvalQueryVariant, EvalWorldState
@@ -56,10 +57,12 @@ class InMemoryProjectionBackend:
 
     def __init__(self) -> None:
         self._namespaces: dict[str, dict[str, Any]] = {}
+        self._lock = RLock()
 
     @property
     def active_namespaces(self) -> tuple[str, ...]:
-        return tuple(sorted(self._namespaces))
+        with self._lock:
+            return tuple(sorted(self._namespaces))
 
     def create_namespace(
         self,
@@ -68,8 +71,11 @@ class InMemoryProjectionBackend:
         world: EvalWorldState,
         query: EvalQueryVariant,
     ) -> MaterializedCase:
-        if namespace in self._namespaces:
-            raise MaterializationError(f"evaluation namespace already exists: {namespace}")
+        with self._lock:
+            if namespace in self._namespaces:
+                raise MaterializationError(
+                    f"evaluation namespace already exists: {namespace}"
+                )
         if query.world_state_id != world.world_state_id:
             raise MaterializationError("query and WorldState IDs do not match")
         if query.dataset_split != world.dataset_split:
@@ -111,13 +117,14 @@ class InMemoryProjectionBackend:
             "current_source_ids": tuple(world.knowledge_state.current_source_ids),
             "stale_source_ids": stale_source_ids,
         }
-        self._namespaces[namespace] = {
-            "database": database_projection,
-            "provider": provider_projection,
-            "rag": rag_projection,
-            "world_state_id": world.world_state_id,
-            "query_id": query.query_id,
-        }
+        with self._lock:
+            self._namespaces[namespace] = {
+                "database": database_projection,
+                "provider": provider_projection,
+                "rag": rag_projection,
+                "world_state_id": world.world_state_id,
+                "query_id": query.query_id,
+            }
         return MaterializedCase(
             world=world.model_copy(deep=True),
             query=query.model_copy(deep=True),
@@ -130,8 +137,9 @@ class InMemoryProjectionBackend:
     def cleanup(self, namespace: str) -> bool:
         """Delete one namespace; deleting an already-clean namespace is safe."""
 
-        self._namespaces.pop(namespace, None)
-        return namespace not in self._namespaces
+        with self._lock:
+            self._namespaces.pop(namespace, None)
+            return namespace not in self._namespaces
 
     @staticmethod
     def _source_ids(world: EvalWorldState) -> tuple[str, ...]:

@@ -267,6 +267,7 @@ class DeterministicBoundedSupervisor:
         pending_steps = {step.step_id: step for step in plan.steps}
         parallel_batches: list[tuple[str, ...]] = []
         degraded = False
+        terminal_failure = False
 
         while pending_steps:
             ready_steps = tuple(
@@ -401,25 +402,28 @@ class DeterministicBoundedSupervisor:
                     if result.status in {"blocked", "failed"}:
                         decisions.append(
                             SupervisorDecision(
-                                action="stop",
+                                action="degrade",
                                 step_id=step.step_id,
                                 role=step.role,
-                                reason="agent returned a terminal failure",
-                                termination_reason=result.failure_reason or "agent_failed",
+                                reason=(
+                                    "agent returned a terminal failure; continue only "
+                                    "with dependency-independent pending steps"
+                                ),
+                                termination_reason=(
+                                    result.failure_reason or "agent_failed"
+                                ),
                                 max_steps=self.max_supervisor_steps,
                             )
                         )
-                        return self._result(
-                            request,
-                            route,
-                            plan,
-                            results,
-                            decisions,
-                            completed=False,
-                            termination_reason=result.failure_reason or "agent_failed",
-                            runtime_options=runtime_options,
-                            parallel_batches=parallel_batches,
-                        )
+                        # Preserve the failure in the reducer, but release
+                        # this step from the pending set.  A sibling step with
+                        # satisfied dependencies may still provide the
+                        # read-only evidence required to finish a bounded
+                        # cross-domain run.  Dependent steps remain blocked by
+                        # the unchanged ``completed_steps`` set.
+                        terminal_failure = True
+                        pending_steps.pop(step.step_id, None)
+                        continue
 
                 if result.status == "needs_clarification":
                     decisions.append(
@@ -462,12 +466,20 @@ class DeterministicBoundedSupervisor:
                 pending_steps.pop(step.step_id, None)
 
         termination_reason = (
-            "completed_with_degradation" if degraded else "all_plan_steps_completed"
+            "completed_with_partial_failure"
+            if terminal_failure
+            else "completed_with_degradation"
+            if degraded
+            else "all_plan_steps_completed"
         )
         decisions.append(
             SupervisorDecision(
                 action="finish",
-                reason="all frozen plan steps completed",
+                reason=(
+                    "independent steps completed after a bounded terminal failure"
+                    if terminal_failure
+                    else "all frozen plan steps completed"
+                ),
                 termination_reason=termination_reason,
                 max_steps=self.max_supervisor_steps,
             )
@@ -478,7 +490,7 @@ class DeterministicBoundedSupervisor:
             plan,
             results,
             decisions,
-            completed=True,
+            completed=not terminal_failure,
             termination_reason=termination_reason,
             runtime_options=runtime_options,
             parallel_batches=parallel_batches,

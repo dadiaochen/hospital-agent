@@ -12,8 +12,10 @@
 ## 当前实测状态
 
 - 已修复单个 `StringIO.question` 格式异常拖垮整批的问题，使用 `raise_exceptions=false`、批次/并发限制、独立 Judge 超时和非有限分数归一化。
-- 冻结记录全量评分覆盖 320 条，其中 300 条三项齐全；最终统计统一排除另外 20 条部分评分样本，不进入任何指标分母，也不按 0 分处理。
-- 定向补分因独立 Judge 账户 HTTP 402 余额不足停止；最终均值、分位数、产物路径和口径统一见主报告。
+- 2026-08-13 修复指标适用性：`expected_response_type=no_answer` 的 60 条仍留在统一数据集，但不进入生成式 RAGAS；它们由无答案准确率独立验收。
+- 最终对 260 条可回答题评分，首轮 258 条三项齐全，2 条 Faithfulness 解析异常；定向补分只重试这 2 条，最终 260/260 三项齐全，结果为 `0.9837 / 0.6818 / 1.0000`，缺失值没有按 0 分处理。
+- 2026-08-12 使用 `qwen3.7-flash` 做同一条“回复 OK”、输出上限 8 token 的最小连通性对照：默认思考时为 12 输入 / 345 输出 / 357 总 token、8.60 秒；传入 `enable_thinking=false` 后为 14 输入 / 8 输出 / 22 总 token、3.19 秒。总 token 下降 93.84%，输出 token 下降 97.68%；该结果只证明配置与成本控制生效，不代表 RAGAS 指标质量。
+- 随后复用冻结记录 `syn-rag-v1-query-001` 做 1 条真实 RAGAS 冒烟测试，未重跑检索和目标回答模型：Faithfulness `1.0000`、Response Relevancy `0.6687`、Context Recall `1.0000`，三项齐全、无部分结果和失败，耗时 21.44 秒。因首条已经验证三项均可解析，按最小 token 原则未继续补跑第 2、3 条。
 
 ## 运行方式
 
@@ -28,19 +30,20 @@ python scripts\run_synthetic_rag_full_eval.py --all --profile m4-snapshot-cache
 
 ```powershell
 python scripts\run_frozen_ragas_eval.py `
-  --source-dir output\benchmarks\rag_synthetic\rag-synthetic-v1-ragas-full-20260810-101500 `
+  --source-dir output\benchmarks\rag_synthetic\rag-synthetic-v1-m5-optimized-full-no-ragas-20260812 `
   --output-dir output\benchmarks\rag_synthetic\rag-synthetic-v1-ragas-offline
 ```
 
 若只有少量指标缺失，可传入 `--retry-from <ragas_results.jsonl>`，脚本只选择缺失行，并且只填补原来为 N/A 的指标，不覆盖已有分数。
 
-需要语义交叉验证时，先安装 `backend/requirements.txt`，再在未提交的 `.env` 中设置以下变量。Judge 模型必须不同于被测模型，避免自评。
+需要语义交叉验证时，先安装 `backend/requirements.txt`，再在未提交的 `.env` 中填写独立的 `RAGAS_JUDGE_*` 配置。业务回答读取 `MODEL_*`，离线 Judge 读取 `RAGAS_JUDGE_*`，两者不会互相覆盖。若同一账号可访问两个模型，Base URL 和 Key 可以复用；Judge 模型名必须不同于目标模型名，避免自评。
 
 ```env
 RAGAS_ENABLED=true
 RAGAS_JUDGE_API_BASE=https://your-compatible-endpoint/v1
 RAGAS_JUDGE_API_KEY=...
 RAGAS_JUDGE_MODEL=independent-judge-model
+RAGAS_JUDGE_THINKING_MODE=disabled
 RAGAS_EMBEDDING_PROVIDER=fastembed
 RAGAS_EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
 RAGAS_BATCH_SIZE=8

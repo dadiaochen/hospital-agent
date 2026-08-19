@@ -179,6 +179,44 @@ def test_supervisor_allows_one_bounded_retry_then_continues() -> None:
     assert run.results[2].attempt == 2
 
 
+class TerminalTriageAgent(DomainAgent):
+    role = "TriageAgent"
+    allowed_tools = ROLE_ALLOWED_TOOLS["TriageAgent"]
+
+    def _execute(self, agent_input: DomainAgentInput) -> AgentTaskResult:
+        return AgentTaskResult(
+            task_id=agent_input.route.task_id,
+            member_id=agent_input.route.member_id,
+            agent_role=self.role,
+            step_id=agent_input.step.step_id,
+            status="failed",
+            failure_reason="provider_unavailable",
+        )
+
+
+def test_supervisor_continues_independent_sibling_after_terminal_failure() -> None:
+    agents = {
+        "TriageAgent": TerminalTriageAgent(),
+        "MedicationAgent": MedicationAgent(),
+        "ReportAgent": ReportAgent(),
+    }
+
+    run = DeterministicBoundedSupervisor(agents=agents).run(
+        make_request(
+            "Please organize recent symptoms, consultation information, and medication refill materials."
+        )
+    )
+
+    assert run.completed is False
+    assert [result.agent_role for result in run.results] == [
+        "TriageAgent",
+        "MedicationAgent",
+    ]
+    assert any(
+        decision.action == "degrade" for decision in run.decisions
+    )
+
+
 def test_domain_agent_input_rejects_tool_outside_role_allowlist() -> None:
     route = ComplexityRoute(
         task_id="task-6",

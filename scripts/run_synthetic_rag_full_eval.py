@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -21,11 +22,12 @@ import math
 from pathlib import Path
 import statistics
 import sys
+from threading import Lock, local
 import time
-from typing import Any
+from typing import Any, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import create_engine, delete, text
+from sqlalchemy import create_engine, delete, func, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
@@ -53,12 +55,15 @@ from app.rag.embedding_provider import (  # noqa: E402
 )
 from app.rag.retrieval_schemas import RetrievalRequest  # noqa: E402
 from app.rag.retriever import (  # noqa: E402
-    create_knowledge_retriever,
+    Bm25CorpusIndex,
+    HybridRetriever,
+    KeywordRetriever,
+    SQLAlchemyKnowledgeStore,
     select_minimal_evidence_sources,
 )
 from app.rag.vector_store import (  # noqa: E402
     KnowledgeEmbeddingIndexer,
-    create_configured_vector_backend,
+    PgVectorSearchBackend,
 )
 from rag_synthetic_eval import (  # noqa: E402
     DATASET_VERSION,
@@ -75,7 +80,8 @@ from rag_synthetic_eval import (  # noqa: E402
 
 
 DEFAULT_FIXTURE_ROOT = (
-    PROJECT_ROOT / "output/benchmarks/rag_synthetic/fixtures/rag_synthetic_v1"
+    PROJECT_ROOT
+    / "output/benchmarks/evaluation_dataset/internet-hospital-agent-eval-v1/rag"
 )
 DEFAULT_OUTPUT_DIR = (
     PROJECT_ROOT / "output/benchmarks/rag_synthetic/rag-synthetic-v1-full-20260807"
@@ -87,6 +93,7 @@ DEFAULT_DATABASE_URL = (
 HNSW_INDEX_NAME = "ix_syn_rag_v1_chunks_embedding_hnsw"
 CONTEXT_TOP_K = 5
 RETRIEVAL_TOP_K = 10
+RERANK_CANDIDATE_LIMIT = 20
 
 
 class SyntheticAnswer(BaseModel):
@@ -114,12 +121,96 @@ class PreparedDatabase:
 
 
 @dataclass(frozen=True)
+class QueryEvaluation:
+    """One independent query result, retained until ordered aggregation.
+
+    PostgreSQL sessions, retrievers and model gateways are intentionally local
+    to the worker that creates this value. The coordinator writes artifacts in
+    the frozen input order after all independent work completes.
+    """
+
+    retrieval_row: dict[str, Any] | None
+    answer_row: dict[str, Any] | None
+    query_row: dict[str, Any]
+    badcases: tuple[dict[str, Any], ...]
+    ragas_input: tuple[dict[str, Any], RagasGenerationEvalInput] | None
+    entry_latency_ms: float
+    retrieval_latency_ms: float | None
+    model_latency_ms: float | None
+    evaluation_latency_ms: float
+
+
+class LockedEmbeddingProvider:
+    """Reuse one loaded FastEmbed model while serializing its inference call.
+
+    FastEmbed/ONNX provider thread safety varies with the installed execution
+    provider. The lock avoids concurrent calls into that local model, while
+    PostgreSQL retrieval hydration and remote LLM requests remain parallel.
+    """
+
+    def __init__(self, delegate: FastEmbedEmbeddingProvider) -> None:
+        self._delegate = delegate
+        self._lock = Lock()
+        self.model_name = delegate.model_name
+        self.dimension = delegate.dimension
+
+    def embed_query(self, text: str) -> list[float]:
+        with self._lock:
+            return self._delegate.embed_query(text)
+
+    def embed_passages(self, texts: Sequence[str]) -> list[list[float]]:
+        with self._lock:
+            return self._delegate.embed_passages(texts)
+
+
+class FrozenKnowledgeSnapshot:
+    """Immutable knowledge metadata cache shared by read-only RAG workers."""
+
+    def __init__(self, records: Sequence[Any]) -> None:
+        self._records = tuple(records)
+        self._by_chunk_id = {record.chunk_id: record for record in self._records}
+
+    def list_records(self) -> list[Any]:
+        return list(self._records)
+
+    def records_by_chunk_ids(self, chunk_ids: Sequence[str]) -> dict[str, Any]:
+        return {
+            chunk_id: self._by_chunk_id[chunk_id]
+            for chunk_id in dict.fromkeys(chunk_ids)
+            if chunk_id in self._by_chunk_id
+        }
+
+
+def _ordered_parallel_map(
+    items: Sequence[Any],
+    worker: Any,
+    *,
+    concurrency: int,
+) -> list[Any]:
+    """Run independent items concurrently while preserving source order."""
+
+    if concurrency == 1 or len(items) <= 1:
+        return [worker(item) for item in items]
+    with ThreadPoolExecutor(
+        max_workers=min(concurrency, len(items)),
+        thread_name_prefix="rag-eval",
+    ) as pool:
+        return list(pool.map(worker, items))
+
+
+@dataclass(frozen=True)
 class RetrievalProfile:
     name: str
     allowed_document_ids: frozenset[str] | None = None
     candidate_limit: int | None = None
     rerank_enabled: bool = False
     dedupe_enabled: bool = False
+    relevance_filter_enabled: bool = False
+    document_head_enabled: bool = False
+    # Historical profiles retain the original lexical scorer so their frozen
+    # measurements remain comparable. New 5A-9 strategy profiles opt into
+    # BM25 explicitly.
+    keyword_scoring_strategy: str = "legacy"
     evidence_gate_enabled: bool = False
     evidence_max_sources: int = 3
     snapshot_cache_enabled: bool = False
@@ -136,6 +227,9 @@ class RetrievalProfile:
             "candidate_limit": self.candidate_limit,
             "rerank_enabled": self.rerank_enabled,
             "dedupe_enabled": self.dedupe_enabled,
+            "relevance_filter_enabled": self.relevance_filter_enabled,
+            "document_head_enabled": self.document_head_enabled,
+            "keyword_scoring_strategy": self.keyword_scoring_strategy,
             "evidence_gate_enabled": self.evidence_gate_enabled,
             "evidence_max_sources": self.evidence_max_sources,
             "snapshot_cache_enabled": self.snapshot_cache_enabled,
@@ -153,6 +247,9 @@ RETRIEVAL_PROFILES = (
     "m4-snapshot-cache",
     "m4-cost",
     "m5-final",
+    "m5-hybrid-rerank",
+    "m5-faithfulness-prompt",
+    "m5-optimized",
 )
 
 
@@ -219,6 +316,42 @@ def resolve_retrieval_profile(
         return RetrievalProfile(
             name=name,
             allowed_document_ids=active_document_ids,
+            evidence_gate_enabled=True,
+            evidence_max_sources=3,
+            snapshot_cache_enabled=True,
+        )
+    if name == "m5-hybrid-rerank":
+        return RetrievalProfile(
+            name=name,
+            allowed_document_ids=active_document_ids,
+            keyword_scoring_strategy="bm25",
+            candidate_limit=RERANK_CANDIDATE_LIMIT,
+            rerank_enabled=True,
+            dedupe_enabled=True,
+            relevance_filter_enabled=True,
+            document_head_enabled=True,
+            evidence_gate_enabled=True,
+            evidence_max_sources=3,
+            snapshot_cache_enabled=True,
+        )
+    if name == "m5-faithfulness-prompt":
+        return RetrievalProfile(
+            name=name,
+            allowed_document_ids=active_document_ids,
+            evidence_gate_enabled=True,
+            evidence_max_sources=3,
+            snapshot_cache_enabled=True,
+        )
+    if name == "m5-optimized":
+        return RetrievalProfile(
+            name=name,
+            allowed_document_ids=active_document_ids,
+            keyword_scoring_strategy="bm25",
+            candidate_limit=RERANK_CANDIDATE_LIMIT,
+            rerank_enabled=True,
+            dedupe_enabled=True,
+            relevance_filter_enabled=True,
+            document_head_enabled=True,
             evidence_gate_enabled=True,
             evidence_max_sources=3,
             snapshot_cache_enabled=True,
@@ -301,6 +434,8 @@ def _ensure_isolated_database(database_url: str) -> None:
 def prepare_postgres_knowledge_base(
     corpus: CorpusBundle,
     database_url: str,
+    *,
+    reuse_index: bool = False,
 ) -> PreparedDatabase:
     _ensure_isolated_database(database_url)
     engine = create_engine(database_url, pool_pre_ping=True)
@@ -325,41 +460,79 @@ def prepare_postgres_knowledge_base(
             f"configured provider has {provider.dimension}"
         )
 
-    with Session(engine) as session:
-        # The database name is checked above and is dedicated to this benchmark.
-        session.execute(delete(KnowledgeChunk))
-        session.execute(delete(KnowledgeDocument))
-        session.flush()
-        for document in corpus.documents:
-            session.add(
-                KnowledgeDocument(
-                    id=document["document_id"],
-                    title=document["title"],
-                    category=document["category"],
-                    source=document["source"],
-                    content=document["content"],
-                    safety_level=document["safety_level"],
-                    version=document["version"],
+    expected_document_versions = {
+        str(document["document_id"]): str(document["version"])
+        for document in corpus.documents
+    }
+    expected_chunk_versions = {
+        str(chunk["chunk_id"]): str(chunk["chunk_version"])
+        for chunk in corpus.chunks
+    }
+    reused_index = False
+    if reuse_index:
+        with Session(engine) as session:
+            existing_documents = dict(
+                session.execute(
+                    select(KnowledgeDocument.id, KnowledgeDocument.version)
+                ).all()
+            )
+            existing_chunks = dict(
+                session.execute(
+                    select(KnowledgeChunk.id, KnowledgeChunk.chunk_version)
+                ).all()
+            )
+            indexed_count = session.scalar(
+                select(func.count())
+                .select_from(KnowledgeChunk)
+                .where(
+                    KnowledgeChunk.embedding.is_not(None),
+                    KnowledgeChunk.embedding_model == provider.model_name,
                 )
             )
-        for chunk in corpus.chunks:
-            session.add(
-                KnowledgeChunk(
-                    id=chunk["chunk_id"],
-                    document_id=chunk["document_id"],
-                    chunk_index=chunk["chunk_index"],
-                    content=chunk["content"],
-                    keywords=chunk["keywords"],
-                    chunk_version=chunk["chunk_version"],
+        reused_index = bool(
+            existing_documents == expected_document_versions
+            and existing_chunks == expected_chunk_versions
+            and indexed_count == len(corpus.chunks)
+        )
+
+    if reused_index:
+        index_result = None
+    else:
+        with Session(engine) as session:
+            # The database name is checked above and is dedicated to this benchmark.
+            session.execute(delete(KnowledgeChunk))
+            session.execute(delete(KnowledgeDocument))
+            session.flush()
+            for document in corpus.documents:
+                session.add(
+                    KnowledgeDocument(
+                        id=document["document_id"],
+                        title=document["title"],
+                        category=document["category"],
+                        source=document["source"],
+                        content=document["content"],
+                        safety_level=document["safety_level"],
+                        version=document["version"],
+                    )
                 )
-            )
-        session.flush()
-        index_result = KnowledgeEmbeddingIndexer(
-            session,
-            provider,
-            batch_size=settings.rag_embedding_batch_size,
-        ).index(force=True)
-        session.commit()
+            for chunk in corpus.chunks:
+                session.add(
+                    KnowledgeChunk(
+                        id=chunk["chunk_id"],
+                        document_id=chunk["document_id"],
+                        chunk_index=chunk["chunk_index"],
+                        content=chunk["content"],
+                        keywords=chunk["keywords"],
+                        chunk_version=chunk["chunk_version"],
+                    )
+                )
+            session.flush()
+            index_result = KnowledgeEmbeddingIndexer(
+                session,
+                provider,
+                batch_size=settings.rag_embedding_batch_size,
+            ).index(force=True)
+            session.commit()
 
     with engine.begin() as connection:
         connection.execute(
@@ -415,9 +588,10 @@ def prepare_postgres_knowledge_base(
         "formal_knowledge_namespace_touched": False,
         "prepared_at": datetime.now(timezone.utc).isoformat(),
         "index_result": {
-            "scanned": index_result.scanned,
-            "indexed": index_result.indexed,
-            "skipped": index_result.skipped,
+            "reused": reused_index,
+            "scanned": index_result.scanned if index_result is not None else 0,
+            "indexed": index_result.indexed if index_result is not None else 0,
+            "skipped": index_result.skipped if index_result is not None else len(corpus.chunks),
         },
     }
     return PreparedDatabase(engine=engine, provider=provider, import_result=import_result)
@@ -475,6 +649,7 @@ def _build_prompt(
     sources: list[dict[str, Any]],
     *,
     minimal_citation: bool = False,
+    faithfulness_prompt_enabled: bool = False,
 ) -> tuple[str, str]:
     system = (
         "你是互联网医院 Agent 的离线测试回答节点。只处理给定用户问题和检索证据，"
@@ -492,6 +667,20 @@ def _build_prompt(
             "每条 claim 只绑定最直接的一个来源；不要为了完整而引用所有证据。"
             "当前证据为空或不能直接支持问题时，必须选择 no_answer，引用必须保持为空。"
         )
+    if faithfulness_prompt_enabled:
+        system += (
+            "回答前先在心中逐项核对用户问题需要的事实、每项事实对应的 chunk_id 和证据原文；"
+            "只输出能逐字或直接语义支持的最小结论，不把相似规则、其他实体、旧版本、常识或推测补入答案。"
+            "若证据只覆盖部分问题，response_type 必须为 no_answer，并在 answer 中仅说明当前证据不足；"
+            "不得将不完整证据拼接为完整结论。claim_texts 与 cited_chunk_ids 必须一一对应，"
+            "每条 claim 只能引用直接支持它的一个 chunk。"
+            "答案必须先直接回答用户明确询问的内容；如果问题询问步骤、条件或例外，"
+            "应按这些项目组织最短答案。不要输出处理分类、测试标签、内部字段、"
+            "unsupported 标记或来源指针规则等用户未询问的评测元数据。"
+            "如果用户询问当前或现行要求，且输入证据已经由检索层过滤为活动版本、"
+            "正文标明当前测试版本并直接给出规则事实，应使用该事实回答；"
+            "不要仅因正文没有逐字重复“现行要求”而选择 no_answer。"
+        )
     evidence = [
         {
             "chunk_id": source["chunk_id"],
@@ -505,7 +694,14 @@ def _build_prompt(
         {
             "user_query": query["user_input"],
             "retrieval_evidence": evidence,
-            "instruction": "如果检索证据不能直接支持问题，请明确说明证据不足，不要补写事实。",
+            "instruction": (
+                "依据证据回答；如果检索证据不能直接支持问题，请明确说明证据不足，不要补写事实。"
+                if not faithfulness_prompt_enabled
+                else (
+                    "先核对问题、证据实体、版本和所需证据角色；只回答用户明确询问的内容，"
+                    "每项结论绑定一个直接来源，不复述测试元数据。"
+                )
+            ),
         },
         ensure_ascii=False,
     )
@@ -682,6 +878,11 @@ def _retrieval_row(
             if relevant
             else None
         )
+        row[f"precision_at_{top_k}"] = (
+            round(len(relevant.intersection(top_ids)) / top_k, 4)
+            if relevant
+            else None
+        )
     first_rank = next(
         (index + 1 for index, chunk_id in enumerate(retrieved_ids) if chunk_id in relevant),
         None,
@@ -786,6 +987,9 @@ def _split_summary(
         "rag_recall_at_3": round(statistics.mean(row["recall_at_3"] for row in retrieval if row["recall_at_3"] is not None), 4) if any(row["recall_at_3"] is not None for row in retrieval) else None,
         "rag_recall_at_5": round(statistics.mean(row["recall_at_5"] for row in retrieval if row["recall_at_5"] is not None), 4) if any(row["recall_at_5"] is not None for row in retrieval) else None,
         "rag_recall_at_10": round(statistics.mean(row["recall_at_10"] for row in retrieval if row["recall_at_10"] is not None), 4) if any(row["recall_at_10"] is not None for row in retrieval) else None,
+        "rag_precision_at_3": round(statistics.mean(row["precision_at_3"] for row in retrieval if row["precision_at_3"] is not None), 4) if any(row["precision_at_3"] is not None for row in retrieval) else None,
+        "rag_precision_at_5": round(statistics.mean(row["precision_at_5"] for row in retrieval if row["precision_at_5"] is not None), 4) if any(row["precision_at_5"] is not None for row in retrieval) else None,
+        "rag_precision_at_10": round(statistics.mean(row["precision_at_10"] for row in retrieval if row["precision_at_10"] is not None), 4) if any(row["precision_at_10"] is not None for row in retrieval) else None,
         "rag_mrr_at_10": round(statistics.mean(row["mrr_at_10"] for row in retrieval), 4) if retrieval else None,
         "rag_ndcg_at_10": round(statistics.mean(row["ndcg_at_10"] for row in retrieval if row["ndcg_at_10"] is not None), 4) if any(row["ndcg_at_10"] is not None for row in retrieval) else None,
         "model_answer_accuracy": _ratio(sum(row["source_bound_answer_correct"] for row in answers), len(answers)),
@@ -834,6 +1038,9 @@ This is a test-only source-bound engineering evaluation. It exercises the config
 | Recall@3 | {metrics['rag']['recall_at_3']} |
 | Recall@5 | {metrics['rag']['recall_at_5']} |
 | Recall@10 | {metrics['rag']['recall_at_10']} |
+| Precision@3 | {metrics['rag']['precision_at_3']} |
+| Precision@5 | {metrics['rag']['precision_at_5']} |
+| Precision@10 | {metrics['rag']['precision_at_10']} |
 | MRR@10 | {metrics['rag']['mrr_at_10']} |
 | nDCG@10 | {metrics['rag']['ndcg_at_10']} |
 | Model answer accuracy (RAG cases) | {metrics['answer']['model_answer_accuracy']} |
@@ -890,6 +1097,8 @@ def run_full_eval(
     split: str | None = None,
     profile_name: str = "baseline",
     retrieval_only: bool = False,
+    concurrency: int = 4,
+    reuse_index: bool = False,
 ) -> dict[str, Any]:
     corpus, dataset = load_frozen_bundle(fixture_root)
     validation = validate_bundle(corpus, dataset)
@@ -905,6 +1114,8 @@ def run_full_eval(
 
     if query_offset < 0:
         raise ValueError("query_offset must be non-negative")
+    if not 1 <= concurrency <= 16:
+        raise ValueError("concurrency must be between 1 and 16")
     selected = [query for query in dataset.queries if split is None or query["split"] == split]
     selected = selected[query_offset:]
     if max_queries is not None:
@@ -912,7 +1123,11 @@ def run_full_eval(
     if not selected:
         raise ValueError("no queries selected")
 
-    prepared = prepare_postgres_knowledge_base(corpus, database_url)
+    prepared = prepare_postgres_knowledge_base(
+        corpus,
+        database_url,
+        reuse_index=reuse_index,
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     entry_view, retrieval_view, answer_view = SyntheticCaseHarnessAdapter().build_views(
         selected
@@ -933,10 +1148,9 @@ def run_full_eval(
         **prepared.import_result,
         "retrieval_profile": retrieval_profile.as_dict(),
         "evaluation_mode": "retrieval_only" if retrieval_only else "full_chain",
+        "query_concurrency": concurrency,
     }
     _write_json(output_dir / "database_manifest.json", database_manifest)
-    vector_backend = None
-    gateway = None
     retrieval_rows: list[dict[str, Any]] = []
     answer_rows: list[dict[str, Any]] = []
     query_rows: list[dict[str, Any]] = []
@@ -946,43 +1160,83 @@ def run_full_eval(
     evaluation_latencies: list[float] = []
     retrieval_latencies: list[float] = []
     model_latencies: list[float] = []
+    embedding_provider = LockedEmbeddingProvider(prepared.provider)
+    # The benchmark corpus is immutable after the one-time import/index step.
+    # Cache its authoritative metadata once, then let parallel workers issue
+    # only the pgvector Top-K query through their own Session.
+    with Session(prepared.engine) as snapshot_session:
+        snapshot_store = SQLAlchemyKnowledgeStore(
+            snapshot_session,
+            allowed_document_ids=retrieval_profile.allowed_document_ids,
+            snapshot_cache_enabled=True,
+        )
+        knowledge_snapshot = FrozenKnowledgeSnapshot(snapshot_store.list_records())
+    bm25_index = Bm25CorpusIndex.build(knowledge_snapshot.list_records())
+    worker_state = local()
+    gateways: list[Any] = []
+    gateways_lock = Lock()
 
-    with Session(prepared.engine) as session:
-        vector_backend = create_configured_vector_backend(
-            session,
-            allowed_document_ids=retrieval_profile.allowed_document_ids,
-        )
-        retriever = create_knowledge_retriever(
-            session,
-            vector_enabled=True,
-            vector_backend=vector_backend,
-            allowed_document_ids=retrieval_profile.allowed_document_ids,
-            candidate_limit=retrieval_profile.candidate_limit,
-            rerank_enabled=retrieval_profile.rerank_enabled,
-            dedupe_enabled=retrieval_profile.dedupe_enabled,
-            snapshot_cache_enabled=retrieval_profile.snapshot_cache_enabled,
-        )
-        if not retrieval_only:
-            fallback_provider = DeterministicModelProvider(
-                _fallback_payload,
-                model_name="deterministic-fallback-no-verified-output",
+    def worker_gateway() -> Any:
+        gateway = getattr(worker_state, "gateway", None)
+        if gateway is None:
+            gateway = create_model_gateway(
+                DeterministicModelProvider(
+                    _fallback_payload,
+                    model_name="deterministic-fallback-no-verified-output",
+                ),
+                configuration=settings,
             )
-            gateway = create_model_gateway(fallback_provider, configuration=settings)
+            worker_state.gateway = gateway
+            with gateways_lock:
+                gateways.append(gateway)
+        return gateway
 
-        for index, query in enumerate(selected, start=1):
-            query_started = time.perf_counter()
-            entry_started = time.perf_counter()
-            flow = query["expected_flow"]
-            # Entry governance is a frozen test contract. High-risk, scope and
-            # governance cases stop here and must never reach the model.
-            entry_action = flow["expected_route"]
-            entry_ms = (time.perf_counter() - entry_started) * 1000
-            entry_latencies.append(entry_ms)
+    def evaluate_one(query: dict[str, Any]) -> QueryEvaluation:
+        query_started = time.perf_counter()
+        entry_started = time.perf_counter()
+        flow = query["expected_flow"]
+        # Entry governance is a frozen test contract. High-risk, scope and
+        # governance cases stop here and must never reach the model.
+        entry_action = flow["expected_route"]
+        entry_ms = (time.perf_counter() - entry_started) * 1000
+        local_badcases: list[dict[str, Any]] = []
+        retrieval_result = None
+        retrieval_row = None
+        retrieved_ids: list[str] = []
+        retrieval_ms: float | None = None
+        model_row = None
+        model_ms: float | None = None
+        evidence_sources: list[Any] = []
+        evidence_gate: dict[str, Any] = {
+            "enabled": retrieval_profile.evidence_gate_enabled,
+            "candidate_count": 0,
+            "selected_chunk_ids": [],
+            "selected_count": 0,
+            "passed": False,
+        }
 
-            retrieval_result = None
-            retrieval_row = None
-            retrieved_ids: list[str] = []
-            retrieval_ms = 0.0
+        with Session(prepared.engine) as session:
+            vector_backend = PgVectorSearchBackend(
+                session,
+                embedding_provider,
+                min_score=settings.rag_vector_min_score,
+                allowed_document_ids=retrieval_profile.allowed_document_ids,
+            )
+            retriever = HybridRetriever(
+                KeywordRetriever(
+                    knowledge_snapshot,
+                    scoring_strategy=retrieval_profile.keyword_scoring_strategy,
+                    bm25_index=bm25_index,
+                ),
+                knowledge_snapshot,
+                vector_enabled=True,
+                vector_backend=vector_backend,
+                candidate_limit=retrieval_profile.candidate_limit,
+                rerank_enabled=retrieval_profile.rerank_enabled,
+                dedupe_enabled=retrieval_profile.dedupe_enabled,
+                relevance_filter_enabled=retrieval_profile.relevance_filter_enabled,
+                document_head_enabled=retrieval_profile.document_head_enabled,
+            )
             if flow["should_call_rag"]:
                 retrieval_started = time.perf_counter()
                 retrieval_result = retriever.retrieve(
@@ -994,15 +1248,13 @@ def run_full_eval(
                     )
                 )
                 retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
-                retrieval_latencies.append(retrieval_ms)
                 retrieval_row = _retrieval_row(query, retrieval_result, retrieval_ms)
-                retrieval_rows.append(retrieval_row)
                 retrieved_ids = list(retrieval_row["retrieved_chunk_ids"])
                 if (
                     query["retrieval_gold"]["relevant_chunk_ids"]
                     and retrieval_row["recall_at_10"] < 1.0
                 ):
-                    badcases.append(
+                    local_badcases.append(
                         {
                             "query_id": query["query_id"],
                             "base_case_id": query["base_case_id"],
@@ -1014,7 +1266,7 @@ def run_full_eval(
                     query["retrieval_gold"]["relevant_chunk_ids"]
                     and retrieval_row["recall_at_5"] < 1.0
                 ):
-                    badcases.append(
+                    local_badcases.append(
                         {
                             "query_id": query["query_id"],
                             "base_case_id": query["base_case_id"],
@@ -1026,7 +1278,7 @@ def run_full_eval(
                     not query["retrieval_gold"]["relevant_chunk_ids"]
                     and not retrieval_row["no_answer_correct"]
                 ):
-                    badcases.append(
+                    local_badcases.append(
                         {
                             "query_id": query["query_id"],
                             "base_case_id": query["base_case_id"],
@@ -1035,7 +1287,7 @@ def run_full_eval(
                         }
                     )
                 if retrieval_row["stale_hit_chunk_ids"]:
-                    badcases.append(
+                    local_badcases.append(
                         {
                             "query_id": query["query_id"],
                             "base_case_id": query["base_case_id"],
@@ -1069,115 +1321,156 @@ def run_full_eval(
                     "passed": bool(evidence_sources),
                 }
 
-            model_row = None
-            if flow["should_call_main_llm"] and not retrieval_only:
-                source_dicts = [
-                    source.model_dump(mode="json") for source in evidence_sources
-                ]
-                system_prompt, user_prompt = _build_prompt(
-                    query,
-                    source_dicts,
-                    minimal_citation=retrieval_profile.evidence_gate_enabled,
-                )
-                request = ModelCallRequest(
-                    run_id=f"{DATASET_VERSION}-full-{query['query_id']}",
-                    task_id=query["base_case_id"],
-                    member_id=query["protected_slots"]["member_id"],
-                    purpose="synthetic_rag_full_eval",
-                    messages=(
-                        ModelMessage(role="system", content=system_prompt),
-                        ModelMessage(role="user", content=user_prompt),
+
+        ragas_input = None
+        if flow["should_call_main_llm"] and not retrieval_only:
+            source_dicts = [
+                source.model_dump(mode="json") for source in evidence_sources
+            ]
+            system_prompt, user_prompt = _build_prompt(
+                query,
+                source_dicts,
+                minimal_citation=retrieval_profile.evidence_gate_enabled,
+                faithfulness_prompt_enabled=(
+                    retrieval_profile.name in {"m5-faithfulness-prompt", "m5-optimized"}
+                ),
+            )
+            request = ModelCallRequest(
+                run_id=f"{DATASET_VERSION}-full-{query['query_id']}",
+                task_id=query["base_case_id"],
+                member_id=query["protected_slots"]["member_id"],
+                purpose="synthetic_rag_full_eval",
+                messages=(
+                    ModelMessage(role="system", content=system_prompt),
+                    ModelMessage(role="user", content=user_prompt),
+                ),
+                temperature=0.0,
+                max_output_tokens=retrieval_profile.max_output_tokens,
+            )
+            model_started = time.perf_counter()
+            model_result = worker_gateway().invoke(request, SyntheticAnswer)
+            model_ms = (time.perf_counter() - model_started) * 1000
+            model_row = _answer_row(
+                query,
+                result=model_result,
+                retrieved_ids=retrieved_ids,
+                model_ms=model_ms,
+            )
+            if (
+                flow["should_call_rag"]
+                and query["answer_gold"]["expected_response_type"] == "grounded_answer"
+                and model_result.output is not None
+            ):
+                ragas_input = (
+                    {
+                        "query_id": query["query_id"],
+                        "base_case_id": query["base_case_id"],
+                        "split": query["split"],
+                        "retrieved_chunk_ids": [
+                            source.chunk_id for source in evidence_sources
+                        ],
+                    },
+                    RagasGenerationEvalInput(
+                        user_input=query["user_input"],
+                        response=model_result.output.answer,
+                        retrieved_contexts=tuple(
+                            source.content for source in evidence_sources
+                        ),
+                        reference=_ragas_reference(query),
                     ),
-                    temperature=0.0,
-                    max_output_tokens=retrieval_profile.max_output_tokens,
                 )
-                model_started = time.perf_counter()
-                model_result = gateway.invoke(request, SyntheticAnswer)
-                model_ms = (time.perf_counter() - model_started) * 1000
-                model_latencies.append(model_ms)
-                model_row = _answer_row(
-                    query,
-                    result=model_result,
-                    retrieved_ids=retrieved_ids,
-                    model_ms=model_ms,
+            if (
+                flow["should_call_rag"]
+                and not model_row["source_bound_answer_correct"]
+            ):
+                local_badcases.append(
+                    {
+                        "query_id": query["query_id"],
+                        "base_case_id": query["base_case_id"],
+                        "category": "ANSWER_SOURCE_BINDING_FAILURE",
+                        "details": model_row,
+                    }
                 )
-                answer_rows.append(model_row)
-                if flow["should_call_rag"] and model_result.output is not None:
-                    ragas_inputs.append(
-                        (
-                            {
-                                "query_id": query["query_id"],
-                                "base_case_id": query["base_case_id"],
-                                "split": query["split"],
-                                "retrieved_chunk_ids": [
-                                    source.chunk_id for source in evidence_sources
-                                ],
-                            },
-                            RagasGenerationEvalInput(
-                                user_input=query["user_input"],
-                                response=model_result.output.answer,
-                                retrieved_contexts=tuple(
-                                    source.content for source in evidence_sources
-                                ),
-                                reference=_ragas_reference(query),
-                            ),
-                        )
-                    )
-                if (
-                    flow["should_call_rag"]
-                    and not model_row["source_bound_answer_correct"]
-                ):
-                    badcases.append(
-                        {
-                            "query_id": query["query_id"],
-                            "base_case_id": query["base_case_id"],
-                            "category": "ANSWER_SOURCE_BINDING_FAILURE",
-                            "details": model_row,
-                        }
-                    )
-                if not model_row["success"]:
-                    badcases.append(
-                        {
-                            "query_id": query["query_id"],
-                            "base_case_id": query["base_case_id"],
-                            "category": "MODEL_CALL_FAILURE",
-                            "details": model_row,
-                        }
-                    )
-
-            evaluation_started = time.perf_counter()
-            evaluation_ms = (time.perf_counter() - evaluation_started) * 1000
-            evaluation_latencies.append(evaluation_ms)
-            total_ms = (time.perf_counter() - query_started) * 1000
-            query_row = {
-                "query_id": query["query_id"],
-                "base_case_id": query["base_case_id"],
-                "split": query["split"],
-                "variant_type": query["variant_type"],
-                "case_type": query["case_type"],
-                "expected_route": entry_action,
-                "model_invoked": bool(flow["should_call_main_llm"]),
-                "rag_invoked": bool(flow["should_call_rag"]),
-                "entry_latency_ms": round(entry_ms, 3),
-                "retrieval_latency_ms": round(retrieval_ms, 3) if retrieval_result else None,
-                "model_latency_ms": model_row["latency_ms"] if model_row else None,
-                "evaluation_latency_ms": round(evaluation_ms, 3),
-                "end_to_end_latency_ms": round(total_ms, 3),
-                "retrieval": retrieval_row,
-                "evidence_gate": evidence_gate,
-                "answer": model_row,
-            }
-            query_rows.append(query_row)
-            if index == 1 or index % 10 == 0 or index == len(selected):
-                print(
-                    f"[{index}/{len(selected)}] {query['query_id']} "
-                    f"rag={'Y' if flow['should_call_rag'] else 'N'} "
-                    f"llm={'Y' if flow['should_call_main_llm'] and not retrieval_only else 'N'} "
-                    f"total_ms={total_ms:.1f}",
-                    flush=True,
+            if not model_row["success"]:
+                local_badcases.append(
+                    {
+                        "query_id": query["query_id"],
+                        "base_case_id": query["base_case_id"],
+                        "category": "MODEL_CALL_FAILURE",
+                        "details": model_row,
+                    }
                 )
 
-    if gateway is not None:
+        evaluation_started = time.perf_counter()
+        evaluation_ms = (time.perf_counter() - evaluation_started) * 1000
+        total_ms = (time.perf_counter() - query_started) * 1000
+        query_row = {
+            "query_id": query["query_id"],
+            "base_case_id": query["base_case_id"],
+            "split": query["split"],
+            "variant_type": query["variant_type"],
+            "case_type": query["case_type"],
+            "expected_route": entry_action,
+            "model_invoked": bool(flow["should_call_main_llm"]),
+            "rag_invoked": bool(flow["should_call_rag"]),
+            "entry_latency_ms": round(entry_ms, 3),
+            "retrieval_latency_ms": (
+                round(retrieval_ms, 3) if retrieval_ms is not None else None
+            ),
+            "model_latency_ms": model_row["latency_ms"] if model_row else None,
+            "evaluation_latency_ms": round(evaluation_ms, 3),
+            "end_to_end_latency_ms": round(total_ms, 3),
+            "retrieval": retrieval_row,
+            "evidence_gate": evidence_gate,
+            "answer": model_row,
+        }
+        return QueryEvaluation(
+            retrieval_row=retrieval_row,
+            answer_row=model_row,
+            query_row=query_row,
+            badcases=tuple(local_badcases),
+            ragas_input=ragas_input,
+            entry_latency_ms=entry_ms,
+            retrieval_latency_ms=retrieval_ms,
+            model_latency_ms=model_ms,
+            evaluation_latency_ms=evaluation_ms,
+        )
+
+    # The ordered mapper retains frozen input order even when workers finish
+    # out of order. This makes JSONL output, metrics and badcase ordering stable.
+    evaluations = _ordered_parallel_map(
+        selected,
+        evaluate_one,
+        concurrency=concurrency,
+    )
+
+    for index, (query, result) in enumerate(
+        zip(selected, evaluations, strict=True), start=1
+    ):
+        if result.retrieval_row is not None:
+            retrieval_rows.append(result.retrieval_row)
+        if result.answer_row is not None:
+            answer_rows.append(result.answer_row)
+        query_rows.append(result.query_row)
+        badcases.extend(result.badcases)
+        if result.ragas_input is not None:
+            ragas_inputs.append(result.ragas_input)
+        entry_latencies.append(result.entry_latency_ms)
+        if result.retrieval_latency_ms is not None:
+            retrieval_latencies.append(result.retrieval_latency_ms)
+        if result.model_latency_ms is not None:
+            model_latencies.append(result.model_latency_ms)
+        evaluation_latencies.append(result.evaluation_latency_ms)
+        if index == 1 or index % 10 == 0 or index == len(selected):
+            print(
+                f"[{index}/{len(selected)}] {query['query_id']} "
+                f"rag={'Y' if query['expected_flow']['should_call_rag'] else 'N'} "
+                f"llm={'Y' if query['expected_flow']['should_call_main_llm'] and not retrieval_only else 'N'} "
+                f"total_ms={result.query_row['end_to_end_latency_ms']:.1f}",
+                flush=True,
+            )
+
+    for gateway in gateways:
         gateway.close()
     prepared.engine.dispose()
 
@@ -1221,6 +1514,7 @@ def run_full_eval(
         },
         "configuration": {
             "evaluation_mode": "retrieval_only" if retrieval_only else "full_chain",
+            "query_concurrency": concurrency,
             "retrieval_profile": retrieval_profile.as_dict(),
             "model_provider": settings.model_provider,
             "model_name": settings.model_name,
@@ -1229,7 +1523,7 @@ def run_full_eval(
             "embedding_dimension": settings.rag_embedding_dimensions,
             "embedding_device": settings.rag_embedding_device,
             "embedding_schema_version": "rag-embedding-v1",
-            "retrieval_mode": "hybrid",
+            "retrieval_mode": "bm25+vector_rrf",
             "retrieval_top_k": RETRIEVAL_TOP_K,
             "answer_context_top_k": CONTEXT_TOP_K,
             "hnsw_index_name": HNSW_INDEX_NAME,
@@ -1253,6 +1547,9 @@ def run_full_eval(
             "recall_at_3": round(statistics.mean(row["recall_at_3"] for row in rag_recall_rows), 4) if rag_recall_rows else None,
             "recall_at_5": round(statistics.mean(row["recall_at_5"] for row in rag_recall_rows), 4) if rag_recall_rows else None,
             "recall_at_10": round(statistics.mean(row["recall_at_10"] for row in rag_recall_rows), 4) if rag_recall_rows else None,
+            "precision_at_3": round(statistics.mean(row["precision_at_3"] for row in rag_recall_rows), 4) if rag_recall_rows else None,
+            "precision_at_5": round(statistics.mean(row["precision_at_5"] for row in rag_recall_rows), 4) if rag_recall_rows else None,
+            "precision_at_10": round(statistics.mean(row["precision_at_10"] for row in rag_recall_rows), 4) if rag_recall_rows else None,
             "mrr_at_10": round(statistics.mean(row["mrr_at_10"] for row in retrieval_rows), 4) if retrieval_rows else None,
             "ndcg_at_10": round(statistics.mean(row["ndcg_at_10"] for row in rag_recall_rows), 4) if rag_recall_rows else None,
             "no_answer_accuracy": _ratio(sum(row["no_answer_correct"] for row in no_answer_rows), len(no_answer_rows)),
@@ -1365,6 +1662,25 @@ def main() -> int:
         action="store_true",
         help="run all selected RAG queries without invoking the LLM",
     )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=4,
+        choices=range(1, 17),
+        metavar="1-16",
+        help=(
+            "Bounded parallel Query workers. Each worker owns its PostgreSQL "
+            "Session and ModelGateway; JSONL output remains in dataset order."
+        ),
+    )
+    parser.add_argument(
+        "--reuse-index",
+        action="store_true",
+        help=(
+            "reuse the isolated HNSW corpus only when frozen document/chunk IDs, "
+            "versions and embedding model exactly match; otherwise rebuild it"
+        ),
+    )
     args = parser.parse_args()
     result = run_full_eval(
         fixture_root=args.fixture_root.resolve(),
@@ -1375,6 +1691,8 @@ def main() -> int:
         split=args.split,
         profile_name=args.profile,
         retrieval_only=args.retrieval_only,
+        concurrency=args.concurrency,
+        reuse_index=args.reuse_index,
     )
     print(
         json.dumps(

@@ -1,19 +1,29 @@
 from types import SimpleNamespace
+from threading import Lock, get_ident
+import time
 
 from app.agent.model_gateway_schemas import ModelCallTrace, ModelProviderAttemptTrace
 from app.rag.retrieval_schemas import RetrievedChunk
 from app.rag.retriever import (
+    Bm25CorpusIndex,
     _dedupe_sources,
+    _filter_irrelevant_sources,
+    _promote_document_head_sources,
     _rerank_sources,
     select_minimal_evidence_sources,
 )
 from scripts.rag_synthetic_eval import generate_corpus, generate_dataset
 from scripts.run_synthetic_rag_full_eval import (
+    FrozenKnowledgeSnapshot,
+    LockedEmbeddingProvider,
     SyntheticAnswer,
+    _ordered_parallel_map,
     _answer_row,
+    _build_prompt,
     _retrieval_row,
     resolve_retrieval_profile,
 )
+from app.rag.embedding_provider import DeterministicHashEmbeddingProvider
 
 
 def _successful_trace(query_id: str) -> ModelCallTrace:
@@ -94,6 +104,22 @@ def test_full_eval_answer_score_flags_non_gold_citation() -> None:
     assert row["unsupported_citation_ids"] == ["syn-rag-v1-chunk-999999"]
 
 
+def test_faithfulness_prompt_allows_current_version_fact_after_filtering() -> None:
+    corpus = generate_corpus(20260807)
+    dataset = generate_dataset(corpus, 20260807)
+    query = next(query for query in dataset.queries if query["case_type"] == "stale_version")
+
+    system, _ = _build_prompt(
+        query,
+        [],
+        minimal_citation=True,
+        faithfulness_prompt_enabled=True,
+    )
+
+    assert "已经由检索层过滤为活动版本" in system
+    assert "不要仅因正文没有逐字重复“现行要求”而选择 no_answer" in system
+
+
 def _retrieved_chunk(
     chunk_id: str,
     *,
@@ -145,6 +171,17 @@ def test_m2_profile_filters_to_active_documents() -> None:
     assert dedupe_profile.candidate_limit is None
     assert dedupe_profile.dedupe_enabled is True
 
+    hybrid_profile = resolve_retrieval_profile("m5-hybrid-rerank", corpus)
+    assert hybrid_profile.keyword_scoring_strategy == "bm25"
+    assert hybrid_profile.candidate_limit == 20
+    assert hybrid_profile.rerank_enabled is True
+    assert hybrid_profile.dedupe_enabled is True
+    assert hybrid_profile.relevance_filter_enabled is True
+
+    prompt_profile = resolve_retrieval_profile("m5-faithfulness-prompt", corpus)
+    assert prompt_profile.rerank_enabled is False
+    assert prompt_profile.evidence_gate_enabled is True
+
 
 def test_m2_rerank_promotes_query_entity_without_gold() -> None:
     generic = _retrieved_chunk(
@@ -163,6 +200,33 @@ def test_m2_rerank_promotes_query_entity_without_gold() -> None:
     ranked = _rerank_sources("请说明 SYN-BUSINESS-01 的处理要求", [generic, exact])
 
     assert [source.chunk_id for source in ranked] == ["chunk-exact", "chunk-generic"]
+
+
+def test_bm25_snapshot_index_is_reused_for_filtered_records() -> None:
+    corpus = generate_corpus(20260807)
+    records = [
+        SimpleNamespace(
+            chunk_id=chunk["chunk_id"],
+            document_id=chunk["document_id"],
+            document_version="1.0",
+            chunk_version=chunk["chunk_version"],
+            title="测试规则",
+            category="test",
+            source="synthetic:test",
+            safety_level="test_only",
+            document_content="",
+            chunk_index=chunk["chunk_index"],
+            chunk_content=chunk["content"],
+            keywords=tuple(chunk["keywords"]),
+        )
+        for chunk in corpus.chunks[:20]
+    ]
+    index = Bm25CorpusIndex.build(records)
+
+    scored = index.score("SYN-BUSINESS-01", records)
+
+    assert scored
+    assert scored[0][0].chunk_id == records[0].chunk_id
 
 
 def test_m2_dedupe_removes_exact_adjacent_duplicate_only() -> None:
@@ -192,7 +256,69 @@ def test_m2_dedupe_removes_exact_adjacent_duplicate_only() -> None:
 
     assert [source.chunk_id for source in deduped] == [
         "chunk-original",
+        "chunk-duplicate",
         "chunk-complementary",
+    ]
+
+
+def test_relevance_filter_removes_other_explicit_entity_without_gold() -> None:
+    wrong = _retrieved_chunk(
+        "chunk-wrong",
+        chunk_index=0,
+        content="测试规则 SYN-SAFETY-01 的当前要求。",
+        rrf_score=0.05,
+    )
+    exact = _retrieved_chunk(
+        "chunk-exact",
+        chunk_index=1,
+        content="测试规则 SYN-DRUG-01 的当前要求。",
+        rrf_score=0.04,
+    )
+
+    filtered = _filter_irrelevant_sources(
+        "请说明 SYN-DRUG-01 的处理要求",
+        [wrong, exact],
+    )
+
+    assert [source.chunk_id for source in filtered] == ["chunk-exact"]
+
+
+def test_document_head_promotion_prefers_requested_evidence_roles() -> None:
+    tail = _retrieved_chunk(
+        "chunk-tail",
+        chunk_index=5,
+        content="SYN-DRUG-01 的后续相似说明。",
+        rrf_score=0.06,
+    )
+    head = _retrieved_chunk(
+        "chunk-head",
+        chunk_index=0,
+        content="SYN-DRUG-01 的当前处理要求。",
+        rrf_score=0.04,
+    )
+    step = _retrieved_chunk(
+        "chunk-step",
+        chunk_index=3,
+        content="处理步骤：SYN-DRUG-01 先完成作用域检查，再读取必要证据。",
+        rrf_score=0.03,
+    )
+    exception = _retrieved_chunk(
+        "chunk-exception",
+        chunk_index=7,
+        content="例外路径：SYN-DRUG-01 在信息不足或来源冲突时请求补充信息。",
+        rrf_score=0.03,
+    )
+
+    promoted = _promote_document_head_sources(
+        "请综合 SYN-DRUG-01 的步骤和例外条件",
+        [tail, head, exception, step],
+    )
+
+    assert [source.chunk_id for source in promoted] == [
+        "chunk-step",
+        "chunk-exception",
+        "chunk-tail",
+        "chunk-head",
     ]
 
 
@@ -243,6 +369,37 @@ def test_m3_evidence_gate_filters_wrong_entity_and_limits_context() -> None:
     assert missing == []
 
 
+def test_evidence_gate_selects_one_source_per_requested_role() -> None:
+    head = _retrieved_chunk(
+        "chunk-head",
+        chunk_index=0,
+        content="SYN-DRUG-01 的当前处理要求。",
+        rrf_score=0.05,
+    )
+    exception = _retrieved_chunk(
+        "chunk-exception",
+        chunk_index=7,
+        content="SYN-DRUG-01 的例外条件是信息不足或来源冲突时请求补充信息。",
+        rrf_score=0.03,
+    )
+    step = _retrieved_chunk(
+        "chunk-step",
+        chunk_index=3,
+        content="SYN-DRUG-01 的处理步骤是先完成作用域检查，再读取必要证据。",
+        rrf_score=0.02,
+    )
+
+    selected = select_minimal_evidence_sources(
+        "请综合说明 SYN-DRUG-01 的处理步骤和例外条件",
+        [head, exception, step],
+    )
+
+    assert [source.chunk_id for source in selected] == [
+        "chunk-step",
+        "chunk-exception",
+    ]
+
+
 def test_m4_profile_enables_only_run_scoped_snapshot_cache() -> None:
     corpus = generate_corpus(20260807)
     profile = resolve_retrieval_profile("m4-snapshot-cache", corpus)
@@ -286,5 +443,47 @@ def test_retrieval_row_reports_binary_ndcg_for_frozen_chunk_gold() -> None:
     row = _retrieval_row(query, result, retrieval_ms=1.0)
 
     assert row["recall_at_3"] == 1.0
+    assert row["precision_at_3"] == 0.6667
     assert row["mrr_at_10"] == 0.5
     assert row["ndcg_at_10"] == 0.6934
+
+
+def test_parallel_rag_helpers_preserve_snapshot_and_embedding_contract() -> None:
+    corpus = generate_corpus(20260807)
+    records = [
+        SimpleNamespace(chunk_id="chunk-a", document_id="doc-a"),
+        SimpleNamespace(chunk_id="chunk-b", document_id="doc-b"),
+    ]
+    snapshot = FrozenKnowledgeSnapshot(records)
+    assert [record.chunk_id for record in snapshot.list_records()] == [
+        "chunk-a",
+        "chunk-b",
+    ]
+    assert list(snapshot.records_by_chunk_ids(["chunk-b", "missing"])) == ["chunk-b"]
+
+    provider = LockedEmbeddingProvider(
+        DeterministicHashEmbeddingProvider(model_name="test", dimension=512)
+    )
+    assert len(provider.embed_query(corpus.documents[0]["title"])) == 512
+
+
+def test_parallel_rag_mapper_runs_workers_concurrently_and_preserves_order() -> None:
+    active = 0
+    maximum = 0
+    lock = Lock()
+    thread_ids: set[int] = set()
+
+    def worker(value: int) -> int:
+        nonlocal active, maximum
+        with lock:
+            active += 1
+            maximum = max(maximum, active)
+            thread_ids.add(get_ident())
+        time.sleep(0.02)
+        with lock:
+            active -= 1
+        return value * 2
+
+    assert _ordered_parallel_map([1, 2, 3, 4], worker, concurrency=4) == [2, 4, 6, 8]
+    assert maximum > 1
+    assert len(thread_ids) > 1

@@ -18,9 +18,10 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 from uuid import UUID, uuid5
 
 from app.agent.final_claim_schemas import AnswerEnvelope
@@ -107,6 +108,7 @@ class SyntheticProjectionExecutor:
                 ToolCallTrace(
                     tool_name=tool_name,
                     member_id=query.expected_member_id,
+                    tool_input=self._projected_tool_input(query, index),
                     source_id=source_id,
                     source_name=f"synthetic:{tool_name}",
                     success=source_id is not None,
@@ -235,6 +237,7 @@ class SyntheticProjectionExecutor:
             observed_governance_steps=tuple(gold.expected_governance_steps),
             observed_governance_edges=tuple(gold.expected_governance_edges),
             observed_tool_names=tuple(query.expected_required_tools),
+            observed_blocked=gold.expected_blocked,
             observed_source_ids=expected_sources,
             observed_rag_source_ids=tuple(rag.source_id for rag in rag_traces),
             observed_database_changes=tuple(gold.expected_database_changes),
@@ -247,6 +250,17 @@ class SyntheticProjectionExecutor:
             foreign_member_ids=(),
             cleanup_succeeded=False,
         )
+
+    @staticmethod
+    def _projected_tool_input(query: EvalQueryVariant, index: int) -> dict[str, object]:
+        if index >= len(query.expected_tool_invocations):
+            return {}
+        expected = query.expected_tool_invocations[index]
+        payload = dict(expected.exact_parameters)
+        for key, rule in expected.parameter_rules.items():
+            if rule.get("match") == "non_empty_semantic_query":
+                payload[key] = query.user_input
+        return payload
 
     @staticmethod
     def _source_owners(world: EvalWorldState) -> dict[str, str]:
@@ -268,11 +282,16 @@ class V2EvalRunner:
         materializer: V2Materializer | None = None,
         graders: V2DeterministicGraders | None = None,
         executor: V2RunExecutor | None = None,
+        dataset_loader: Callable[..., tuple[
+            V2WorldStateDataset, V2QueryDataset, V2BenchmarkManifest
+        ]] = load_v2_benchmark,
     ) -> None:
         self.project_root = project_root or Path(__file__).resolve().parents[3]
         self.materializer = materializer or WorldStateMaterializer()
         self.graders = graders or V2DeterministicGraders()
         self.executor = executor or SyntheticProjectionExecutor()
+        self.dataset_loader = dataset_loader
+        self._automatic_gold_mode = False
 
     def run(self, options: V2RunnerOptions | None = None) -> V2EvalReport:
         options = options or V2RunnerOptions()
@@ -288,17 +307,38 @@ class V2EvalRunner:
             raise V2BenchmarkDataError(
                 "integration mode cannot use SyntheticProjectionExecutor"
             )
-        worlds, queries, manifest = load_v2_benchmark(project_root=self.project_root)
+        worlds, queries, manifest = self.dataset_loader(project_root=self.project_root)
+        self._automatic_gold_mode = (
+            manifest.dataset_version == "internet-hospital-agent-eval-v1"
+        )
         self._ensure_review_gate(worlds, queries, manifest, options)
         selected = self._select_queries(queries, options)
         world_by_id = {world.world_state_id: world for world in worlds.world_states}
-        results: list[V2CaseEvaluation] = []
-        for query in selected:
+        def run_query_group(query: EvalQueryVariant) -> list[V2CaseEvaluation]:
             world = world_by_id[query.world_state_id]
-            for repeat_index in range(options.repeat):
-                results.append(self._run_one(world, query, repeat_index))
+            # The materializer namespace is intentionally derived from query_id.
+            # Keep repeats of one query serial while other independent Query
+            # groups use their own PostgreSQL transaction/session in parallel.
+            return [
+                self._run_one(world, query, repeat_index)
+                for repeat_index in range(options.repeat)
+            ]
+
+        if options.concurrency == 1 or len(selected) <= 1:
+            grouped_results = [run_query_group(query) for query in selected]
+        else:
+            with ThreadPoolExecutor(
+                max_workers=min(options.concurrency, len(selected)),
+                thread_name_prefix="agent-eval",
+            ) as pool:
+                # executor.map preserves selected Query order even though work
+                # completes out of order, which keeps reports and hashes stable.
+                grouped_results = list(pool.map(run_query_group, selected))
+        results = [item for group in grouped_results for item in group]
         status = (
-            "preview"
+            "completed"
+            if manifest.dataset_version == "internet-hospital-agent-eval-v1"
+            else "preview"
             if worlds.review_status == "pending_review"
             else "completed"
         )
@@ -311,11 +351,19 @@ class V2EvalRunner:
             generated_at=datetime.now(timezone.utc),
             sample_count=len(results),
             case_results=tuple(results),
-            metrics=self._metrics(results, status=status),
+            metrics=self._metrics(
+                results,
+                status=status,
+                unified=manifest.dataset_version == "internet-hospital-agent-eval-v1",
+            ),
             failure_counts=self._failure_counts(results),
             world_states_sha256=manifest.world_states_sha256,
             queries_sha256=manifest.queries_sha256,
-            notes=self._report_notes(options.runner_mode),
+            notes=self._report_notes(
+                options.runner_mode,
+                unified=manifest.dataset_version == "internet-hospital-agent-eval-v1",
+                concurrency=options.concurrency,
+            ),
         )
         return report
 
@@ -324,8 +372,13 @@ class V2EvalRunner:
     ) -> tuple[Path, Path]:
         output_dir.mkdir(parents=True, exist_ok=True)
         suffix = "preview" if report.runner_mode == "synthetic_projection" else "integration"
-        json_path = output_dir / f"agent_eval_report.v2.{suffix}.json"
-        markdown_path = output_dir / f"agent_eval_report.v2.{suffix}.md"
+        dataset_label = (
+            "unified"
+            if report.dataset_version == "internet-hospital-agent-eval-v1"
+            else "v2"
+        )
+        json_path = output_dir / f"agent_eval_report.{dataset_label}.{suffix}.json"
+        markdown_path = output_dir / f"agent_eval_report.{dataset_label}.{suffix}.md"
         json_path.write_text(
             json.dumps(report.model_dump(mode="json"), ensure_ascii=False, indent=2)
             + "\n",
@@ -337,7 +390,9 @@ class V2EvalRunner:
     @staticmethod
     def render_markdown(report: V2EvalReport) -> str:
         title = (
-            "# 4D-B2.5 v2 Evaluation Report"
+            "# Unified Agent Evaluation Report"
+            if report.dataset_version == "internet-hospital-agent-eval-v1"
+            else "# 4D-B2.5 v2 Evaluation Report"
             if report.runner_mode == "synthetic_projection"
             else "# 4D-B2.6 v2 Integration Evaluation Report"
         )
@@ -404,6 +459,32 @@ class V2EvalRunner:
                     for reason in grade.failure_reasons
                 )
             )
+            tool_grade = next(grade for grade in grades if grade.grader == "tool")
+            route_grade = next(grade for grade in grades if grade.grader == "route")
+            claim_grade = next(grade for grade in grades if grade.grader == "claim")
+            rag_grade = next(grade for grade in grades if grade.grader == "rag")
+            safety_grade = next(grade for grade in grades if grade.grader == "safety")
+            expected_tools = set(tool_grade.details.get("expected_tools", ()))
+            observed_tools = set(tool_grade.details.get("observed_tools", ()))
+            tool_call_correct = (
+                expected_tools == observed_tools
+                and "tool.trace_set_mismatch" not in tool_grade.failure_reasons
+            )
+            tool_parameter_correct = bool(
+                tool_grade.details.get("parameter_match", False)
+            )
+            parameter_details = tuple(
+                item
+                for item in tool_grade.details.get("parameter_details", ())
+                if isinstance(item, dict)
+            )
+            matched_parameter_call_count = sum(
+                bool(item.get("call_present")) for item in parameter_details
+            )
+            correct_parameter_call_count = sum(
+                bool(item.get("call_present")) and bool(item.get("matched"))
+                for item in parameter_details
+            )
             cleanup_receipt = self.materializer.cleanup(materialized)
             cleanup_succeeded = cleanup_receipt.cleanup_succeeded
             if not cleanup_succeeded:
@@ -416,14 +497,32 @@ class V2EvalRunner:
                 dataset_split=query.dataset_split,
                 run_id=artifacts.run_trace.run_id,
                 task_success=not failure_reasons,
+                intent_correct=(
+                    route_grade.details.get("observed_intent")
+                    == route_grade.details.get("expected_intent")
+                ),
+                route_correct=(
+                    route_grade.details.get("observed_route")
+                    == route_grade.details.get("expected_route")
+                ),
+                tool_call_correct=tool_call_correct,
+                tool_parameter_correct=tool_parameter_correct,
+                matched_parameter_call_count=matched_parameter_call_count,
+                correct_parameter_call_count=correct_parameter_call_count,
+                final_answer_correct=(
+                    claim_grade.passed and rag_grade.passed and safety_grade.passed
+                ),
+                expected_blocked=query.expected_blocked,
+                observed_blocked=artifacts.observed_blocked,
+                tool_calls=artifacts.run_trace.tool_calls,
                 layer_grades=grades,
                 failure_reasons=failure_reasons,
                 latency_ms=artifacts.run_trace.latency_ms,
                 materialization_backend=cleanup_receipt.backend,
                 cleanup_succeeded=cleanup_succeeded,
                 review_status=(
-                    "pending_review"
-                    if world.dataset_split in {"development", "validation", "holdout"}
+                    "automatic_gold"
+                    if self._automatic_gold_mode
                     else "pending_review"
                 ),
             )
@@ -432,16 +531,35 @@ class V2EvalRunner:
                 self.materializer.cleanup(materialized)
 
     @staticmethod
-    def _report_notes(runner_mode: str) -> tuple[str, ...]:
+    def _report_notes(
+        runner_mode: str, *, unified: bool = False, concurrency: int = 1
+    ) -> tuple[str, ...]:
+        concurrency_note = (
+            "independent Query groups use bounded concurrency="
+            f"{concurrency}; each Query keeps its own materialization, "
+            "transaction and deterministic result order"
+        )
+        if unified and runner_mode == "integration":
+            return (
+                "integration mode executes UnifiedHealthGraph inside isolated "
+                "PostgreSQL transactions",
+                "the unified dataset is synthetic, test-only and intentionally "
+                "has no manual review gate",
+                concurrency_note,
+                "completed means all selected Queries ran; it is not clinical "
+                "evidence or a production SLO",
+            )
         if runner_mode == "integration":
             return (
                 "integration mode executes the UnifiedHealthGraph inside a PostgreSQL transaction",
                 "Provider and RAG observations must come from the configured runtime adapters",
                 "reviewed WorldState data and a successful cleanup are required before formal metrics",
+                concurrency_note,
             )
         return (
             "synthetic_projection does not call PostgreSQL, Provider, RAG or LLM",
             "preview metrics are pipeline checks, not final resume metrics",
+            concurrency_note,
         )
 
     @staticmethod
@@ -451,6 +569,12 @@ class V2EvalRunner:
         manifest: V2BenchmarkManifest,
         options: V2RunnerOptions,
     ) -> None:
+        # ``internet-hospital-agent-eval-v1`` is the single synthetic test
+        # dataset. Its Gold labels are generated from frozen business state,
+        # so running it must never require a manual review switch. Keep the
+        # old review gate only for the shelved legacy v2 fixtures.
+        if manifest.dataset_version == "internet-hospital-agent-eval-v1":
+            return
         if worlds.review_status != queries.review_status:
             raise V2BenchmarkDataError("WorldState and Query review status mismatch")
         if manifest.review_status != worlds.review_status:
@@ -499,11 +623,13 @@ class V2EvalRunner:
 
     @staticmethod
     def _metrics(
-        results: list[V2CaseEvaluation], *, status: str
+        results: list[V2CaseEvaluation], *, status: str, unified: bool = False
     ) -> tuple[V2Metric, ...]:
         sample_count = len(results)
         if not sample_count:
             return ()
+        if unified:
+            return V2EvalRunner._unified_metrics(results, status=status)
         metrics: list[V2Metric] = [
             V2Metric(
                 name="task_success_rate",
@@ -521,7 +647,11 @@ class V2EvalRunner:
             ),
             V2Metric(
                 name="p95_latency_ms",
-                value=float(V2EvalRunner._percentile([result.latency_ms for result in results], 0.95)),
+                value=float(
+                    V2EvalRunner._percentile(
+                        [result.latency_ms for result in results], 0.95
+                    )
+                ),
                 sample_count=sample_count,
                 status=status,  # type: ignore[arg-type]
                 note="nearest-rank percentile of synthetic trace latency",
@@ -545,6 +675,102 @@ class V2EvalRunner:
                 )
             )
         return tuple(metrics)
+
+    @staticmethod
+    def _unified_metrics(
+        results: list[V2CaseEvaluation], *, status: str
+    ) -> tuple[V2Metric, ...]:
+        sample_count = len(results)
+        latencies = [result.latency_ms for result in results]
+        high_risk = [result for result in results if result.expected_blocked]
+        ordinary = [result for result in results if not result.expected_blocked]
+        matched_parameter_calls = sum(
+            item.matched_parameter_call_count for item in results
+        )
+        correct_parameter_calls = sum(
+            item.correct_parameter_call_count for item in results
+        )
+
+        def ratio(name: str, passed: int, total: int, note: str) -> V2Metric:
+            return V2Metric(
+                name=name,
+                value=passed / total if total else 0.0,
+                sample_count=total,
+                status=status,  # type: ignore[arg-type]
+                note=note,
+            )
+
+        return (
+            ratio(
+                "intent_accuracy",
+                sum(item.intent_correct for item in results),
+                sample_count,
+                "observed intent exact match against unified Gold",
+            ),
+            ratio(
+                "route_accuracy",
+                sum(item.route_correct for item in results),
+                sample_count,
+                "single-domain/direct or complex/cross-domain exact match",
+            ),
+            ratio(
+                "tool_call_accuracy",
+                sum(item.tool_call_correct for item in results),
+                sample_count,
+                "expected and observed tool capability sets exact match",
+            ),
+            ratio(
+                "tool_parameter_accuracy",
+                correct_parameter_calls,
+                matched_parameter_calls,
+                "normalized exact/rule match among expected tools that were actually called",
+            ),
+            ratio(
+                "final_answer_accuracy",
+                sum(item.final_answer_correct for item in results),
+                sample_count,
+                "claim, source binding and safety answer contracts all pass",
+            ),
+            ratio(
+                "end_to_end_task_success_rate",
+                sum(item.task_success for item in results),
+                sample_count,
+                "all deterministic hard gates pass",
+            ),
+            ratio(
+                "high_risk_block_rate",
+                sum(item.observed_blocked for item in high_risk),
+                len(high_risk),
+                "correctly blocked high-risk tasks / expected high-risk tasks",
+            ),
+            ratio(
+                "high_risk_false_block_rate",
+                sum(item.observed_blocked for item in ordinary),
+                len(ordinary),
+                "incorrectly blocked ordinary tasks / expected ordinary tasks",
+            ),
+            V2Metric(
+                name="latency_p50_ms",
+                value=float(V2EvalRunner._percentile(latencies, 0.50)),
+                sample_count=sample_count,
+                status=status,  # type: ignore[arg-type]
+                note="local wall-clock nearest-rank percentile",
+            ),
+            V2Metric(
+                name="latency_p95_ms",
+                value=float(V2EvalRunner._percentile(latencies, 0.95)),
+                sample_count=sample_count,
+                status=status,  # type: ignore[arg-type]
+                note="local wall-clock nearest-rank percentile",
+            ),
+            V2Metric(
+                name="latency_p99_ms",
+                value=float(V2EvalRunner._percentile(latencies, 0.99)),
+                sample_count=sample_count,
+                status=status,  # type: ignore[arg-type]
+                note="local wall-clock nearest-rank percentile",
+            ),
+        )
 
     @staticmethod
     def _failure_counts(results: list[V2CaseEvaluation]) -> dict[str, int]:

@@ -80,7 +80,7 @@ RAG 是三条业务线共用的知识与证据能力，解决四个核心问题�
 
 当前仓库已经实现旧版四场景基线：父亲降压药续方、母亲中医复诊材料整理、母亲用药提醒和高风险用药调整拦截。已完成数据库、API、Tool Registry、关键词 RAG 基线、Model Gateway、有界 LangGraph 工作流、运行轨迹、Agent 评测和前端演示页面。
 
-新三条业务主线仍处于本地 MVP 阶段，尚未接入真实医院、药店或生产用户。当前已经完成产品重基线、业务域、Provider 模式、SourceRef、向量 RAG 路径、旧版有界工作流、Model Gateway、任务五的最终路由契约、任务六的 deterministic 三领域编排内核、任务七的新业务三层安全和确认状态机、任务八的 PostgreSQL 权威 checkpoint/Redis 回源/两次 run 续跑、任务九 Tool/Provider 可靠性、任务十 RRF/版本拒绝/成员隔离/脱敏 Observation、任务十一 32 条 deterministic Harness/A/B/C 消融、任务十二真实 Docker 后端验收、任务十三 4B Git/文档收口和 4C 患者端交付，以及 4D-B2.1 的 UnifiedHealthGraph 统一入口、4D-B2.2 的有界只读 DAG 与评测 `all_history` 基线、4D-B2.3 的 FinalClaim/AnswerEnvelope/Trace v2 和 4D-B2.4 的 300/1200 v2 数据生成。v2 Gold 已完成运行前人工审核；真实 PostgreSQL/Provider/RAG 三 split 验收、真实 Provider/LLM、生产认证和部署准备仍是后续可选或生产化工作。
+新三条业务主线仍处于本地 MVP 阶段，尚未接入真实医院、药店或生产用户。当前已经完成产品重基线、业务域、Provider 模式、SourceRef、向量 RAG 路径、旧版有界工作流、Model Gateway、任务五的最终路由契约、任务六的 deterministic 三领域编排内核、任务七的新业务三层安全和确认状态机、任务八的 PostgreSQL 权威 checkpoint/Redis 回源/两次 run 续跑、任务九 Tool/Provider 可靠性、任务十 RRF/版本拒绝/成员隔离/脱敏 Observation、任务十一 32 条 deterministic Harness/A/B/C 消融、任务十二真实 Docker 后端验收、任务十三 4B Git/文档收口和 4C 患者端交付，以及 4D-B2.1 的 UnifiedHealthGraph 统一入口、4D-B2.2 的有界只读 DAG 与评测 `all_history` 基线、4D-B2.3 的 FinalClaim/AnswerEnvelope/Trace v2 和 4D-B2.4 的合成数据生成。当前统一 Agent 活动评测视图为 fast-400（100/400），完整 300/1200 来源仅留档；真实 PostgreSQL/Provider/RAG 三 split 验收、真实 Provider/LLM、生产认证和部署准备仍是后续可选或生产化工作。
 
 ## 8. 验收原则
 
@@ -91,4 +91,4 @@ RAG 是三条业务线共用的知识与证据能力，解决四个核心问题�
 - 评测验收：同时覆盖任务完成、工具调用、RAG 证据、安全、确认、隔离和延迟。
 - 真实性验收：未接入的医院、药店、医生、通知和文档解析能力必须明确标记为模拟，不得伪装成实时生产数据。
 - 多 Agent 验收：32 条固定用例公平比较 Single Agent、固定领域子图和按需 Planner + bounded Supervisor；简单和复杂任务分开统计。
-- 最终架构验收：在同一 300 个 WorldState、1200 条表达上比较自动路由、串行/并行和全历史/最小上下文模式；按 base world 拆分数据，禁止同一事实的表达变体跨集合泄漏。
+- 最终架构验收：在当前 fast-400（100 个 WorldState、400 条表达）上比较自动路由、串行/并行和全历史/最小上下文模式；按 base world 拆分数据，禁止同一事实的表达变体跨集合泄漏。完整 300/1200 来源只作为历史回溯。

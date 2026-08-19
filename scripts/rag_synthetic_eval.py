@@ -167,13 +167,21 @@ def _document_content(
     rule: str,
     version_note: str,
 ) -> str:
+    step_evidence = (
+        f"{anchor} 的处理步骤是先完成作用域检查，再读取必要证据，"
+        "最后生成带来源指针的可追踪结果"
+    )
+    exception_evidence = (
+        f"{anchor} 的例外条件是信息不足、来源冲突或版本不一致；"
+        "命中任一条件时必须降级为说明或请求补充信息"
+    )
     sections = (
         ("适用范围", "本节描述测试对象、适用的流程边界、输入字段和输出字段。"),
         ("术语与字段", "系统只把结构化字段作为测试事实，字段缺失时应保留不确定性。"),
-        ("处理步骤", "接收请求后先完成作用域检查，再读取必要证据，最后生成可追踪结果。"),
+        ("处理步骤", f"{step_evidence}。"),
         ("条件判断", "每个条件都要求记录命中的文档版本、Chunk 指针和本次评测查询编号。"),
         ("正常路径", "正常路径只描述测试环境中的信息整理、来源引用和待确认草稿。"),
-        ("例外路径", "信息不足、来源冲突或版本不一致时，结果必须降级为说明或请求补充信息。"),
+        ("例外路径", f"{exception_evidence}。"),
         ("来源要求", "正文事实只能来自当前文档和当前 Chunk，模型推断不能替代来源。"),
         ("成员作用域", "成员字段只用于测试隔离演练，不能把一个成员的事实复制到另一个成员。"),
         ("版本规则", "当前版本优先，旧版本只作为困难负例，不得覆盖当前有效规则。"),
@@ -504,6 +512,32 @@ def _claims_for(
     ]
 
 
+def _multi_evidence_claims(anchor: str) -> tuple[str, str]:
+    """Return the two complementary facts requested by multi-evidence cases."""
+
+    return (
+        f"{anchor} 的处理步骤是先完成作用域检查，再读取必要证据，最后生成带来源指针的可追踪结果",
+        f"{anchor} 的例外条件是信息不足、来源冲突或版本不一致；命中任一条件时必须降级为说明或请求补充信息",
+    )
+
+
+def _chunk_containing(
+    chunks: list[dict[str, Any]],
+    *,
+    heading: str,
+    evidence: str,
+) -> dict[str, Any]:
+    matches = [
+        chunk
+        for chunk in chunks
+        if heading in str(chunk.get("content") or "")
+        and evidence in str(chunk.get("content") or "")
+    ]
+    if not matches:
+        raise ValueError(f"missing structured evidence chunk: {heading}")
+    return min(matches, key=lambda chunk: (chunk["chunk_index"], chunk["chunk_id"]))
+
+
 def _make_case(
     *,
     case_index: int,
@@ -538,7 +572,7 @@ def _make_case(
         hard_negative_ids: list[str] = []
         claims = _claims_for(case_id=case_id, member_id=member_id, rule=rule, chunk_ids=required_chunks)
     elif scenario == "multi_chunk_hard_negative":
-        canonical = f"请综合测试规则 {anchor} 的步骤和例外条件。"
+        canonical = f"请综合说明测试规则 {anchor} 的处理步骤和例外条件。"
         flow = _flow(
             scope_action="allow",
             safety_action="pass",
@@ -550,9 +584,39 @@ def _make_case(
             response_type="grounded_answer",
         )
         difficulty = "hard"
-        required_chunks = active_chunk_ids[:2]
+        step_claim, exception_claim = _multi_evidence_claims(anchor)
+        step_chunk = _chunk_containing(
+            active_chunks,
+            heading="处理步骤",
+            evidence=step_claim,
+        )
+        exception_chunk = _chunk_containing(
+            active_chunks,
+            heading="例外路径",
+            evidence=exception_claim,
+        )
+        required_chunks = [step_chunk["chunk_id"], exception_chunk["chunk_id"]]
         hard_negative_ids = stale_chunk_ids[:2]
-        claims = _claims_for(case_id=case_id, member_id=member_id, rule=rule, chunk_ids=required_chunks)
+        claims = [
+            {
+                "claim_id": f"{case_id}-claim-01",
+                "fact_key": "synthetic.rule.processing_steps",
+                "subject_id": member_id,
+                "text": step_claim,
+                "supporting_chunk_ids": [step_chunk["chunk_id"]],
+                "claim_type": "knowledge_fact",
+                "evidence_role": "processing_steps",
+            },
+            {
+                "claim_id": f"{case_id}-claim-02",
+                "fact_key": "synthetic.rule.exception_conditions",
+                "subject_id": member_id,
+                "text": exception_claim,
+                "supporting_chunk_ids": [exception_chunk["chunk_id"]],
+                "claim_type": "knowledge_fact",
+                "evidence_role": "exception_conditions",
+            },
+        ]
     elif scenario == "stale_version":
         canonical = f"请按当前版本说明 {anchor} 的现行要求，不要采用旧版内容。"
         flow = _flow(
@@ -726,7 +790,7 @@ def _make_case(
         "generation_meta": {
             "generator": "deterministic-template",
             "seed": SEED,
-            "prompt_version": "rag-synthetic-v1-case-1",
+            "prompt_version": "rag-synthetic-v1-case-2-structured-evidence",
             "human_reviewed": False,
         },
         "verification_meta": {
@@ -934,6 +998,28 @@ def validate_bundle(corpus: CorpusBundle, dataset: DatasetBundle) -> dict[str, A
         for chunk_id in retrieval["stale_chunk_ids"] + retrieval["hard_negative_chunk_ids"]:
             if chunk_id not in chunk_by_id:
                 errors.append(f"negative source missing: {case['base_case_id']}:{chunk_id}")
+        for claim in case["answer_gold"]["required_claims"]:
+            supporting_ids = claim.get("supporting_chunk_ids") or []
+            if not supporting_ids:
+                errors.append(f"answer claim has no source: {case['base_case_id']}:{claim['claim_id']}")
+                continue
+            if not any(
+                claim["text"] in str(chunk_by_id.get(chunk_id, {}).get("content") or "")
+                for chunk_id in supporting_ids
+            ):
+                errors.append(
+                    f"answer claim missing from source text: {case['base_case_id']}:{claim['claim_id']}"
+                )
+        if case["case_type"] == "multi_chunk_hard_negative":
+            roles = {
+                claim.get("evidence_role")
+                for claim in case["answer_gold"]["required_claims"]
+            }
+            if roles != {"processing_steps", "exception_conditions"}:
+                errors.append(f"multi-evidence roles invalid: {case['base_case_id']}")
+            canonical = case["canonical_query"]
+            if "处理步骤" not in canonical or "例外条件" not in canonical:
+                errors.append(f"multi-evidence query intent invalid: {case['base_case_id']}")
         expected_split = case["split"]
         if any(query["split"] != expected_split for query in query_by_case[case["base_case_id"]]):
             errors.append(f"case/query split mismatch: {case['base_case_id']}")

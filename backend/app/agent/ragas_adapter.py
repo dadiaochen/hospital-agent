@@ -149,6 +149,7 @@ def _run_ragas_v029(
             base_url=configuration.ragas_judge_api_base,
             temperature=0.0,
             timeout=configuration.ragas_timeout_seconds,
+            extra_body=_judge_extra_body(configuration),
         )
     )
     if configuration.ragas_embedding_provider == "fastembed":
@@ -197,6 +198,16 @@ def _run_ragas_v029(
         batch_size=configuration.ragas_batch_size,
     )
     return [dict(item) for item in evaluated.scores]
+
+
+def _judge_extra_body(configuration: Settings) -> dict[str, bool] | None:
+    """Map the provider-neutral setting to Qwen's compatible API extension."""
+
+    if configuration.ragas_judge_thinking_mode == "default":
+        return None
+    return {
+        "enable_thinking": configuration.ragas_judge_thinking_mode == "enabled"
+    }
 
 
 __all__ = ["RagasEvaluationAdapter", "RagasRunner"]

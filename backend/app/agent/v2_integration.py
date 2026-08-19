@@ -16,10 +16,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import date, timedelta
 import hashlib
 import json
 from pathlib import Path
 from time import perf_counter
+from threading import RLock
 from typing import Any, Protocol
 from uuid import uuid4
 
@@ -44,7 +46,14 @@ from app.agent.v2_eval_schemas import (
 )
 from app.agent.v2_materializer import MaterializationError
 from app.agent.orchestration_schemas import EvalRuntimeOptions
-from app.models import AgentRun, BusinessTask, KnowledgeChunk, KnowledgeDocument
+from app.models import (
+    AgentRun,
+    BusinessTask,
+    KnowledgeChunk,
+    KnowledgeDocument,
+    MedicineBoxItem,
+    Prescription,
+)
 from app.models.base import utc_now
 from app.core.reliability import classify_error
 from app.providers import build_mock_provider_registry
@@ -82,9 +91,20 @@ class ScopedProviderSandbox(ProviderRegistry):
 
     def invoke(self, name: str, request: ProviderRequest) -> ProviderResponse:
         fault = self.world.fault_injection
-        if fault.enabled and fault.fault_type == "timeout" and (
-            name in fault.target or fault.target in f"{name}_{request.operation}"
-        ):
+        timeout_targeted = (
+            name in fault.target
+            or fault.target in f"{name}_{request.operation}"
+            or (
+                fault.target.endswith("_provider")
+                and name in {
+                    "online_consultation",
+                    "pharmacy",
+                    "notification",
+                    "medical_document_parser",
+                }
+            )
+        )
+        if fault.enabled and fault.fault_type == "timeout" and timeout_targeted:
             attempt_count = 2 if fault.retryable else 1
             attempts = [
                 ProviderAttemptTrace(
@@ -179,20 +199,23 @@ class PostgresV2Materializer:
     def __init__(self, session_factory: PostgresSessionFactory) -> None:
         self._session_factory = session_factory
         self._active: dict[str, PostgresMaterializedCase] = {}
+        self._lock = RLock()
 
     @property
     def active_namespaces(self) -> tuple[str, ...]:
-        return tuple(sorted(self._active))
+        with self._lock:
+            return tuple(sorted(self._active))
 
     def materialize(
         self, world: EvalWorldState, query: EvalQueryVariant
     ) -> PostgresMaterializedCase:
         self._validate_pair(world, query)
         namespace = self._namespace(query.query_id)
-        if namespace in self._active:
-            raise PostgresMaterializationError(
-                f"evaluation namespace already exists: {namespace}"
-            )
+        with self._lock:
+            if namespace in self._active:
+                raise PostgresMaterializationError(
+                    f"evaluation namespace already exists: {namespace}"
+                )
 
         session = self._session_factory()
         try:
@@ -264,7 +287,8 @@ class PostgresV2Materializer:
                 rag_projection=rag_projection,
                 rag_source_aliases=rag_source_aliases,
             )
-            self._active[namespace] = materialized
+            with self._lock:
+                self._active[namespace] = materialized
             return materialized
         except (SQLAlchemyError, TypeError, ValueError) as exc:
             session.rollback()
@@ -278,7 +302,8 @@ class PostgresV2Materializer:
     def cleanup(
         self, materialized: PostgresMaterializedCase
     ) -> MaterializationReceipt:
-        active = self._active.pop(materialized.receipt.namespace, None)
+        with self._lock:
+            active = self._active.pop(materialized.receipt.namespace, None)
         if active is None:
             return materialized.receipt.model_copy(update={"cleanup_succeeded": True})
         succeeded = True
@@ -293,9 +318,12 @@ class PostgresV2Materializer:
         return active.receipt.model_copy(update={"cleanup_succeeded": succeeded})
 
     def cleanup_all(self) -> bool:
-        for materialized in tuple(self._active.values()):
+        with self._lock:
+            active_cases = tuple(self._active.values())
+        for materialized in active_cases:
             self.cleanup(materialized)
-        return not self._active
+        with self._lock:
+            return not self._active
 
     @staticmethod
     def _validate_pair(world: EvalWorldState, query: EvalQueryVariant) -> None:
@@ -664,6 +692,11 @@ class UnifiedHealthGraphIntegrationExecutor:
         actual_task_id = str(uuid4())
         actual_run_id = str(uuid4())
         now = utc_now()
+        self._materialize_member_medication_rows(
+            materialized,
+            benchmark_member_id=query.expected_member_id,
+            actual_member_id=actual_member_id,
+        )
         task = BusinessTask(
             id=actual_task_id,
             user_id=actual_user_id,
@@ -730,6 +763,13 @@ class UnifiedHealthGraphIntegrationExecutor:
             elapsed = max(1, int((perf_counter() - started) * 1000))
             state = dict(state)
             state["latency_ms"] = elapsed
+            if (
+                materialized.world.fault_injection.fault_type == "no_source"
+                and state.get("status") == "failed"
+            ):
+                state["fallback_action"] = (
+                    materialized.world.fault_injection.expected_fallback
+                )
             # The graph uses the application domain as its internal intent;
             # the benchmark query supplies the reviewed evaluation intent.
             state["intent"] = query.expected_intent
@@ -748,6 +788,63 @@ class UnifiedHealthGraphIntegrationExecutor:
             raise IntegrationExecutionError(
                 "UnifiedHealthGraph integration execution failed"
             ) from exc
+
+    @staticmethod
+    def _materialize_member_medication_rows(
+        materialized: PostgresMaterializedCase,
+        *,
+        benchmark_member_id: str,
+        actual_member_id: str,
+    ) -> None:
+        """Project frozen medication facts into the graph's active transaction."""
+
+        today = date.today()
+        rows: list[object] = []
+        for index, item in enumerate(materialized.world.medicine_box):
+            if item.member_id != benchmark_member_id:
+                continue
+            remaining_days = max(0, item.remaining_days)
+            rows.append(
+                MedicineBoxItem(
+                    id=str(uuid4()),
+                    member_id=actual_member_id,
+                    medicine_name=item.medication_code,
+                    specification="synthetic-evaluation",
+                    total_quantity=max(1, remaining_days),
+                    remaining_quantity=remaining_days,
+                    dosage="按已确认处方",
+                    frequency="按已确认处方",
+                    purchased_at=today,
+                    estimated_remaining_days=remaining_days,
+                    safety_note="仅用于隔离的自动化评测事务",
+                )
+            )
+        for index, item in enumerate(materialized.world.prescriptions):
+            if item.member_id != benchmark_member_id:
+                continue
+            rows.append(
+                Prescription(
+                    id=str(uuid4()),
+                    member_id=actual_member_id,
+                    prescription_no=(
+                        f"EVAL-{materialized.query.query_id}-{index}"
+                    ),
+                    doctor_name="评测医生",
+                    hospital_name="评测互联网医院",
+                    doctor_diagnosis_summary="冻结合成状态，不作为临床诊断",
+                    medicine_items=[{"medicine_name": item.medication_code}],
+                    issued_at=today,
+                    expires_at=(
+                        today + timedelta(days=30)
+                        if item.valid
+                        else today - timedelta(days=1)
+                    ),
+                    status="valid" if item.valid else "expired",
+                    doctor_confirmation_required=item.doctor_confirmed,
+                    safety_note="仅用于隔离的自动化评测事务",
+                )
+            )
+        materialized.session.add_all(rows)
 
     def _map_trace(self, trace, materialized: PostgresMaterializedCase):
         payload = trace.model_dump(mode="json")
@@ -812,6 +909,13 @@ class UnifiedHealthGraphIntegrationExecutor:
             # observation, so bind it to this case's reviewed current-source
             # namespace rather than leaking a seed database ID into Gold.
             return materialized.world.knowledge_state.current_source_ids[0]
+        if actual_source_id.startswith("knowledge:"):
+            # A no-source Gold case may still expose an unexpected local
+            # knowledge row. Preserve it as a deterministic opaque bad-case
+            # observation instead of leaking the database ID or aborting the
+            # remaining benchmark batch.
+            digest = hashlib.sha256(actual_source_id.encode("utf-8")).hexdigest()
+            return f"unexpected:knowledge:{digest[:16]}"
         if (
             actual_source_id.startswith("provider:")
             and materialized.world.provider_state.source_ids
@@ -979,6 +1083,7 @@ class UnifiedHealthGraphIntegrationExecutor:
             observed_governance_steps=governance_steps,
             observed_governance_edges=governance_edges,
             observed_tool_names=tuple(call.tool_name for call in trace.tool_calls),
+            observed_blocked=trace.safety_trace.blocked,
             observed_source_ids=source_ids,
             observed_rag_source_ids=tuple(rag.source_id for rag in trace.rag_traces),
             observed_database_changes=(
@@ -994,7 +1099,10 @@ class UnifiedHealthGraphIntegrationExecutor:
                 if isinstance(item, Mapping)
             ),
             fallback_action=(
-                str(state.get("errors", ["none"])[-1])
+                str(
+                    state.get("fallback_action")
+                    or state.get("errors", ["none"])[-1]
+                )
                 if state.get("degraded") and state.get("errors")
                 else "none"
             ),
@@ -1019,6 +1127,8 @@ def _business_domain(intent: str) -> BusinessDomain:
     if intent == "safety_check":
         return "preconsultation"
     if intent in {"refill", "reminder", "pharmacy"}:
+        return "chronic_care"
+    if intent == "chronic_care":
         return "chronic_care"
     return "health_record"
 
@@ -1142,6 +1252,7 @@ def _integration_input_payload(
             {
                 "text": "Reviewed synthetic medical report for evaluation only.",
                 "document_type": "medical_report",
+                "analysis_only": True,
             }
         )
     elif query.expected_intent == "safety_check":
@@ -1149,6 +1260,34 @@ def _integration_input_payload(
             {
                 "action_type": "refill_request",
                 "medicine_name": "reviewed-medication",
+                "symptoms": query.user_input,
+            }
+        )
+    elif query.expected_intent == "chronic_care":
+        medication = next(
+            (
+                item.medication_code
+                for item in world.medicine_box
+                if item.member_id == query.expected_member_id
+            ),
+            "reviewed-medication",
+        )
+        payload.update(
+            {
+                "medicine_name": medication,
+                "action_type": "refill_request",
+                "symptoms": "近期轻度头晕，需要整理就医信息。",
+                "text": "Reviewed synthetic medical report for evaluation only.",
+                "document_type": "medical_report",
+                "analysis_only": True,
+            }
+        )
+    if query.expected_route == "complex_cross_domain":
+        payload.update(
+            {
+                "symptoms": "近期轻度头晕，需要整理就医信息。",
+                "text": "Reviewed synthetic medical report for evaluation only.",
+                "document_type": "medical_report",
             }
         )
     return payload

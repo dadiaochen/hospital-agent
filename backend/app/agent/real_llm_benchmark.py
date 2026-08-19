@@ -14,12 +14,13 @@ import hashlib
 import json
 from pathlib import Path
 from statistics import fmean
+from threading import Lock
 from typing import Literal
 
 from pydantic import Field
 
 from app.agent.context_schemas import ContractModel, NonEmptyStr
-from app.agent.v2_benchmark_generator import load_v2_benchmark
+from app.agent.unified_eval_dataset import load_unified_agent_benchmark
 from app.agent.v2_eval_runner import V2EvalRunner, V2RunExecutor
 from app.agent.v2_eval_schemas import (
     ConfirmationDraftSnapshot,
@@ -37,7 +38,12 @@ from app.core.database import SessionLocal
 
 B3ReportStatus = Literal["blocked", "preview", "completed"]
 MetricStatus = Literal["measured", "not_available"]
-HumanReviewStatus = Literal["pending_review", "reviewed_pass", "reviewed_fail"]
+HumanReviewStatus = Literal[
+    "automatic_gold",
+    "pending_review",
+    "reviewed_pass",
+    "reviewed_fail",
+]
 
 
 class RealLLMFinalizationError(ValueError):
@@ -75,11 +81,24 @@ class RealLLMCaseResult(ContractModel):
     output_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
     cost_usd: float | None = Field(default=None, ge=0)
+    # Preserve the automatic unified-Gold results from the same real-model
+    # execution. These fields are intentionally separate from optional human
+    # review artifacts: the active dataset is synthetic and has no manual
+    # review gate.
+    intent_correct: bool | None = None
+    route_correct: bool | None = None
+    tool_call_correct: bool | None = None
+    tool_parameter_correct: bool | None = None
+    matched_parameter_call_count: int = Field(default=0, ge=0)
+    correct_parameter_call_count: int = Field(default=0, ge=0)
+    final_answer_correct: bool | None = None
+    expected_blocked: bool | None = None
+    observed_blocked: bool | None = None
     failure_reasons: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
 
 
 class RealLLMReviewItem(ContractModel):
-    """Synthetic case and answer bundle for manual badcase review."""
+    """Frozen synthetic evidence bundle with optional legacy review metadata."""
 
     query_id: NonEmptyStr
     world_state_id: NonEmptyStr
@@ -97,7 +116,7 @@ class RealLLMReviewItem(ContractModel):
     effective_provider: NonEmptyStr | None = None
     fallback_used: bool = False
     confirmation_draft: ConfirmationDraftSnapshot | None = None
-    review_status: HumanReviewStatus = "pending_review"
+    review_status: HumanReviewStatus = "automatic_gold"
     reviewer_notes: str | None = None
 
 
@@ -146,12 +165,21 @@ class _RecordingExecutor:
 
     def __init__(self, delegate: V2RunExecutor) -> None:
         self.delegate = delegate
-        self.artifacts: list[V2RunArtifacts] = []
+        self._artifacts_by_run_id: dict[str, V2RunArtifacts] = {}
+        self._lock = Lock()
 
     def execute(self, materialized, *, repeat_index: int) -> V2RunArtifacts:
         artifacts = self.delegate.execute(materialized, repeat_index=repeat_index)
-        self.artifacts.append(artifacts)
+        with self._lock:
+            self._artifacts_by_run_id[artifacts.run_trace.run_id] = artifacts
         return artifacts
+
+    def artifact_for_run(self, run_id: str) -> V2RunArtifacts:
+        with self._lock:
+            artifact = self._artifacts_by_run_id.get(run_id)
+        if artifact is None:
+            raise RuntimeError(f"missing recorded artifacts for run_id={run_id}")
+        return artifact
 
 
 SessionFactory = Callable[[], object]
@@ -210,18 +238,22 @@ class RealLLMBenchmarkRunner:
             project_root=self.project_root,
             materializer=materializer,
             executor=executor,
+            dataset_loader=load_unified_agent_benchmark,
         ).run(options.model_copy(update={"runner_mode": "integration"}))
-        if len(report.case_results) != len(executor.artifacts):
+        if len(report.case_results) != len(executor._artifacts_by_run_id):
             raise RuntimeError("real LLM report and artifact counts do not match")
+        artifacts_by_case = tuple(
+            executor.artifact_for_run(case.run_id) for case in report.case_results
+        )
         case_results = tuple(
             self._case_result(case, artifacts)
             for case, artifacts in zip(
                 report.case_results,
-                executor.artifacts,
+                artifacts_by_case,
                 strict=True,
             )
         )
-        _, queries, _ = load_v2_benchmark(project_root=self.project_root)
+        _, queries, _ = load_unified_agent_benchmark(project_root=self.project_root)
         queries_by_id = {query.query_id: query for query in queries.queries}
         review_items = tuple(
             self._review_item(
@@ -231,7 +263,7 @@ class RealLLMBenchmarkRunner:
             )
             for case, artifacts in zip(
                 report.case_results,
-                executor.artifacts,
+                artifacts_by_case,
                 strict=True,
             )
         )
@@ -599,6 +631,15 @@ class RealLLMBenchmarkRunner:
                 output_tokens=output_tokens,
                 pricing=self._pricing(),
             ),
+            intent_correct=case.intent_correct,
+            route_correct=case.route_correct,
+            tool_call_correct=case.tool_call_correct,
+            tool_parameter_correct=case.tool_parameter_correct,
+            matched_parameter_call_count=case.matched_parameter_call_count,
+            correct_parameter_call_count=case.correct_parameter_call_count,
+            final_answer_correct=case.final_answer_correct,
+            expected_blocked=case.expected_blocked,
+            observed_blocked=case.observed_blocked,
             failure_reasons=tuple(dict.fromkeys(failure_reasons)),
         )
 
@@ -633,6 +674,7 @@ class RealLLMBenchmarkRunner:
                 for item in artifacts.run_trace.observations
             ),
             confirmation_draft=artifacts.confirmation_draft,
+            review_status="automatic_gold",
         )
 
     def _metrics(
@@ -648,7 +690,90 @@ class RealLLMBenchmarkRunner:
             if item.effective_provider == self.configuration.model_provider
             and not item.fallback_used
         ]
+        successful_usage = [
+            item
+            for item in usage
+            if item.task_success
+        ]
+        successful_cases = [item for item in cases if item.task_success]
+
+        def automatic_ratio(
+            name: str,
+            field: str,
+            note: str,
+        ) -> RealLLMMetric:
+            eligible = [
+                item for item in cases if getattr(item, field) is not None
+            ]
+            return self._ratio(
+                name,
+                sum(bool(getattr(item, field)) for item in eligible),
+                len(eligible),
+                "ratio",
+                note,
+            )
+
+        parameter_matched = sum(item.matched_parameter_call_count for item in cases)
+        parameter_correct = sum(item.correct_parameter_call_count for item in cases)
+        high_risk = [
+            item
+            for item in cases
+            if item.expected_blocked is True and item.observed_blocked is not None
+        ]
+        ordinary = [
+            item
+            for item in cases
+            if item.expected_blocked is False and item.observed_blocked is not None
+        ]
         return (
+            automatic_ratio(
+                "intent_accuracy",
+                "intent_correct",
+                "observed intent exact match against frozen unified Gold during the real-LLM run.",
+            ),
+            automatic_ratio(
+                "route_accuracy",
+                "route_correct",
+                "observed single-domain/direct or complex/cross-domain route exact match against frozen unified Gold during the real-LLM run.",
+            ),
+            automatic_ratio(
+                "tool_call_accuracy",
+                "tool_call_correct",
+                "expected and observed tool capability sets exact match during the real-LLM run.",
+            ),
+            self._ratio(
+                "tool_parameter_accuracy",
+                parameter_correct,
+                parameter_matched,
+                "ratio",
+                "normalized exact/rule parameter match among matched expected tool invocations during the real-LLM run.",
+            ),
+            automatic_ratio(
+                "final_answer_accuracy",
+                "final_answer_correct",
+                "required Claim, source-binding and safety answer contracts jointly pass against frozen synthetic Gold; not clinical accuracy.",
+            ),
+            self._ratio(
+                "end_to_end_task_success_rate",
+                sum(item.task_success for item in cases),
+                total,
+                "ratio",
+                "all deterministic hard gates pass in the real-LLM execution.",
+            ),
+            self._ratio(
+                "high_risk_block_rate",
+                sum(item.observed_blocked is True for item in high_risk),
+                len(high_risk),
+                "ratio",
+                "correctly blocked high-risk tasks divided by frozen expected high-risk tasks.",
+            ),
+            self._ratio(
+                "high_risk_false_block_rate",
+                sum(item.observed_blocked is True for item in ordinary),
+                len(ordinary),
+                "ratio",
+                "ordinary tasks incorrectly observed as blocked divided by frozen ordinary tasks.",
+            ),
             self._ratio(
                 "deterministic_contract_pass_rate",
                 sum(item.task_success for item in cases),
@@ -701,6 +826,49 @@ class RealLLMBenchmarkRunner:
                 "usd",
                 "Requires complete usage and both configured prices.",
             ),
+            self._ratio(
+                "successful_task_token_usage_available_rate",
+                len(successful_usage),
+                len(successful_cases),
+                "ratio",
+                "fraction of end-to-end successful tasks with complete provider usage.",
+            ),
+            self._mean(
+                "successful_average_input_tokens",
+                [
+                    float(item.input_tokens)
+                    for item in successful_usage
+                    if item.input_tokens is not None
+                ],
+                "tokens",
+                "recorded provider input usage for end-to-end successful tasks only.",
+            ),
+            self._mean(
+                "successful_average_output_tokens",
+                [
+                    float(item.output_tokens)
+                    for item in successful_usage
+                    if item.output_tokens is not None
+                ],
+                "tokens",
+                "recorded provider output usage for end-to-end successful tasks only.",
+            ),
+            self._mean(
+                "successful_average_total_tokens",
+                [
+                    float(item.total_tokens)
+                    for item in successful_usage
+                    if item.total_tokens is not None
+                ],
+                "tokens",
+                "recorded provider total usage for end-to-end successful tasks only.",
+            ),
+            self._mean(
+                "successful_average_cost_usd",
+                [float(item.cost_usd) for item in successful_usage if item.cost_usd is not None],
+                "usd",
+                "average recorded model cost for end-to-end successful tasks only.",
+            ),
             self._mean(
                 "workflow_latency_avg_ms",
                 [float(item.workflow_latency_ms) for item in cases],
@@ -708,20 +876,26 @@ class RealLLMBenchmarkRunner:
                 "Local wall-clock latency for the full integration run.",
             ),
             self._percentile(
+                "workflow_latency_p50_ms",
+                [float(item.workflow_latency_ms) for item in cases],
+                "Local wall-clock p50 for the full integration run.",
+                percentile=50,
+            ),
+            self._percentile(
                 "workflow_latency_p95_ms",
                 [float(item.workflow_latency_ms) for item in cases],
                 "Local wall-clock p95 for the full integration run.",
             ),
             self._percentile(
+                "workflow_latency_p99_ms",
+                [float(item.workflow_latency_ms) for item in cases],
+                "Local wall-clock p99 for the full integration run.",
+                percentile=99,
+            ),
+            self._percentile(
                 "model_latency_p95_ms",
                 [float(item.model_latency_ms) for item in cases],
                 "Model call p95 from ModelGateway Trace.",
-            ),
-            self._mean(
-                "human_reviewed_answer_quality",
-                [],
-                "ratio",
-                "N/A until badcases and the reviewed answer set are completed.",
             ),
         )
 
@@ -783,6 +957,8 @@ class RealLLMBenchmarkRunner:
         name: str,
         values: list[float],
         note: str,
+        *,
+        percentile: int = 95,
     ) -> RealLLMMetric:
         if not values:
             return RealLLMMetric(
@@ -794,7 +970,7 @@ class RealLLMBenchmarkRunner:
                 note=note,
             )
         ordered = sorted(values)
-        index = max(0, (95 * len(ordered) + 99) // 100 - 1)
+        index = max(0, (percentile * len(ordered) + 99) // 100 - 1)
         return RealLLMMetric(
             name=name,
             value=ordered[index],
@@ -845,14 +1021,14 @@ class RealLLMBenchmarkRunner:
     @staticmethod
     def render_review_queue(report: RealLLMBenchmarkReport) -> str:
         lines = [
-            "# 4D-B3 Badcase Review Queue",
+            "# 4D-B3 Frozen Gold Evidence",
             "",
             f"- Report: `{report.report_id}`",
             f"- Items: `{len(report.review_items)}`",
             (
-                "- Human review is frozen in this completed report."
-                if report.status == "completed"
-                else "- Review status is pending until a human checks the answer."
+                "- All rows use automatic frozen-Gold scoring; no human review gate applies."
+                if all(item.review_status == "automatic_gold" for item in report.review_items)
+                else "- Historical manual-review metadata is retained only for legacy reports."
             ),
             "",
         ]
@@ -893,13 +1069,10 @@ class RealLLMBenchmarkRunner:
                         else "No local confirmation draft snapshot was captured."
                     ),
                     "",
-                    "### Human review",
+                    "### Automatic Gold status",
                     "",
-                    "- [ ] Facts match the allowed evidence",
-                    "- [ ] Member scope is correct",
-                    "- [ ] Safety and confirmation wording is correct",
-                    "- [ ] No forbidden phrase or unsupported claim",
-                    "- [ ] Mark `review_status` in the JSON queue",
+                    "- Frozen business-state Gold covers facts, member scope, safety, confirmation, required claims and forbidden claims.",
+                    "- `automatic_gold` means the row is scored without a human review step.",
                     "",
                 ]
             )
